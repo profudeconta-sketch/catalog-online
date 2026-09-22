@@ -1,15 +1,15 @@
 import datetime
-import io
 import os
+from io import BytesIO
 import openpyxl
 import streamlit as st
 
-from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.colors import HexColor
+from reportlab.lib import colors
 
 st.set_page_config(
     page_title="Catalog Școlar Online IX TH",
@@ -17,53 +17,94 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CONFIGURARE FONTS UNICODE PENTRU DIACRITICE (ă, â, î, ș, ț) ---
-def setup_unicode_fonts():
-    font_name = "Helvetica"
-    font_bold = "Helvetica-Bold"
-    
-    candidates = [
-        ("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-        ("LiberationSans", "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
-        ("Roboto", "/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Regular.ttf", "/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Bold.ttf"),
-    ]
-    
-    for fname, regular_path, bold_path in candidates:
-        if os.path.exists(regular_path) and os.path.exists(bold_path):
-            try:
-                pdfmetrics.registerFont(TTFont(fname, regular_path))
-                pdfmetrics.registerFont(TTFont(f"{fname}-Bold", bold_path))
-                font_name = fname
-                font_bold = f"{fname}-Bold"
-                break
-            except Exception:
-                pass
-                
-    if font_name == "Helvetica":
-        reg_found, bold_found = None, None
-        for root, dirs, files in os.walk("/usr/share/fonts"):
-            for f in files:
-                fl = f.lower()
-                if fl in ["dejavusans.ttf", "liberationsans-regular.ttf", "free-sans.ttf"]:
-                    reg_found = os.path.join(root, f)
-                elif fl in ["dejavusans-bold.ttf", "liberationsans-bold.ttf", "free-sansbold.ttf"]:
-                    bold_found = os.path.join(root, f)
-        if reg_found and bold_found:
-            try:
-                pdfmetrics.registerFont(TTFont("DynSans", reg_found))
-                pdfmetrics.registerFont(TTFont("DynSans-Bold", bold_found))
-                font_name = "DynSans"
-                font_bold = "DynSans-Bold"
-            except Exception:
-                pass
-            
-    return font_name, font_bold
-
-FONT_NORM, FONT_BOLD = setup_unicode_fonts()
-
+# ---------------------------------------------------------
+# AUTHENTICATION (PASSWORD PROTECTION)
+# ---------------------------------------------------------
 PAROLA_PROFESORI = "profesori2026"
 
-# Lista celor 32 de elevi
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    st.title("🔒 Acces Restricționat — Catalog Școlar Online")
+    st.caption("Colegiul 'Emil Negruțiu' Turda — Clasa a IX-a TH Turism")
+    st.write("Vă rugăm să introduceți parola de profesor pentru a accesa catalogul:")
+    
+    col_acc1, col_acc2 = st.columns([1, 2])
+    with col_acc1:
+        pwd_input = st.text_input("Parolă Profesori:", type="password", key="login_pwd")
+        btn_login = st.button("🔑 Autentificare", type="primary", use_container_width=True)
+        if btn_login:
+            if pwd_input == PAROLA_PROFESORI:
+                st.session_state["authenticated"] = True
+                st.success("Autentificare reușită!")
+                st.rerun()
+            else:
+                st.error("❌ Parolă incorectă! Încercați din nou.")
+    st.stop()
+
+# ---------------------------------------------------------
+# FONT REGISTRATION FOR PDF (ROBUST UNICODE & DIACRITICS)
+# ---------------------------------------------------------
+FONT_NAME = None
+BOLD_FONT_NAME = None
+
+font_search_paths = [
+    ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+    ("/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Regular.ttf", "/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Bold.ttf"),
+    ("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf", "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf"),
+    ("/usr/share/fonts/truetype/freefont/FreeSans.ttf", "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"),
+]
+
+for reg_path, bold_path in font_search_paths:
+    if os.path.exists(reg_path):
+        try:
+            name = "AppUnicodeFont"
+            pdfmetrics.registerFont(TTFont(name, reg_path))
+            FONT_NAME = name
+            if os.path.exists(bold_path):
+                bold_name = "AppUnicodeFontBold"
+                pdfmetrics.registerFont(TTFont(bold_name, bold_path))
+                BOLD_FONT_NAME = bold_name
+            else:
+                BOLD_FONT_NAME = name
+            break
+        except Exception:
+            pass
+
+if not FONT_NAME:
+    FONT_NAME = "Helvetica"
+    BOLD_FONT_NAME = "Helvetica-Bold"
+
+def clean_pdf_text(text):
+    if text is None:
+        return ""
+    s = str(text)
+    s = s.replace("ş", "ș").replace("Ş", "Ș").replace("ţ", "ț").replace("Ţ", "Ț")
+    if FONT_NAME == "Helvetica":
+        rep = {"ș": "s", "Ș": "S", "ț": "t", "Ț": "T", "ă": "a", "Ă": "A", "î": "i", "Î": "I", "â": "a", "Â": "A", "–": "-", "—": "-"}
+        for k, v in rep.items():
+            s = s.replace(k, v)
+    return s
+
+def safe_str(val):
+    if val is None:
+        return ""
+    return str(val).strip()
+
+def safe_float_str(val, default="-"):
+    if val is None or safe_str(val) == "":
+        return default
+    try:
+        val_clean = safe_str(val).replace(",", ".").strip()
+        return f"{float(val_clean):.2f}"
+    except (ValueError, TypeError):
+        return safe_str(val)
+
+# ---------------------------------------------------------
+# CONSTANTS & STRUCTURES
+# ---------------------------------------------------------
 ELEVI = [
     (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76"),
     (2, "BARA D. ADRIAN DANIEL", 14, "126/77"),
@@ -138,256 +179,254 @@ def find_excel_file():
 
 excel_path = find_excel_file()
 
-# --- VERIFICARE AUTENTIFICARE ---
-if "autentificat" not in st.session_state:
-    st.session_state.autentificat = False
+# ---------------------------------------------------------
+# PDF GENERATORS
+# ---------------------------------------------------------
+def generate_student_pdf_bytes(excel_path_val, elev_idx):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    styles = getSampleStyleSheet()
 
-if not st.session_state.autentificat:
-    st.title("🔒 Catalog Școlar Online — Conectare Profesori")
-    st.caption("Colegiul 'Emil Negruțiu' Turda — Clasa a IX-a TH Turism")
+    st_title = ParagraphStyle('PdfTitle', parent=styles['Heading1'], fontName=BOLD_FONT_NAME, fontSize=13, leading=16, textColor=colors.HexColor('#1A365D'), alignment=1)
+    st_sub = ParagraphStyle('PdfSub', parent=styles['Heading2'], fontName=BOLD_FONT_NAME, fontSize=10, leading=13, textColor=colors.HexColor('#2B6CB0'))
+    st_th = ParagraphStyle('PdfTh', parent=styles['Normal'], fontName=BOLD_FONT_NAME, fontSize=8, leading=10, textColor=colors.white)
+    st_td = ParagraphStyle('PdfTd', parent=styles['Normal'], fontName=FONT_NAME, fontSize=8, leading=10, textColor=colors.HexColor('#2D3748'))
+
+    story = []
+    e_info = ELEVI[elev_idx]
     
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.subheader("Autentificare Cadre Didactice")
-        parola_introduse = st.text_input("Introduceți Parola de Acces:", type="password", key="pass_input")
-        if st.button("🔑 Conectare în Catalog", type="primary", use_container_width=True):
-            if parola_introduse == PAROLA_PROFESORI:
-                st.session_state.autentificat = True
-                st.success("✅ Conectare reușită!")
-                st.rerun()
-            else:
-                st.error("❌ Parolă incorectă! Vă rugăm să încercați din nou.")
-    st.stop()
+    story.append(Paragraph(clean_pdf_text("COLEGIUL 'EMIL NEGRUȚIU' TURDA"), st_title))
+    story.append(Paragraph(clean_pdf_text("FIȘĂ INDIVIDUALĂ DE EVALUARE ELEV — AN ȘCOLAR 2026-2027"), st_title))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(clean_pdf_text(f"Elev: <b>{e_info[1]}</b> | Nr. Matricol: <b>{e_info[3]}</b> | Clasa a IX-a TH Turism"), st_sub))
+    story.append(Spacer(1, 10))
 
-# --- INTERFAȚĂ PRINCIPALĂ PROFESORI ---
+    if os.path.exists(excel_path_val):
+        wb = openpyxl.load_workbook(excel_path_val, data_only=True)
+
+        for cat_title, sheet_n, sub_list in [("CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG), ("MODULE TEHNOLOGICE", "Module Tehnologice", MODULE_TH)]:
+            story.append(Paragraph(clean_pdf_text(cat_title), st_sub))
+            story.append(Spacer(1, 4))
+            ws = wb[sheet_n]
+            s_row = 9 + elev_idx
+
+            table_data = [[
+                Paragraph(clean_pdf_text("Disciplină / Modul"), st_th),
+                Paragraph(clean_pdf_text("Note Obligatorii"), st_th),
+                Paragraph(clean_pdf_text("Absențe Înregistrate"), st_th),
+                Paragraph(clean_pdf_text("Medie"), st_th)
+            ]]
+
+            for s_name, start_col in sub_list:
+                notes = []
+                for k in range(5):
+                    n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
+                    if n_val is not None and safe_str(n_val) != "":
+                        notes.append(safe_str(n_val))
+                absences = []
+                for k in range(8):
+                    a_val = ws.cell(row=s_row, column=start_col + 11 + k).value
+                    if a_val is not None and safe_str(a_val) != "":
+                        absences.append(safe_str(a_val))
+                media_val = ws.cell(row=s_row, column=start_col + 19).value
+                media_str = safe_float_str(media_val)
+
+                table_data.append([
+                    Paragraph(clean_pdf_text(s_name), st_td),
+                    Paragraph(clean_pdf_text(", ".join(notes) if notes else "-"), st_td),
+                    Paragraph(clean_pdf_text(", ".join(absences) if absences else "-"), st_td),
+                    Paragraph(clean_pdf_text(media_str), st_td)
+                ])
+
+            t = Table(table_data, colWidths=[200, 150, 120, 50])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1A365D')),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E0')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F7FAFC')]),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            story.append(t)
+            story.append(Spacer(1, 10))
+
+        wb.close()
+
+    doc.build(story)
+    return buffer.getvalue()
+
+def generate_centralizator_pdf_bytes(excel_path_val):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), leftMargin=20, rightMargin=20, topMargin=20, bottomMargin=20)
+    styles = getSampleStyleSheet()
+
+    st_title = ParagraphStyle('CentTitle', parent=styles['Heading1'], fontName=BOLD_FONT_NAME, fontSize=12, leading=15, textColor=colors.HexColor('#1A365D'), alignment=1)
+    st_th = ParagraphStyle('CentTh', parent=styles['Normal'], fontName=BOLD_FONT_NAME, fontSize=8, leading=10, textColor=colors.white, alignment=1)
+    st_td = ParagraphStyle('CentTd', parent=styles['Normal'], fontName=FONT_NAME, fontSize=8, leading=10, textColor=colors.HexColor('#2D3748'))
+
+    story = []
+    story.append(Paragraph(clean_pdf_text("COLEGIUL 'EMIL NEGRUȚIU' TURDA — CENTRALIZATOR MEDII ȘI SITUAȚIE ȘCOLARĂ"), st_title))
+    story.append(Paragraph(clean_pdf_text("Clasa a IX-a TH Turism | An Școlar 2026-2027"), st_title))
+    story.append(Spacer(1, 10))
+
+    table_data = [[
+        Paragraph(clean_pdf_text("Nr."), st_th),
+        Paragraph(clean_pdf_text("Nume și Prenume Elev"), st_th),
+        Paragraph(clean_pdf_text("Nr. Matr."), st_th),
+        Paragraph(clean_pdf_text("Medie CG"), st_th),
+        Paragraph(clean_pdf_text("Medie Module"), st_th),
+        Paragraph(clean_pdf_text("Medie Gen."), st_th),
+        Paragraph(clean_pdf_text("Purtare"), st_th),
+        Paragraph(clean_pdf_text("Abs. Mot."), st_th),
+        Paragraph(clean_pdf_text("Abs. Nemot."), st_th),
+        Paragraph(clean_pdf_text("Statut Școlar"), st_th)
+    ]]
+
+    if os.path.exists(excel_path_val):
+        wb = openpyxl.load_workbook(excel_path_val, data_only=True)
+        ws_cg = wb["Cultură Generală"]
+        ws_th = wb["Module Tehnologice"]
+        ws_abs = wb["Absențe & Purtare"]
+
+        for idx, (num, nume, row_id, matr) in enumerate(ELEVI):
+            s_row = 9 + idx
+
+            cg_medias = []
+            for s_name, start_col in DISCIPLINE_CG:
+                m_val = ws_cg.cell(row=s_row, column=start_col + 19).value
+                if isinstance(m_val, (int, float)):
+                    cg_medias.append(float(m_val))
+            med_cg_str = f"{sum(cg_medias)/len(cg_medias):.2f}" if cg_medias else "-"
+
+            th_medias = []
+            for m_name, start_col in MODULE_TH:
+                m_val = ws_th.cell(row=s_row, column=start_col + 19).value
+                if isinstance(m_val, (int, float)):
+                    th_medias.append(float(m_val))
+            med_th_str = f"{sum(th_medias)/len(th_medias):.2f}" if th_medias else "-"
+
+            all_medias = cg_medias + th_medias
+            med_gen_str = f"{sum(all_medias)/len(all_medias):.2f}" if all_medias else "-"
+
+            abs_row = 9 + idx
+            mot_val = ws_abs.cell(row=abs_row, column=4).value
+            nemot_val = ws_abs.cell(row=abs_row, column=5).value
+            purt_val = ws_abs.cell(row=abs_row, column=7).value
+
+            mot_str = safe_str(mot_val) if mot_val is not None else "0"
+            nemot_str = safe_str(nemot_val) if nemot_val is not None else "0"
+            purt_str = safe_float_str(purt_val, default="10")
+
+            statut_str = "Promovat" if all_medias and all(m >= 5.0 for m in all_medias) else ("În curs" if not all_medias else "Neconcordanță / Corigent")
+
+            table_data.append([
+                Paragraph(clean_pdf_text(str(num)), st_td),
+                Paragraph(clean_pdf_text(nume), st_td),
+                Paragraph(clean_pdf_text(matr), st_td),
+                Paragraph(clean_pdf_text(med_cg_str), st_td),
+                Paragraph(clean_pdf_text(med_th_str), st_td),
+                Paragraph(clean_pdf_text(med_gen_str), st_td),
+                Paragraph(clean_pdf_text(purt_str), st_td),
+                Paragraph(clean_pdf_text(mot_str), st_td),
+                Paragraph(clean_pdf_text(nemot_str), st_td),
+                Paragraph(clean_pdf_text(statut_str), st_td)
+            ])
+
+        wb.close()
+
+    t = Table(table_data, colWidths=[25, 220, 60, 65, 75, 65, 55, 55, 65, 85])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1A365D')),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E0')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F7FAFC')]),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    story.append(t)
+    doc.build(story)
+    return buffer.getvalue()
+
+def generate_raport_pdf_bytes(excel_path_val):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    styles = getSampleStyleSheet()
+
+    st_title = ParagraphStyle('RapTitle', parent=styles['Heading1'], fontName=BOLD_FONT_NAME, fontSize=13, leading=16, textColor=colors.HexColor('#1A365D'), alignment=1)
+    st_sub = ParagraphStyle('RapSub', parent=styles['Heading2'], fontName=BOLD_FONT_NAME, fontSize=10, leading=13, textColor=colors.HexColor('#2B6CB0'))
+    st_td = ParagraphStyle('RapTd', parent=styles['Normal'], fontName=FONT_NAME, fontSize=9, leading=12, textColor=colors.HexColor('#2D3748'))
+    st_th = ParagraphStyle('RapTh', parent=styles['Normal'], fontName=BOLD_FONT_NAME, fontSize=9, leading=12, textColor=colors.white)
+
+    story = []
+    story.append(Paragraph(clean_pdf_text("COLEGIUL 'EMIL NEGRUȚIU' TURDA"), st_title))
+    story.append(Paragraph(clean_pdf_text("RAPORT SINTETIC AL DIRIGINTELUI — AN ȘCOLAR 2026-2027"), st_title))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(clean_pdf_text("Clasa a IX-a TH — Domeniul Turism și Alimentație"), st_sub))
+    story.append(Spacer(1, 10))
+
+    indicators = [
+        ("Total Elevi Înscriși", "32 elevi"),
+        ("Profil / Calificare", "Turism și Alimentație (Lucrător Hotelier)"),
+        ("Promovabilitate Estimată", "100%"),
+        ("Frecvență Școlară", "Monitorizată în timp real în catalogul digital"),
+        ("Stare Date Catalog", "Actualizat la zi (Note, Absențe, Motivări)")
+    ]
+
+    table_data = [[Paragraph(clean_pdf_text("Indicator Performanță"), st_th), Paragraph(clean_pdf_text("Valoare / Stare"), st_th)]]
+    for k, v in indicators:
+        table_data.append([Paragraph(clean_pdf_text(k), st_td), Paragraph(clean_pdf_text(v), st_td)])
+
+    t = Table(table_data, colWidths=[200, 320])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1A365D')),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E0')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F7FAFC')]),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story.append(t)
+    doc.build(story)
+    return buffer.getvalue()
+
+# ---------------------------------------------------------
+# UI INTERFACE
+# ---------------------------------------------------------
 st.title("🏫 Colegiul 'Emil Negruțiu' Turda — Catalog Școlar Online (IX TH Turism)")
-st.caption("Aplicație Web securizată pentru gestionare note, absențe și rapoarte")
+st.caption("Aplicație Web Streamlit pentru gestionare note, absențe și generare rapoarte PDF")
 
 if not os.path.exists(excel_path):
-    st.warning(f"⚠️ Fișierul catalog '{excel_path}' nu a fost găsit în directorul curent. Vă rugăm să îl încărcați pe GitHub în același folder.")
+    st.warning(f"⚠️ Fișierul catalog '{excel_path}' nu a fost găsit în directorul curent. Vă rugăm să îl încărcați pe GitHub.")
 
-elev_options = [f"{e[0]}. {e[1]} (Matr. {e[2]})" for e in ELEVI]
+elev_options = [f"{e[0]}. {e[1]} (Matr. {e[3]})" for e in ELEVI]
 
 with st.sidebar:
     st.header("⚙️ Opțiuni Catalog")
-    st.success("🔓 Conectat ca Profesor")
     selected_file = st.text_input("Fișier Excel:", value=excel_path)
     
     if os.path.exists(selected_file):
-        with open(selected_file, "rb") as f:
+        with open(selected_file, "rb") as f_excel:
             st.download_button(
                 label="📥 Descarcă Catalog Excel (.xlsx)",
-                data=f,
-                file_name=os.path.basename(selected_file),
+                data=f_excel,
+                file_name="catalog_scolar_IX_TH.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-            
+    st.markdown("---")
     if st.button("🚪 Deconectare (Logout)", use_container_width=True):
-        st.session_state.autentificat = False
+        st.session_state["authenticated"] = False
         st.rerun()
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "➕ Adăugare Notă", 
-    "❌ Adăugare Absență", 
-    "✅ Motivare Absență", 
-    "📊 Fișă Elev", 
+    "➕ Adăugare Notă",
+    "❌ Adăugare Absență",
+    "✅ Motivare Absență",
+    "📊 Fișă Elev",
     "📋 Centralizator Clasă",
     "📈 Raport Diriginte"
 ])
-
-# --- GENERARE PDF-URI PENTRU DESCĂRCARE ---
-def generate_fisa_elev_pdf(e_info, rows_cg, rows_th):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
-    styles = getSampleStyleSheet()
-    
-    title_style = ParagraphStyle('TitleStyle', fontName=FONT_BOLD, fontSize=14, leading=18, alignment=1, textColor=HexColor('#1A237E'))
-    sub_style = ParagraphStyle('SubStyle', fontName=FONT_BOLD, fontSize=11, leading=15, textColor=HexColor('#0D47A1'))
-    body_style = ParagraphStyle('BodyStyle', fontName=FONT_NORM, fontSize=9, leading=12)
-    head_style = ParagraphStyle('HeadStyle', fontName=FONT_BOLD, fontSize=9, leading=12, textColor=HexColor('#FFFFFF'))
-    
-    story = [
-        Paragraph("COLEGIUL „EMIL NEGRUȚIU” TURDA", title_style),
-        Paragraph("FIȘĂ INDIVIDUALĂ DE EVALUARE ȘI FRECVENȚĂ ȘCOLARĂ", title_style),
-        Spacer(1, 10),
-        Paragraph(f"<b>Elev:</b> {e_info[1]} | <b>Nr. Matricol:</b> {e_info[2]} | <b>Clasa:</b> a IX-a TH (Turism)", sub_style),
-        Spacer(1, 10)
-    ]
-    
-    for title_cat, r_data in [("DISCIPLINE CULTURĂ GENERALĂ", rows_cg), ("MODULE TEHNOLOGICE & PREGĂTIRE PRACTICĂ", rows_th)]:
-        story.append(Paragraph(title_cat, sub_style))
-        story.append(Spacer(1, 4))
-        
-        table_data = [[
-            Paragraph("<b>Disciplină / Modul</b>", head_style),
-            Paragraph("<b>Note</b>", head_style),
-            Paragraph("<b>Absențe</b>", head_style),
-            Paragraph("<b>Medie</b>", head_style)
-        ]]
-        for r in r_data:
-            table_data.append([
-                Paragraph(r["Disciplină / Modul"], body_style),
-                Paragraph(r["Note"], body_style),
-                Paragraph(r["Absențe"], body_style),
-                Paragraph(r["Medie"], body_style)
-            ])
-            
-        t = Table(table_data, colWidths=[200, 160, 110, 50])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), HexColor('#1A237E')),
-            ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#B0BEC5')),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#FFFFFF'), HexColor('#F5F5F5')])
-        ]))
-        story.append(t)
-        story.append(Spacer(1, 12))
-        
-    story.append(Spacer(1, 15))
-    sign_data = [
-        [Paragraph("<b>Profesor Diriginte:</b> ____________________", body_style), Paragraph("<b>Director / Conducere:</b> ____________________", body_style)]
-    ]
-    st_sign = Table(sign_data, colWidths=[260, 260])
-    st_sign.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
-    story.append(st_sign)
-    
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-def generate_centralizator_pdf(excel_f):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
-    styles = getSampleStyleSheet()
-    
-    title_style = ParagraphStyle('CTitleStyle', fontName=FONT_BOLD, fontSize=14, leading=18, alignment=1, textColor=HexColor('#1A237E'))
-    sub_style = ParagraphStyle('CSubStyle', fontName=FONT_NORM, fontSize=10, leading=13, alignment=1)
-    body_style = ParagraphStyle('CBodyStyle', fontName=FONT_NORM, fontSize=8, leading=10)
-    head_style = ParagraphStyle('CHeadStyle', fontName=FONT_BOLD, fontSize=8, leading=10, textColor=HexColor('#FFFFFF'))
-    
-    story = [
-        Paragraph("COLEGIUL „EMIL NEGRUȚIU” TURDA — CENTRALIZATOR MEDII & SITUAȚIE ȘCOLARĂ", title_style),
-        Paragraph("Clasa a IX-a TH (Domeniul Turism și Alimentație) | An școlar 2026-2027", sub_style),
-        Spacer(1, 10)
-    ]
-    
-    table_data = [[
-        Paragraph("<b>Nr.</b>", head_style),
-        Paragraph("<b>Nume și Prenume</b>", head_style),
-        Paragraph("<b>Nr. Matr.</b>", head_style),
-        Paragraph("<b>Media CG</b>", head_style),
-        Paragraph("<b>Media Mod.</b>", head_style),
-        Paragraph("<b>Media Gen.</b>", head_style),
-        Paragraph("<b>Purtare</b>", head_style),
-        Paragraph("<b>Abs. Nem.</b>", head_style),
-        Paragraph("<b>Abs. Mot.</b>", head_style),
-        Paragraph("<b>Total Abs.</b>", head_style)
-    ]]
-    
-    if os.path.exists(excel_f):
-        try:
-            wb = openpyxl.load_workbook(excel_f, data_only=True)
-            ws_cen = wb["Centralizator Medii"] if "Centralizator Medii" in wb.sheetnames else None
-            ws_abs = wb["Absențe & Purtare"] if "Absențe & Purtare" in wb.sheetnames else None
-            
-            for idx, e in enumerate(ELEVI):
-                s_row = 9 + idx
-                mcg = ws_cen.cell(row=s_row, column=5).value if ws_cen else "-"
-                mth = ws_cen.cell(row=s_row, column=6).value if ws_cen else "-"
-                mgen = ws_cen.cell(row=s_row, column=7).value if ws_cen else "-"
-                purt = ws_cen.cell(row=s_row, column=8).value if ws_cen else "10"
-                
-                abs_nem = ws_abs.cell(row=s_row, column=5).value if ws_abs else "-"
-                abs_mot = ws_abs.cell(row=s_row, column=6).value if ws_abs else "-"
-                abs_tot = ws_abs.cell(row=s_row, column=7).value if ws_abs else "-"
-                
-                table_data.append([
-                    Paragraph(str(e[0]), body_style),
-                    Paragraph(e[1], body_style),
-                    Paragraph(str(e[2]), body_style),
-                    Paragraph(f"{float(mcg):.2f}" if isinstance(mcg, (int, float)) else str(mcg or "-"), body_style),
-                    Paragraph(f"{float(mth):.2f}" if isinstance(mth, (int, float)) else str(mth or "-"), body_style),
-                    Paragraph(f"{float(mgen):.2f}" if isinstance(mgen, (int, float)) else str(mgen or "-"), body_style),
-                    Paragraph(str(purt or "10"), body_style),
-                    Paragraph(str(abs_nem or "0"), body_style),
-                    Paragraph(str(abs_mot or "0"), body_style),
-                    Paragraph(str(abs_tot or "0"), body_style)
-                ])
-            wb.close()
-        except Exception:
-            pass
-            
-    t = Table(table_data, colWidths=[25, 220, 65, 60, 60, 60, 50, 55, 55, 55])
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#1A237E')),
-        ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#B0BEC5')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#FFFFFF'), HexColor('#F5F5F5')])
-    ]))
-    story.append(t)
-    
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-def generate_raport_pdf(excel_f):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
-    styles = getSampleStyleSheet()
-    
-    title_style = ParagraphStyle('RTitleStyle', fontName=FONT_BOLD, fontSize=14, leading=18, alignment=1, textColor=HexColor('#1A237E'))
-    sub_style = ParagraphStyle('RSubStyle', fontName=FONT_BOLD, fontSize=11, leading=15, textColor=HexColor('#0D47A1'))
-    body_style = ParagraphStyle('RBodyStyle', fontName=FONT_NORM, fontSize=10, leading=14)
-    head_style = ParagraphStyle('RHeadStyle', fontName=FONT_BOLD, fontSize=10, leading=13, textColor=HexColor('#FFFFFF'))
-    
-    story = [
-        Paragraph("COLEGIUL „EMIL NEGRUȚIU” TURDA", title_style),
-        Paragraph("RAPORT EVALUATIV AL DIRIGINTELUI — CLASA a IX-a TH", title_style),
-        Spacer(1, 10),
-        Paragraph("<b>An școlar:</b> 2026-2027 | <b>Especialitatea:</b> Turism și Alimentație (Lucrător Hotelier)", body_style),
-        Spacer(1, 10),
-        Paragraph("I. SITUAȚIA GENERALĂ A CLASEI", sub_style),
-        Spacer(1, 4)
-    ]
-    
-    info_data = [
-        [Paragraph("<b>Indicator</b>", head_style), Paragraph("<b>Valoare / Stare</b>", head_style)],
-        [Paragraph("Total Elevi Înscriși", body_style), Paragraph("32 elevi", body_style)],
-        [Paragraph("Clasă / Profil", body_style), Paragraph("a IX-a TH — Turism și Alimentație", body_style)],
-        [Paragraph("Stare Salvări Catalog", body_style), Paragraph("Actualizat la zi în baza de date Excel", body_style)],
-        [Paragraph("Promovabilitate Estimată", body_style), Paragraph("100%", body_style)]
-    ]
-    t = Table(info_data, colWidths=[260, 260])
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#1A237E')),
-        ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#B0BEC5')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5)
-    ]))
-    story.append(t)
-    story.append(Spacer(1, 15))
-    
-    story.append(Paragraph("II. OBSERVAȚII ȘI MĂSURI DISCIPLINARE / FRECVENȚĂ", sub_style))
-    story.append(Spacer(1, 4))
-    story.append(Paragraph("• Frecvența elevilor este monitorizată zilnic și actualizată în catalogul electronic.", body_style))
-    story.append(Paragraph("• Pentru elevii care acumulează absențe nemotivate se aplică scăderea notei la purtare (-1 punct la 20 de absențe nemotivate).", body_style))
-    story.append(Paragraph("• Se menține legătura permanentă cu părinții/reprezentanții legali prin portalul securizat online.", body_style))
-    
-    story.append(Spacer(1, 30))
-    sign_data = [
-        [Paragraph("<b>Profesor Diriginte:</b> ____________________", body_style), Paragraph("<b>Data:</b> _____________", body_style)]
-    ]
-    st_sign = Table(sign_data, colWidths=[320, 200])
-    story.append(st_sign)
-    
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
 
 # --- TAB 1: NOTĂ ---
 with tab1:
@@ -419,16 +458,16 @@ with tab1:
                     d_col = n_col + 1
                     cell_n = ws.cell(row=student_row, column=n_col)
                     cell_d = ws.cell(row=student_row, column=d_col)
-                    if cell_n.value is None or str(cell_n.value).strip() == "":
+                    if cell_n.value is None or safe_str(cell_n.value) == "":
                         cell_n.value = int(nota_val)
-                        cell_d.value = str(data_nota)
+                        cell_d.value = safe_str(data_nota)
                         cell_d.number_format = '@'
                         slot_found = True
                         slot_num = k + 1
                         break
                 if slot_found:
                     wb.save(selected_file)
-                    st.success(f"✅ Notă salvată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} pentru {ELEVI[elev_idx_n][1]}")
+                    st.success(f"✅ Notă salvată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
                 else:
                     st.error("❌ Toate cele 5 sloturi de note sunt pline pentru această disciplină!")
                 wb.close()
@@ -459,20 +498,21 @@ with tab2:
                 student_row = 9 + elev_idx_a
                 start_col = DISCIPLINE_CG[mat_idx_a][1] if cat_a == "Cultură Generală" else MODULE_TH[mat_idx_a][1]
                 
-                abs_val = f"{data_abs.strip()}m" if is_mot else data_abs.strip()
+                abs_val = f"{safe_str(data_abs)}m" if is_mot else safe_str(data_abs)
                 
                 slot_found = False
                 for k in range(8):
                     a_col = start_col + 11 + k
                     cell_a = ws.cell(row=student_row, column=a_col)
-                    if cell_a.value is None or str(cell_a.value).strip() == "":
+                    if cell_a.value is None or safe_str(cell_a.value) == "":
                         cell_a.value = abs_val
                         cell_a.number_format = '@'
                         slot_found = True
+                        slot_num = k + 1
                         break
                 if slot_found:
                     wb.save(selected_file)
-                    st.success(f"✅ Absență salvată: '{abs_val}' la {materii_a[mat_idx_a]} pentru {ELEVI[elev_idx_a][1]}")
+                    st.success(f"✅ Absență salvată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
                 else:
                     st.error("❌ Toate cele 8 sloturi de absențe sunt pline pentru această disciplină!")
                 wb.close()
@@ -494,7 +534,7 @@ with tab3:
     if st.button("✅ Motivează Absența", type="primary", use_container_width=True):
         if not os.path.exists(selected_file):
             st.error(f"Fișierul {selected_file} nu există!")
-        elif not data_mot.strip():
+        elif not safe_str(data_mot):
             st.warning("Vă rugăm să introduceți data absenței!")
         else:
             try:
@@ -504,12 +544,12 @@ with tab3:
                 student_row = 9 + elev_idx_m
                 start_col = DISCIPLINE_CG[mat_idx_m][1] if cat_m == "Cultură Generală" else MODULE_TH[mat_idx_m][1]
                 
-                target_d = data_mot.strip()
+                target_d = safe_str(data_mot)
                 found = False
                 for k in range(8):
                     a_col = start_col + 11 + k
                     cell_a = ws.cell(row=student_row, column=a_col)
-                    val = str(cell_a.value).strip() if cell_a.value else ""
+                    val = safe_str(cell_a.value)
                     if val == target_d:
                         cell_a.value = f"{target_d}m"
                         cell_a.number_format = '@'
@@ -532,124 +572,173 @@ with tab3:
 
 # --- TAB 4: FIȘĂ ELEV ---
 with tab4:
-    st.subheader("Fișă Elev & Rezumat")
-    col_e1, col_e2 = st.columns([3, 1])
-    with col_e1:
+    st.subheader("Fișă Elev & Rezumat Individual")
+    
+    col_v1, col_v2 = st.columns([2, 1])
+    with col_v1:
         elev_idx_v = st.selectbox("Alege Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_v")
-        
+    with col_v2:
+        st.write("")
+        st.write("")
+        if os.path.exists(selected_file):
+            try:
+                pdf_data = generate_student_pdf_bytes(selected_file, elev_idx_v)
+                st.download_button(
+                    label="🖨️ Descarcă Fișă PDF",
+                    data=pdf_data,
+                    file_name=f"fisa_elev_{ELEVI[elev_idx_v][2]}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            except Exception as e_pdf:
+                st.error(f"Eroare PDF: {e_pdf}")
+
     if os.path.exists(selected_file):
         try:
             wb = openpyxl.load_workbook(selected_file, data_only=True)
             e_info = ELEVI[elev_idx_v]
+            st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[3]})")
             
-            rows_cg, rows_th = [], []
-            for cat_title, sheet_n, sub_list, r_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG, rows_cg), ("Module Tehnologice", "Module Tehnologice", MODULE_TH, rows_th)]:
+            for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
+                st.markdown(f"#### {cat_title}")
                 ws = wb[sheet_n]
                 s_row = 9 + elev_idx_v
+                
+                rows_data = []
                 for s_name, start_col in sub_list:
-                    notes = [str(ws.cell(row=s_row, column=start_col + (k * 2)).value) for k in range(5) if ws.cell(row=s_row, column=start_col + (k * 2)).value is not None and str(ws.cell(row=s_row, column=start_col + (k * 2)).value).strip() != ""]
-                    absences = [str(ws.cell(row=s_row, column=start_col + 11 + k).value) for k in range(8) if ws.cell(row=s_row, column=start_col + 11 + k).value is not None and str(ws.cell(row=s_row, column=start_col + 11 + k).value).strip() != ""]
+                    notes = []
+                    for k in range(5):
+                        n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
+                        if n_val is not None and safe_str(n_val) != "":
+                            notes.append(safe_str(n_val))
+                    absences = []
+                    for k in range(8):
+                        a_val = ws.cell(row=s_row, column=start_col + 11 + k).value
+                        if a_val is not None and safe_str(a_val) != "":
+                            absences.append(safe_str(a_val))
                     media_val = ws.cell(row=s_row, column=start_col + 19).value
-                    media_str = f"{float(media_val):.2f}" if isinstance(media_val, (int, float)) else (str(media_val) if media_val else "-")
+                    media_str = safe_float_str(media_val)
                     
-                    r_list.append({
+                    rows_data.append({
                         "Disciplină / Modul": s_name,
                         "Note": ", ".join(notes) if notes else "Fără note",
                         "Absențe": ", ".join(absences) if absences else "Fără absențe",
                         "Medie": media_str
                     })
+                st.dataframe(rows_data, use_container_width=True)
             wb.close()
-            
-            with col_e2:
-                st.write("")
-                st.write("")
-                pdf_bytes_fisa = generate_fisa_elev_pdf(e_info, rows_cg, rows_th)
-                st.download_button(
-                    label="🖨️ Descarcă Fișă PDF",
-                    data=pdf_bytes_fisa,
-                    file_name=f"Fisa_Elev_{e_info[2].replace('/', '_')}.pdf",
-                    mime="application/pdf",
-                    type="primary",
-                    use_container_width=True
-                )
-                
-            st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[2]})")
-            st.markdown("#### Cultură Generală")
-            st.dataframe(rows_cg, use_container_width=True)
-            st.markdown("#### Module Tehnologice")
-            st.dataframe(rows_th, use_container_width=True)
-            
         except Exception as ex:
             st.error(f"Eroare la citire fișă: {ex}")
     else:
-        st.info("Fișierul Excel nu a fost încărcat încă.")
+        st.info("Fișierul Excel nu a fost găsit.")
 
 # --- TAB 5: CENTRALIZATOR CLASĂ ---
 with tab5:
-    st.subheader("📋 Centralizator Medii & Situație Școlară Clasă")
-    col_c1, col_c2 = st.columns([3, 1])
-    with col_c2:
-        if os.path.exists(selected_file):
-            pdf_bytes_cen = generate_centralizator_pdf(selected_file)
+    st.subheader("📋 Centralizator General Clasă — Situație Școlară")
+    
+    if os.path.exists(selected_file):
+        try:
+            c_pdf_data = generate_centralizator_pdf_bytes(selected_file)
             st.download_button(
-                label="🖨️ Descarcă Centralizator PDF",
-                data=pdf_bytes_cen,
-                file_name="Centralizator_Clasa_IX_TH.pdf",
+                label="🖨️ Descarcă Centralizator Clasă PDF",
+                data=c_pdf_data,
+                file_name="centralizator_clasic_IX_TH.pdf",
                 mime="application/pdf",
-                type="primary",
-                use_container_width=True
+                use_container_width=False
             )
-            
+        except Exception as e_cpdf:
+            st.error(f"Eroare PDF Centralizator: {e_cpdf}")
+
     if os.path.exists(selected_file):
         try:
             wb = openpyxl.load_workbook(selected_file, data_only=True)
-            ws_cen = wb["Centralizator Medii"] if "Centralizator Medii" in wb.sheetnames else None
-            ws_abs = wb["Absențe & Purtare"] if "Absențe & Purtare" in wb.sheetnames else None
-            
-            cen_data = []
-            for idx, e in enumerate(ELEVI):
+            ws_cg = wb["Cultură Generală"]
+            ws_th = wb["Module Tehnologice"]
+            ws_abs = wb["Absențe & Purtare"]
+
+            cent_rows = []
+            for idx, (num, nume, row_id, matr) in enumerate(ELEVI):
                 s_row = 9 + idx
-                mcg = ws_cen.cell(row=s_row, column=5).value if ws_cen else "-"
-                mth = ws_cen.cell(row=s_row, column=6).value if ws_cen else "-"
-                mgen = ws_cen.cell(row=s_row, column=7).value if ws_cen else "-"
-                purt = ws_cen.cell(row=s_row, column=8).value if ws_cen else "10"
-                abs_tot = ws_abs.cell(row=s_row, column=7).value if ws_abs else "-"
-                
-                cen_data.append({
-                    "Nr.": e[0],
-                    "Nume și Prenume": e[1],
-                    "Matricol": e[2],
-                    "Media CG": f"{float(mcg):.2f}" if isinstance(mcg, (int, float)) else str(mcg or "-"),
-                    "Media Module": f"{float(mth):.2f}" if isinstance(mth, (int, float)) else str(mth or "-"),
-                    "Media Generală": f"{float(mgen):.2f}" if isinstance(mgen, (int, float)) else str(mgen or "-"),
-                    "Purtare": str(purt or "10"),
-                    "Total Absențe": str(abs_tot or "0")
+
+                cg_medias = []
+                for s_name, start_col in DISCIPLINE_CG:
+                    m_val = ws_cg.cell(row=s_row, column=start_col + 19).value
+                    if isinstance(m_val, (int, float)):
+                        cg_medias.append(float(m_val))
+                med_cg_str = f"{sum(cg_medias)/len(cg_medias):.2f}" if cg_medias else "-"
+
+                th_medias = []
+                for m_name, start_col in MODULE_TH:
+                    m_val = ws_th.cell(row=s_row, column=start_col + 19).value
+                    if isinstance(m_val, (int, float)):
+                        th_medias.append(float(m_val))
+                med_th_str = f"{sum(th_medias)/len(th_medias):.2f}" if th_medias else "-"
+
+                all_medias = cg_medias + th_medias
+                med_gen_str = f"{sum(all_medias)/len(all_medias):.2f}" if all_medias else "-"
+
+                abs_row = 9 + idx
+                mot_val = ws_abs.cell(row=abs_row, column=4).value
+                nemot_val = ws_abs.cell(row=abs_row, column=5).value
+                purt_val = ws_abs.cell(row=abs_row, column=7).value
+
+                mot_str = safe_str(mot_val) if mot_val is not None else "0"
+                nemot_str = safe_str(nemot_val) if nemot_val is not None else "0"
+                purt_str = safe_float_str(purt_val, default="10")
+
+                statut_str = "Promovat" if all_medias and all(m >= 5.0 for m in all_medias) else ("În curs" if not all_medias else "Corigent")
+
+                cent_rows.append({
+                    "Nr.": num,
+                    "Nume și Prenume Elev": nume,
+                    "Nr. Matr.": matr,
+                    "Medie CG": med_cg_str,
+                    "Medie Module": med_th_str,
+                    "Medie Gen.": med_gen_str,
+                    "Purtare": purt_str,
+                    "Abs. Mot.": mot_str,
+                    "Abs. Nemot.": nemot_str,
+                    "Statut Școlar": statut_str
                 })
+
+            st.dataframe(cent_rows, use_container_width=True)
             wb.close()
-            st.dataframe(cen_data, use_container_width=True)
         except Exception as ex:
             st.error(f"Eroare la citire centralizator: {ex}")
 
 # --- TAB 6: RAPORT DIRIGINTE ---
 with tab6:
     st.subheader("📈 Raport Sintetic al Dirigintelui")
-    col_r1, col_r2 = st.columns([3, 1])
-    with col_r2:
-        if os.path.exists(selected_file):
-            pdf_bytes_rap = generate_raport_pdf(selected_file)
+    
+    if os.path.exists(selected_file):
+        try:
+            r_pdf_data = generate_raport_pdf_bytes(selected_file)
             st.download_button(
-                label="🖨️ Descarcă Raport PDF",
-                data=pdf_bytes_rap,
-                file_name="Raport_Diriginte_IX_TH.pdf",
+                label="🖨️ Descarcă Raport DirigINTE PDF",
+                data=r_pdf_data,
+                file_name="raport_diriginte_IX_TH.pdf",
                 mime="application/pdf",
-                type="primary",
-                use_container_width=True
+                use_container_width=False
             )
-            
+        except Exception as e_rpdf:
+            st.error(f"Eroare PDF Raport: {e_rpdf}")
+
     st.markdown("#### Indicatori Cheie de Performanță Clasă")
-    st.json({
-        "Total Elevi Înscriși": 32,
-        "Profil / Calificare": "Clasa a IX-a TH — Turism și Alimentație",
-        "Promovabilitate Estimată": "100%",
-        "Stare Catalog": "Actualizat în timp real (Excel & Bază de date)"
-    })
+    r_col1, r_col2 = st.columns(2)
+    with r_col1:
+        st.metric(label="Total Elevi Înscriși", value="32 elevi")
+        st.metric(label="Promovabilitate Estimată", value="100%")
+    with r_col2:
+        st.metric(label="Profil / Calificare", value="IX TH — Turism și Alimentație")
+        st.metric(label="Stare Catalog", value="Actualizat în timp real (Excel)")
+
+    st.markdown("---")
+    st.markdown("#### Detalii Indicatori Raportare")
+    r_table = [
+        {"Indicator Performanță": "Total Elevi Înscriși", "Valoare / Stare": "32 elevi"},
+        {"Indicator Performanță": "Profil / Calificare", "Valoare / Stare": "Turism și Alimentație (Lucrător Hotelier)"},
+        {"Indicator Performanță": "Promovabilitate Estimată", "Valoare / Stare": "100%"},
+        {"Indicator Performanță": "Frecvență Școlară", "Valoare / Stare": "Monitorizată în timp real în catalogul digital"},
+        {"Indicator Performanță": "Stare Date Catalog", "Valoare / Stare": "Actualizat la zi (Note, Absențe, Motivări)"}
+    ]
+    st.dataframe(r_table, use_container_width=True)
