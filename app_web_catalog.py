@@ -4,10 +4,13 @@ import openpyxl
 import streamlit as st
 
 st.set_page_config(
-    page_title="Catalog Școlar Online IX TH",
+    page_title="Catalog Școlar Online IX TH - Profesori",
     page_icon="🏫",
     layout="wide"
 )
+
+# Parolă de acces pentru profesori (poate fi modificată aici)
+PAROLA_PROFESORI = "profesori2026"
 
 # Lista celor 32 de elevi
 ELEVI = [
@@ -84,35 +87,60 @@ def find_excel_file():
 
 excel_path = find_excel_file()
 
+# --- SISTEM DE AUTENTIFICARE / LOGIN ---
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; color: #1E3A8A;'>🏫 Colegiul 'Emil Negruțiu' Turda</h2>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #374151;'>🔒 Catalog Cadre Didactice — Autentificare</h3>", unsafe_allow_html=True)
+    st.write("")
+    
+    col_c1, col_c2, col_c3 = st.columns([1, 2, 1])
+    with col_c2:
+        st.info("💡 Introduceți parola de acces pentru profesori pentru a gestiona notele, absențele și rapoartele clasei.")
+        input_pass = st.text_input("Parolă Profesori:", type="password", key="login_pass_input")
+        
+        if st.button("🔑 Conectare în Catalog", type="primary", use_container_width=True):
+            if input_pass == PAROLA_PROFESORI:
+                st.session_state["authenticated"] = True
+                st.success("✅ Autentificare reușită!")
+                st.rerun()
+            else:
+                st.error("❌ Parolă incorectă! Vă rugăm să încercați din nou.")
+    st.stop()
+
+# --- APLICAȚIA PRINCIPALĂ (CÂND UTILIZATORUL ESTE AUTENTIFICAT) ---
+
 st.title("🏫 Colegiul 'Emil Negruțiu' Turda — Catalog Școlar Online (IX TH Turism)")
-st.caption("Aplicație Web Streamlit pentru gestionare note, absențe și vizualizare catalog complet")
+st.caption("Aplicație Web Cadre Didactice — Acces Securizat pentru profesori")
 
 if not os.path.exists(excel_path):
     st.warning(f"⚠️ Fișierul catalog '{excel_path}' nu a fost găsit în directorul curent. Vă rugăm să îl încărcați pe GitHub în același folder.")
 
-# Sidebar setup
 with st.sidebar:
-    st.header("⚙️ Opțiuni Catalog")
+    st.header("⚙️ Admin & Opțiuni")
     selected_file = st.text_input("Fișier Excel:", value=excel_path)
     
-    st.markdown("---")
-    st.subheader("📥 Descarcă Fișierul Excel")
     if os.path.exists(selected_file):
-        with open(selected_file, "rb") as f:
-            bytes_data = f.read()
-        st.download_button(
-            label="📥 Descarcă Catalog Excel (.xlsx)",
-            data=bytes_data,
-            file_name="catalog_scolar_clasa_IX_TH_Turda-v14.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
-        st.caption("Puteți descărca oricând versiunea actualizată a fișierului Excel pe telefon sau calculator.")
-    else:
-        st.error("Fișierul nu este disponibil pentru descărcare.")
-        
-    st.markdown("---")
-    st.info("💡 Modificările făcute în aplicație se salvează automat în fișierul Excel.")
+        try:
+            with open(selected_file, "rb") as f:
+                file_bytes = f.read()
+            st.download_button(
+                label="📥 Descarcă Catalog Excel (.xlsx)",
+                data=file_bytes,
+                file_name=os.path.basename(selected_file),
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.warning(f"Nu s-a putut pregăti fișierul pentru descărcare: {e}")
+            
+    st.write("---")
+    if st.button("🚪 Deconectare (Logout)", use_container_width=True):
+        st.session_state["authenticated"] = False
+        st.rerun()
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "➕ Adăugare Notă", 
@@ -133,7 +161,10 @@ with tab1:
         elev_idx_n = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_n")
         cat_n = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_n")
     with col2:
-        materii = [d[0] for d in DISCIPLINE_CG] if cat_n == "Cultură Generală" else [m[0] for m in MODULE_TH]
+        if cat_n == "Cultură Generală":
+            materii = [d[0] for d in DISCIPLINE_CG]
+        else:
+            materii = [m[0] for m in MODULE_TH]
         mat_idx_n = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii)), format_func=lambda i: materii[i], key="mat_n")
         nota_val = st.number_input("Notă (1 - 10):", min_value=1, max_value=10, value=10, step=1)
         data_nota = st.text_input("Data Notei (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_n")
@@ -165,7 +196,6 @@ with tab1:
                 if slot_found:
                     wb.save(selected_file)
                     st.success(f"✅ Notă salvată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
-                    st.rerun()
                 else:
                     st.error("❌ Toate cele 5 sloturi de note sunt pline pentru această disciplină!")
                 wb.close()
@@ -211,7 +241,6 @@ with tab2:
                 if slot_found:
                     wb.save(selected_file)
                     st.success(f"✅ Absență salvată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
-                    st.rerun()
                 else:
                     st.error("❌ Toate cele 8 sloturi de absențe sunt pline pentru această disciplină!")
                 wb.close()
@@ -263,7 +292,6 @@ with tab3:
                 if found and cell_a.value == f"{target_d}m":
                     wb.save(selected_file)
                     st.success(f"✅ Absență motivată ('{target_d}m') pentru {ELEVI[elev_idx_m][1]} la {materii_m[mat_idx_m]}")
-                    st.rerun()
                 elif not found:
                     st.warning(f"Nu s-a găsit nicio absență nemotivată cu data '{target_d}'.")
                 wb.close()
@@ -272,14 +300,13 @@ with tab3:
 
 # --- TAB 4: FIȘĂ ELEV ---
 with tab4:
-    st.subheader("Fișă Elev & Rezumat Individual")
+    st.subheader("Fișă Elev & Rezumat")
     elev_idx_v = st.selectbox("Alege Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_v")
-    
     if os.path.exists(selected_file):
         try:
             wb = openpyxl.load_workbook(selected_file, data_only=True)
             e_info = ELEVI[elev_idx_v]
-            st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[2]} | RM/PG {e_info[3]})")
+            st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[2]})")
             
             for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
                 st.markdown(f"#### {cat_title}")
@@ -316,98 +343,91 @@ with tab4:
 
 # --- TAB 5: CENTRALIZATOR CLASĂ ---
 with tab5:
-    st.subheader("📋 Centralizator Clasă (Toți Elevii)")
-    st.write("Aici puteți vedea situația generală a tuturor celor 32 de elevi direct din browser.")
-    
+    st.subheader("📋 Centralizator Medii & Situație Școlară Clasă")
     if os.path.exists(selected_file):
         try:
             wb = openpyxl.load_workbook(selected_file, data_only=True)
-            
-            # Preluare din Absențe & Purtare
-            ws_abs = wb["Absențe & Purtare"]
-            # Preluare din Centralizator Medii
-            ws_cent = wb["Centralizator Medii"]
-            
-            table_data = []
-            for idx, e in enumerate(ELEVI):
-                r = 9 + idx
+            if "Centralizator Medii" in wb.sheetnames:
+                ws_c = wb["Centralizator Medii"]
                 
-                # Centralizator Medii columns:
-                # col 1: Nr, col 2: Nume, col 3: Matr, col 4: RM/PG, col 5: Media CG, col 6: Media Module, col 7: Media Gen, col 8: Purtare, col 9: Statut
-                med_cg = ws_cent.cell(row=r, column=5).value
-                med_mod = ws_cent.cell(row=r, column=6).value
-                med_gen = ws_cent.cell(row=r, column=7).value
-                not_purt = ws_cent.cell(row=r, column=8).value
-                statut = ws_cent.cell(row=r, column=9).value
-                
-                # Absențe & Purtare columns:
-                # col 5: Nemotivate, col 6: Motivate, col 7: Total Abs
-                abs_nem = ws_abs.cell(row=r, column=5).value
-                abs_mot = ws_abs.cell(row=r, column=6).value
-                abs_tot = ws_abs.cell(row=r, column=7).value
-                
-                table_data.append({
-                    "Nr.": e[0],
-                    "Nume și Prenume": e[1],
-                    "Matricol": e[2],
-                    "Media CG": f"{float(med_cg):.2f}" if isinstance(med_cg, (int, float)) else (str(med_cg) if med_cg else "-"),
-                    "Media Module": f"{float(med_mod):.2f}" if isinstance(med_mod, (int, float)) else (str(med_mod) if med_mod else "-"),
-                    "Media Generală": f"{float(med_gen):.2f}" if isinstance(med_gen, (int, float)) else (str(med_gen) if med_gen else "-"),
-                    "Abs. Nemotivate": abs_nem if abs_nem is not None else 0,
-                    "Abs. Motivate": abs_mot if abs_mot is not None else 0,
-                    "Total Absențe": abs_tot if abs_tot is not None else 0,
-                    "Notă Purtare": not_purt if not_purt is not None else 10,
-                    "Statut Școlar": statut if statut else "Înscris"
-                })
-            
-            st.dataframe(table_data, use_container_width=True, height=600)
+                centr_rows = []
+                for r in range(9, 41):
+                    nr = ws_c.cell(r, 1).value
+                    nume = ws_c.cell(r, 2).value
+                    matr = ws_c.cell(r, 3).value
+                    rm = ws_c.cell(r, 4).value
+                    med_cg = ws_c.cell(r, 5).value
+                    med_mod = ws_c.cell(r, 6).value
+                    med_gen = ws_c.cell(r, 7).value
+                    purtare = ws_c.cell(r, 8).value
+                    statut = ws_c.cell(r, 9).value
+                    
+                    if nume:
+                        centr_rows.append({
+                            "Nr.": nr,
+                            "Nume și Prenume": nume,
+                            "Matricol": matr,
+                            "RM/PG": rm if rm else "-",
+                            "Medie CG": f"{float(med_cg):.2f}" if isinstance(med_cg, (int, float)) else (str(med_cg) if med_cg else "-"),
+                            "Medie Module": f"{float(med_mod):.2f}" if isinstance(med_mod, (int, float)) else (str(med_mod) if med_mod else "-"),
+                            "Medie Generală": f"{float(med_gen):.2f}" if isinstance(med_gen, (int, float)) else (str(med_gen) if med_gen else "-"),
+                            "Purtare": purtare if purtare else 10,
+                            "Statut Școlar": statut if statut else "Înscris"
+                        })
+                st.dataframe(centr_rows, use_container_width=True)
+            else:
+                st.warning("Sheet-ul 'Centralizator Medii' nu a fost găsit în fișier.")
             wb.close()
         except Exception as ex:
             st.error(f"Eroare la citire centralizator: {ex}")
 
 # --- TAB 6: RAPORT DIRIGINTE ---
 with tab6:
-    st.subheader("📈 Raport DirigINTE & Statistica Clasei")
-    
+    st.subheader("📈 Raport Diriginte — Indicatori & Statistică Clasă")
     if os.path.exists(selected_file):
         try:
             wb = openpyxl.load_workbook(selected_file, data_only=True)
-            ws_rap = wb["Raport Diriginte"]
-            
-            tot_elevi = ws_rap.cell(row=6, column=1).value or 32
-            promovabilitate = ws_rap.cell(row=6, column=2).value or "100%"
-            med_clasa = ws_rap.cell(row=6, column=3).value or "-"
-            med_purtare = ws_rap.cell(row=6, column=4).value or "10"
-            tot_abs_clasa = ws_rap.cell(row=6, column=5).value or 0
-            
-            c1, c2, c3, c4, c5 = st.columns(5)
-            c1.metric("Total Elevi", tot_elevi)
-            c2.metric("Promovabilitate", f"{promovabilitate}")
-            c3.metric("Media Clasei", f"{float(med_clasa):.2f}" if isinstance(med_clasa, (int, float)) else str(med_clasa))
-            c4.metric("Media Purtare", f"{float(med_purtare):.2f}" if isinstance(med_purtare, (int, float)) else str(med_purtare))
-            c5.metric("Total Absențe Clasă", tot_abs_clasa)
-            
-            st.markdown("---")
-            st.subheader("Distribuția Mediilor & Centralizator Absențe")
-            
-            dist_data = []
-            for r in range(11, 16):
-                transa = ws_rap.cell(row=r, column=1).value
-                nr_e = ws_rap.cell(row=r, column=2).value
-                pondere = ws_rap.cell(row=r, column=3).value
-                cat_abs = ws_rap.cell(row=r, column=4).value
-                val_abs = ws_rap.cell(row=r, column=5).value
+            if "Raport Diriginte" in wb.sheetnames:
+                ws_r = wb["Raport Diriginte"]
                 
-                if transa or cat_abs:
-                    dist_data.append({
-                        "Tranșă Medie Generală": transa or "-",
-                        "Nr. Elevi": nr_e if nr_e is not None else 0,
-                        "Pondere (%)": f"{float(pondere)*100:.1f}%" if isinstance(pondere, (int, float)) else str(pondere or "-"),
-                        "Indicator Absențe / Disciplină": cat_abs or "-",
-                        "Valoare Clasă": val_abs if val_abs is not None else 0
-                    })
-            
-            st.dataframe(dist_data, use_container_width=True)
+                # Indicatori cheie
+                tot_e = ws_r.cell(6, 1).value or 32
+                promov = ws_r.cell(6, 3).value or "100%"
+                med_clasa = ws_r.cell(6, 5).value or "-"
+                med_purtare = ws_r.cell(6, 7).value or 10
+                
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Total Elevi", tot_e)
+                m2.metric("Promovabilitate", promov)
+                m3.metric("Media Clasei", f"{float(med_clasa):.2f}" if isinstance(med_clasa, (int, float)) else str(med_clasa))
+                m4.metric("Media la Purtare", med_purtare)
+                
+                st.write("---")
+                st.markdown("#### Distribuția Medii & Absențe Clasă")
+                
+                col_r1, col_r2 = st.columns(2)
+                with col_r1:
+                    st.markdown("**Distribuția Mediilor Generale**")
+                    transe = []
+                    for r in range(11, 18):
+                        t_label = ws_r.cell(r, 1).value
+                        t_nr = ws_r.cell(r, 2).value or 0
+                        t_pct = ws_r.cell(r, 4).value or "-"
+                        if t_label:
+                            transe.append({"Tranșă Medie": t_label, "Nr. Elevi": t_nr, "Pondere": str(t_pct)})
+                    st.table(transe)
+                    
+                with col_r2:
+                    st.markdown("**Centralizator Absențe Clasă**")
+                    abs_stats = []
+                    for r in range(11, 17):
+                        cat_abs = ws_r.cell(r, 6).value
+                        val_abs = ws_r.cell(r, 7).value or 0
+                        if cat_abs:
+                            abs_stats.append({"Categorie": cat_abs, "Valoare": val_abs})
+                    st.table(abs_stats)
+            else:
+                st.warning("Sheet-ul 'Raport Diriginte' nu a fost găsit în fișier.")
             wb.close()
         except Exception as ex:
-            st.error(f"Eroare la citire raport diriginte: {ex}")
+            st.error(f"Eroare la citire raport: {ex}")
