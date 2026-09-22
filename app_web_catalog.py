@@ -93,40 +93,40 @@ if not st.session_state["authenticated"]:
 
 # --- APLICAȚIA PRINCIPALA PENTRU PROFESORI ---
 
-# Lista celor 32 de elevi
+# Lista celor 32 de elevi (ID, Nume, Nr. Matr. Simplu, Nr. Matr. Registru/Complet, PIN)
 ELEVI = [
-    (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76"),
-    (2, "BARA D. ADRIAN DANIEL", 14, "126/77"),
-    (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78"),
-    (4, "BUDULĂU I.M. VLAD IOAN", 16, "126/79"),
-    (5, "CHESZOVAN D.E. IRINA JULIETA", 17, "126/80"),
-    (6, "CIURCUI V. DIANA", 18, "126/81"),
-    (7, "CORDIȘ M.C. EDUARD IONUȚ", 19, "126/82"),
-    (8, "DEMETER D.C. DENIS RĂZVAN", 20, "126/83"),
-    (9, "FERENCZI E.C. MEDEA MARICARMEN", 21, "126/84"),
-    (10, "FLOREA V. FLAVIU CRISTIAN", 22, "126/85"),
-    (11, "GHERMAN M.I. DAVID MARIUS", 23, "126/86"),
-    (12, "LOBONȚ M. MIHNEA", 24, "126/87"),
-    (13, "LUKACS A.L. LORENA DENISA", 25, "126/88"),
-    (14, "MAGYARI A.M. ANDREI", 26, "126/89"),
-    (15, "MARCOVICI L.S. IOANA DENISA", 27, "126/90"),
-    (16, "MARIAN M.I. MIHAELA DARIA", 28, "126/91"),
-    (17, "MATEI V.C. ROXANA MIHAELA", 29, "126/92"),
-    (18, "MENCU R.R. DIANA OLIVIA", 30, "126/93"),
-    (19, "MUNTEANU V.N. ELENA", 31, "126/94"),
-    (20, "NAP A.C. ALEXANDRA MARIA", 32, "126/95"),
-    (21, "PETELEU C.A. CLAUDIA MARIA", 33, "126/96"),
-    (22, "POP D. ANDRA MARIA", 34, "126/97"),
-    (23, "POP M.V. LARISA ANDREEA", 35, "126/98"),
-    (24, "POP I.C. ROBERT EUGEN", 36, "126/99"),
-    (25, "POPA C.F. ILINCA", 37, "126/100"),
-    (26, "PUICA G. GEORGE ROBERT", 38, "126/101"),
-    (27, "RĂDUȚ I.M. ADELINA IOANA", 39, "128/1"),
-    (28, "ȘIPOȘ T.R. DAVID ADRIAN", 40, "128/2"),
-    (29, "TRIF S.D. TUȘA DANIEL", 41, "128/3"),
-    (30, "TUȘINEAN S.V. IRINA", 42, "128/4"),
-    (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5"),
-    (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6")
+    (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76", "2951"),
+    (2, "BARA D. ADRIAN DANIEL", 14, "126/77", "6234"),
+    (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78", "9233"),
+    (4, "BUDULĂU I.M. VLAD IOAN", 16, "126/79", "9385"),
+    (5, "CHESZOVAN D.E. IRINA JULIETA", 17, "126/80", "2681"),
+    (6, "CIURCUI V. DIANA", 18, "126/81", "4658"),
+    (7, "CORDIȘ M.C. EDUARD IONUȚ", 19, "126/82", "7891"),
+    (8, "DEMETER D.C. DENIS RĂZVAN", 20, "126/83", "9975"),
+    (9, "FERENCZI E.C. MEDEA MARICARMEN", 21, "126/84", "9042"),
+    (10, "FLOREA V. FLAVIU CRISTIAN", 22, "126/85", "8226"),
+    (11, "GHERMAN M.I. DAVID MARIUS", 23, "126/86", "4931"),
+    (12, "LOBONȚ M. MIHNEA", 24, "126/87", "1041"),
+    (13, "LUKACS A.L. LORENA DENISA", 25, "126/88", "2322"),
+    (14, "MAGYARI A.M. ANDREI", 26, "126/89", "2814"),
+    (15, "MARCOVICI L.S. IOANA DENISA", 27, "126/90", "5706"),
+    (16, "MARIAN M.I. MIHAELA DARIA", 28, "126/91", "2606"),
+    (17, "MATEI V.C. ROXANA MIHAELA", 29, "126/92", "8367"),
+    (18, "MENCU R.R. DIANA OLIVIA", 30, "126/93", "1188"),
+    (19, "MUNTEANU V.N. ELENA", 31, "126/94", "9032"),
+    (20, "NAP A.C. ALEXANDRA MARIA", 32, "126/95", "6148"),
+    (21, "PETELEU C.A. CLAUDIA MARIA", 33, "126/96", "4444"),
+    (22, "POP D. ANDRA MARIA", 34, "126/97", "7508"),
+    (23, "POP M.V. LARISA ANDREEA", 35, "126/98", "5120"),
+    (24, "POP I.C. ROBERT EUGEN", 36, "126/99", "6696"),
+    (25, "POPA C.F. ILINCA", 37, "126/100", "6843"),
+    (26, "PUICA G. GEORGE ROBERT", 38, "126/101", "7166"),
+    (27, "RĂDUȚ I.M. ADELINA IOANA", 39, "128/1", "9414"),
+    (28, "ȘIPOȘ T.R. DAVID ADRIAN", 40, "128/2", "2250"),
+    (29, "TRIF S.D. TUȘA DANIEL", 41, "128/3", "6577"),
+    (30, "TUȘINEAN S.V. IRINA", 42, "128/4", "2469"),
+    (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5", "9815"),
+    (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6", "5786")
 ]
 
 DISCIPLINE_CG = [
@@ -160,7 +160,7 @@ def find_excel_file():
         "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
         "CATALOG/catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
         "/workspace/artifacts/catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
-        
+        "catalog_scolar_clasa_IX_TH_Turda-v14.xlsx"
     ]
     for c in candidates:
         if os.path.exists(c):
@@ -175,10 +175,16 @@ st.caption("Sistem Informatizat de Gestionare Note, Absențe și Generare Docume
 with st.sidebar:
     st.header("⚙️ Opțiuni Catalog")
     selected_file = st.text_input("Fișier Excel Sursă:", value=excel_path)
-    st.info("💡 Fișierul se salvează automat la fiecare modificare.")
     if os.path.exists(selected_file):
-        with open(selected_file, "rb") as f_ex:
-            st.download_button("📥 Descarcă Catalog Excel (.xlsx)", data=f_ex, file_name=os.path.basename(selected_file), mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        with open(selected_file, "rb") as f_excel:
+            st.download_button(
+                "📥 Descarcă Catalog Excel (.xlsx)",
+                data=f_excel,
+                file_name=os.path.basename(selected_file),
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+    st.info("💡 Fișierul se salvează automat la fiecare modificare.")
     st.divider()
     if st.button("🚪 Deconectare (Logout)", use_container_width=True):
         st.session_state["authenticated"] = False
@@ -424,6 +430,53 @@ def generate_pdf_raport(file_path):
     buffer.seek(0)
     return buffer
 
+def generate_pdf_pins():
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName=PDF_FONT_BOLD, fontSize=13, leading=16, alignment=1, textColor=colors.HexColor("#1A365D"))
+    subtitle_style = ParagraphStyle('SubtitleStyle', parent=styles['Normal'], fontName=PDF_FONT, fontSize=9, leading=12, alignment=1, textColor=colors.HexColor("#4A5568"))
+    cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontName=PDF_FONT, fontSize=8, leading=11)
+    cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=8, leading=11)
+
+    story.append(Paragraph("COLEGIUL 'EMIL NEGRUȚIU' TURDA", title_style))
+    story.append(Paragraph("TABEL CODURI PIN CONFIDENȚIALE PENTRU PORTALUL PĂRINȚILOR", title_style))
+    story.append(Paragraph("Clasa a IX-a TH — Turism și Alimentație | An școlar 2026-2027", subtitle_style))
+    story.append(Spacer(1, 10))
+    
+    pin_table_data = [[
+        Paragraph("<b>Nr.</b>", cell_bold),
+        Paragraph("<b>Nume și Prenume Elev</b>", cell_bold),
+        Paragraph("<b>Nr. Matricol Registru</b>", cell_bold),
+        Paragraph("<b>Cod PIN Confidențial Părinte</b>", cell_bold)
+    ]]
+    
+    for e in ELEVI:
+        pin_table_data.append([
+            Paragraph(str(e[0]), cell_style),
+            Paragraph(e[1], cell_style),
+            Paragraph(str(e[3]), cell_style),
+            Paragraph(f"<b>{e[4]}</b>", cell_bold)
+        ])
+        
+    t_pin = Table(pin_table_data, colWidths=[30, 240, 130, 120])
+    t_pin.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
+        ('PADDING', (0,0), (-1,-1), 4),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
+    ]))
+    story.append(t_pin)
+    story.append(Spacer(1, 15))
+    story.append(Paragraph("<b>Profesor Diriginte:</b> ___________________________   |   <b>Semnătură:</b> ___________", cell_style))
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
 # --- TAB 1: NOTĂ ---
 with tab1:
     st.subheader("Adăugare Notă Nouă (Sloturi N1 - N10)")
@@ -585,7 +638,7 @@ with tab4:
         try:
             wb = openpyxl.load_workbook(selected_file, data_only=True)
             e_info = ELEVI[elev_idx_v]
-            st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[2]})")
+            st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[2]}) | Cod PIN Părinți: `{e_info[4]}`")
             
             for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
                 st.markdown(f"#### {cat_title}")
@@ -656,6 +709,28 @@ with tab5:
             wb.close()
         except Exception as ex:
             st.error(f"Eroare la citire centralizator: {ex}")
+
+    # Secțiune dedicată pentru Coduri PIN Părinți
+    with st.expander("🔐 Gestionare Coduri PIN Confidențiale Părinți", expanded=False):
+        col_p1, col_p2 = st.columns([3, 1])
+        with col_p1:
+            st.info("💡 Părinții folosesc aceste coduri PIN confidențiale împreună cu Numărul Matricol pentru a se conecta în portal.")
+        with col_p2:
+            try:
+                pdf_pin_bytes = generate_pdf_pins()
+                st.download_button("🖨️ Descarcă Listă PIN-uri (PDF)", data=pdf_pin_bytes, file_name="Lista_PINuri_Parinti_IX_TH.pdf", mime="application/pdf", use_container_width=True)
+            except Exception as ex:
+                st.error(f"Eroare PDF PIN-uri: {ex}")
+                
+        pin_rows = []
+        for e in ELEVI:
+            pin_rows.append({
+                "Nr. Crt.": e[0],
+                "Nume și Prenume Elev": e[1],
+                "Nr. Matricol": e[3],
+                "Cod PIN Confidențial": e[4]
+            })
+        st.dataframe(pin_rows, use_container_width=True)
 
 # --- TAB 6: RAPORT DIRIGINTE ---
 with tab6:
