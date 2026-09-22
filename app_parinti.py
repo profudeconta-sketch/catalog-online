@@ -4,12 +4,26 @@ import openpyxl
 import streamlit as st
 
 st.set_page_config(
-    page_title="Portal Părinți - Catalog IX TH",
+    page_title="Portal Părinți — Catalog IX TH",
     page_icon="👨‍👩‍👧‍👦",
     layout="wide"
 )
 
-# Lista celor 32 de elevi (ID, Nume, Nr. Matr. Simplu, Nr. Matr. Registru/Complet)
+# Safe string conversion helpers
+def safe_str(val):
+    if val is None:
+        return ""
+    return str(val).strip()
+
+def safe_float_str(val):
+    if val is None or val == "":
+        return "-"
+    try:
+        return f"{float(val):.2f}"
+    except Exception:
+        return str(val)
+
+# Lista celor 32 de elevi
 ELEVI = [
     (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76"),
     (2, "BARA D. ADRIAN DANIEL", 14, "126/77"),
@@ -87,9 +101,8 @@ excel_path = find_excel_file()
 
 st.title("🏫 Colegiul 'Emil Negruțiu' Turda")
 st.subheader("👨‍👩‍👧‍👦 Portal Părinți — Vizualizare Fișă Școlară Elev (IX TH)")
-st.info("🔒 Acces securizat pentru părinți. Vă rugăm să vă autentificați mai jos cu Numărul Matricol al elevului pentru a consulta situația școlară.")
+st.info("🔒 Acces securizat pentru părinți. Vă rugăm să vă autentificați cu Numărul Matricol al elevului pentru a consulta situația școlară.")
 
-# Zona de Autentificare
 col_auth1, col_auth2 = st.columns([2, 1])
 
 with col_auth1:
@@ -100,94 +113,95 @@ with col_auth1:
         help="Numărul matricol se găsește pe carnetul de elev sau adeverința de înscriere."
     ).strip()
 
-def safe_str(val):
-    if val is None:
-        return ""
-    return str(val).strip()
+found_student = None
+student_idx = -1
 
-def safe_float_str(val):
-    if val is None or val == "":
-        return "-"
-    try:
-        return f"{float(val):.2f}"
-    except Exception:
-        return str(val)
-
-# Verificare elev pe bază de număr matricol
-student_found = None
 if nr_matricol_input:
-    for e in ELEVI:
-        if nr_matricol_input == str(e[2]) or nr_matricol_input == str(e[3]) or nr_matricol_input.lower() == str(e[3]).lower():
-            student_found = e
+    for idx, (nr_ord, nume, nr_matr_s, nr_matr_reg) in enumerate(ELEVI):
+        if (nr_matricol_input.lower() == safe_str(nr_matr_reg).lower() or 
+            nr_matricol_input == safe_str(nr_matr_s) or 
+            nr_matricol_input == safe_str(nr_ord)):
+            found_student = ELEVI[idx]
+            student_idx = idx
             break
 
 if not nr_matricol_input:
-    st.warning("👈 Vă rugăm să introduceți Numărul Matricol în căsuța de mai sus.")
-elif not student_found:
-    st.error("❌ Nu s-a găsit niciun elev cu acest Număr Matricol. Verificați carnetul elevului și încercați din nou.")
-else:
-    st.success(f"✅ Autentificare reușită pentru elevul: **{student_found[1]}** (Matricol {student_found[3]})")
+    st.warning("👈 Introduceți numărul matricol mai sus pentru a vizualiza datele elevului.")
+    st.stop()
+
+if not found_student:
+    st.error("❌ Nu s-a găsit niciun elev cu acest număr matricol! Verificați numărul și încercați din nou.")
+    st.stop()
+
+st.success(f"✅ Autentificat cu succes pentru elevul: **{found_student[1]}** (Matricol: {found_student[3]})")
+st.divider()
+
+if not os.path.exists(excel_path):
+    st.warning(f"⚠️ Fișierul catalog '{excel_path}' nu a fost găsit.")
+    st.stop()
+
+try:
+    wb = openpyxl.load_workbook(excel_path, data_only=True)
+    s_row = 9 + student_idx
+    
+    # 1. Preluare indicatori din Centralizator Medii
+    ws_cent = wb["Centralizator Medii"]
+    med_cg = safe_float_str(ws_cent.cell(row=s_row, column=5).value)
+    med_th = safe_float_str(ws_cent.cell(row=s_row, column=6).value)
+    med_gen = safe_float_str(ws_cent.cell(row=s_row, column=7).value)
+    nota_purtare = safe_str(ws_cent.cell(row=s_row, column=8).value) or "10"
+    statut = safe_str(ws_cent.cell(row=s_row, column=9).value) or "Promovat"
+    
+    ws_abs = wb["Absențe & Purtare"]
+    abs_nem = safe_str(ws_abs.cell(row=s_row, column=5).value) or "0"
+    abs_mot = safe_str(ws_abs.cell(row=s_row, column=6).value) or "0"
+    abs_tot = safe_str(ws_abs.cell(row=s_row, column=7).value) or "0"
+    
+    # Carduri Vizuale sintetice
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Media Cultură Gen.", med_cg)
+    m2.metric("Media Module TH", med_th)
+    m3.metric("Media Generală", med_gen)
+    m4.metric("Notă Purtare", nota_purtare)
+    m5.metric("Total Absențe", f"{abs_tot} ({abs_nem} nemot / {abs_mot} mot)")
+    
     st.divider()
-
-    if not os.path.exists(excel_path):
-        st.error(f"Fișierul catalog '{excel_path}' nu a fost găsit.")
-    else:
-        try:
-            wb = openpyxl.load_workbook(excel_path, data_only=True)
-            s_idx = student_found[0] - 1
-            s_row = 9 + s_idx
-
-            # Preluare sumare din Centralizator și Absențe
-            ws_c = wb["Centralizator Medii"]
-            ws_a = wb["Absențe & Purtare"]
-
-            media_cg = safe_float_str(ws_c.cell(row=s_row, column=5).value)
-            media_th = safe_float_str(ws_c.cell(row=s_row, column=6).value)
-            media_gen = safe_float_str(ws_c.cell(row=s_row, column=7).value)
-            nota_purtare = safe_str(ws_a.cell(row=s_row, column=8).value)
-            abs_nem = safe_str(ws_a.cell(row=s_row, column=5).value)
-            abs_mot = safe_str(ws_a.cell(row=s_row, column=6).value)
-            abs_tot = safe_str(ws_a.cell(row=s_row, column=7).value)
-
-            col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
-            col_kpi1.metric("Media Cultură Gen.", media_cg)
-            col_kpi2.metric("Media Module TH.", media_th)
-            col_kpi3.metric("Media Generală", media_gen)
-            col_kpi4.metric("Nota la Purtare", nota_purtare if nota_purtare else "10")
-            col_kpi5.metric("Total Absențe", f"{abs_tot if abs_tot else '0'} ({abs_nem if abs_nem else '0'} nem.)")
-
-            st.divider()
-
-            # Tabel detaliat pe discipline
-            for cat_title, sheet_n, sub_list in [("📚 DISCIPLINE CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG), ("⚙️ MODULE TEHNOLOGICE", "Module Tehnologice", MODULE_TH)]:
-                st.markdown(f"#### {cat_title}")
-                ws = wb[sheet_n]
-
-                rows_data = []
-                for s_name, start_col in sub_list:
-                    notes = []
-                    for k in range(10):
-                        n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
-                        d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
-                        if n_val is not None and str(n_val).strip() != "":
-                            d_str = f" ({d_val})" if d_val else ""
-                            notes.append(f"{n_val}{d_str}")
-                    absences = []
-                    for k in range(30):
-                        a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
-                        if a_val is not None and str(a_val).strip() != "":
-                            absences.append(str(a_val))
-                    media_val = ws.cell(row=s_row, column=start_col + 20).value
-                    media_str = safe_float_str(media_val)
-
-                    rows_data.append({
-                        "Disciplină / Modul": s_name,
-                        "Note & Date": ", ".join(notes) if notes else "Fără note",
-                        "Absențe": ", ".join(absences) if absences else "Fără absențe",
-                        "Medie": media_str
-                    })
-                st.dataframe(rows_data, use_container_width=True)
-
-            wb.close()
-        except Exception as ex:
-            st.error(f"Eroare la încărcarea fișei elevului: {ex}")
+    
+    # Tabele detaliate per categorie
+    for cat_title, sheet_n, sub_list in [
+        ("📚 DISCIPLINE CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG),
+        ("🏨 MODULE TEHNOLOGICE (HORECA / TURISM)", "Module Tehnologice", MODULE_TH)
+    ]:
+        st.subheader(cat_title)
+        ws = wb[sheet_n]
+        
+        rows_data = []
+        for s_name, start_col in sub_list:
+            notes_with_dates = []
+            for k in range(10):
+                n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
+                d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
+                if n_val is not None and safe_str(n_val) != "":
+                    d_str = f" ({safe_str(d_val)})" if d_val else ""
+                    notes_with_dates.append(f"{safe_str(n_val)}{d_str}")
+            
+            absences_list = []
+            for k in range(30):
+                a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
+                if a_val is not None and safe_str(a_val) != "":
+                    absences_list.append(safe_str(a_val))
+            
+            media_val = ws.cell(row=s_row, column=start_col + 20).value
+            media_str = safe_float_str(media_val)
+            
+            rows_data.append({
+                "Disciplină / Modul": s_name,
+                "Note Acoardate (Data)": ", ".join(notes_with_dates) if notes_with_dates else "Fără note",
+                "Absențe Înregistrate": ", ".join(absences_list) if absences_list else "Fără absențe",
+                "Medie Semestrială / Anuală": media_str
+            })
+        st.dataframe(rows_data, use_container_width=True)
+        
+    wb.close()
+except Exception as ex:
+    st.error(f"Eroare la citirea datelor elevului: {ex}")
