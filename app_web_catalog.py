@@ -1,15 +1,15 @@
 import datetime
 import os
 import openpyxl
-import io
 import streamlit as st
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, Image as RLImage
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+import io
 
 st.set_page_config(
     page_title="Catalog Școlar Online IX TH",
@@ -69,18 +69,6 @@ def safe_float_str(val):
     except Exception:
         return str(val)
 
-def find_image(filename):
-    candidates = [
-        filename,
-        os.path.join("/workspace/artifacts", filename),
-        os.path.join("/workspace", filename),
-        os.path.join("artifacts", filename)
-    ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
-    return filename
-
 # AUTENTIFICARE PROFESORI
 PAROLA_PROFESORI = "profesori2026"
 
@@ -101,22 +89,22 @@ if not st.session_state["authenticated"]:
                 st.rerun()
             else:
                 st.error("❌ Parolă incorectă! Vă rugăm să încercați din nou.")
-                
-    st.markdown("---")
-    st.markdown(
-        "<div style='text-align: center; color: #718096; font-size: 0.85rem; padding: 10px; background-color: #F7FAFC; border-radius: 5px; border: 1px solid #E2E8F0;'>"
-        "<b>© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor</b><br/>"
-        "<i>Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.<br/>"
-        "Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.</i><br/>"
-        "<b>🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!</b><br/>"
-        "<i>Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.</i>"
-        "</div>",
-        unsafe_allow_html=True
-    )
+    
+    st.divider()
+    st.markdown("""
+    <div style="background-color: #F7FAFC; padding: 12px; border-radius: 8px; border: 1px solid #E2E8F0; text-align: center; font-size: 13px; color: #4A5568;">
+        <b>© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor</b><br/>
+        <i>Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.<br/>
+        Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.<br/>
+        <b>🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!</b><br/>
+        Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.</i>
+    </div>
+    """, unsafe_allow_html=True)
     st.stop()
 
 # --- APLICAȚIA PRINCIPALA PENTRU PROFESORI ---
 
+# Lista celor 32 de elevi
 ELEVI = [
     (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76"),
     (2, "BARA D. ADRIAN DANIEL", 14, "126/77"),
@@ -203,32 +191,40 @@ with st.sidebar:
     
     if os.path.exists(selected_file):
         try:
-            with open(selected_file, "rb") as f_excel:
+            with open(selected_file, "rb") as f_ex:
                 st.download_button(
                     label="📥 Descarcă Catalog Excel (.xlsx)",
-                    data=f_excel.read(),
+                    data=f_ex.read(),
                     file_name=os.path.basename(selected_file),
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
-        except Exception as ex:
-            st.error(f"Eroare descărcare Excel: {ex}")
-            
+        except Exception:
+            pass
+
     st.info("💡 Fișierul se salvează automat la fiecare modificare.")
-    st.markdown("---")
-    st.caption("© **Prof. Ec. Gherman Octavian-Theodor**\nDrepturi de autor rezervate.\nComercializarea este interzisă!")
     st.divider()
     if st.button("🚪 Deconectare (Logout)", use_container_width=True):
         st.session_state["authenticated"] = False
         st.rerun()
 
+    st.divider()
+    st.markdown("""
+    <div style="font-size: 11px; color: #718096; text-align: center;">
+        <b>© Prof. Ec. Gherman Octavian-Theodor</b><br/>
+        Drepturi de autor rezervate.<br/>
+        Comercializarea interzisă.<br/>
+        Utilizare gratuită acordată exclusiv autorizat.
+    </div>
+    """, unsafe_allow_html=True)
+
 if not os.path.exists(selected_file):
     st.warning(f"⚠️ Fișierul catalog '{selected_file}' nu a fost găsit în directorul curent.")
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "➕ Adăugare Notă",
-    "❌ Adăugare Absență",
-    "✅ Motivare Absență",
+    "➕ Adăugare Notă", 
+    "❌ Adăugare Absență", 
+    "✅ Motivare Absență", 
     "📊 Fișă Elev",
     "📈 Centralizator Clasă",
     "📋 Raport Diriginte"
@@ -237,12 +233,11 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 elev_options = [f"{e[0]}. {e[1]} (Matr. {e[2]})" for e in ELEVI]
 
 # --- GENERATOARE PDF ---
-
 def generate_pdf_student(student_idx, file_path):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     story = []
-
+    
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName=PDF_FONT_BOLD, fontSize=14, leading=18, alignment=1, textColor=colors.HexColor("#1A365D"))
     subtitle_style = ParagraphStyle('SubtitleStyle', parent=styles['Normal'], fontName=PDF_FONT, fontSize=9, leading=12, alignment=1, textColor=colors.HexColor("#4A5568"))
@@ -251,190 +246,184 @@ def generate_pdf_student(student_idx, file_path):
     cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=8, leading=11)
 
     e_info = ELEVI[student_idx]
-
+    
     story.append(Paragraph("COLEGIUL 'EMIL NEGRUȚIU' TURDA", title_style))
     story.append(Paragraph("FIȘĂ INDIVIDUALĂ DE EVALUARE ȘI FRECVENȚĂ ȘCOLARĂ", title_style))
     story.append(Paragraph("Clasa a IX-a TH — Turism și Alimentație | An școlar 2026-2027", subtitle_style))
     story.append(Spacer(1, 10))
-
+    
     meta_data = [
         [Paragraph(f"<b>Nume și Prenume:</b> {e_info[1]}", cell_style), Paragraph(f"<b>Nr. Matricol:</b> {e_info[3]}", cell_style), Paragraph(f"<b>RM/PG:</b> {e_info[2]}", cell_style)]
     ]
-    t_meta = Table(meta_data, colWidths=[250, 150, 120])
+    t_meta = Table(meta_data, colWidths=[240, 150, 130])
     t_meta.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EDF2F7")),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
-        ('PADDING', (0,0), (-1,-1), 6)
+        ('PADDING', (0,0), (-1,-1), 6),
+        ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E0"))
     ]))
     story.append(t_meta)
     story.append(Spacer(1, 10))
 
     if os.path.exists(file_path):
         wb = openpyxl.load_workbook(file_path, data_only=True)
-        student_row = 9 + student_idx
-
-        # CG
-        story.append(Paragraph("DISCIPLINE CULTURĂ GENERALĂ", heading_style))
-        ws_cg = wb["Cultură Generală"]
-        table_data = [[Paragraph("<b>Disciplină</b>", cell_bold), Paragraph("<b>Note Obtinute (cu date)</b>", cell_bold), Paragraph("<b>Medie</b>", cell_bold), Paragraph("<b>Absențe</b>", cell_bold)]]
+        s_row = 9 + student_idx
         
-        for name, start_col in DISCIPLINE_CG:
-            notes = []
-            for k in range(10):
-                n_val = ws_cg.cell(row=student_row, column=start_col + (k * 2)).value
-                d_val = ws_cg.cell(row=student_row, column=start_col + (k * 2) + 1).value
-                if n_val is not None and str(n_val).strip() != "":
-                    d_str = f" ({d_val})" if d_val else ""
-                    notes.append(f"{n_val}{d_str}")
-            absences = []
-            for k in range(30):
-                a_val = ws_cg.cell(row=student_row, column=start_col + 21 + k).value
-                if a_val is not None and str(a_val).strip() != "":
-                    absences.append(str(a_val))
-            media_val = ws_cg.cell(row=student_row, column=start_col + 20).value
-            media_str = safe_float_str(media_val)
+        for cat_title, sheet_n, sub_list in [("DISCIPLINE CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG), ("MODULE TEHNOLOGICE", "Module Tehnologice", MODULE_TH)]:
+            story.append(Paragraph(cat_title, heading_style))
+            ws = wb[sheet_n]
             
-            table_data.append([
-                Paragraph(name, cell_style),
-                Paragraph(", ".join(notes) if notes else "-", cell_style),
-                Paragraph(media_str, cell_bold),
-                Paragraph(", ".join(absences) if absences else "-", cell_style)
-            ])
+            table_data = [[
+                Paragraph("<b>Disciplină / Modul</b>", cell_bold),
+                Paragraph("<b>Note & Date</b>", cell_bold),
+                Paragraph("<b>Medie</b>", cell_bold),
+                Paragraph("<b>Absențe</b>", cell_bold)
+            ]]
             
-        t_cg = Table(table_data, colWidths=[160, 200, 50, 110])
-        t_cg.setStyle(TableStyle([
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
-            ('PADDING', (0,0), (-1,-1), 4)
-        ]))
-        story.append(t_cg)
-        story.append(Spacer(1, 10))
-
-        # TH
-        story.append(Paragraph("MODULE TEHNOLOGICE (SPECIALITATE)", heading_style))
-        ws_th = wb["Module Tehnologice"]
-        table_data_th = [[Paragraph("<b>Modul Tehnologic</b>", cell_bold), Paragraph("<b>Note Obtinute (cu date)</b>", cell_bold), Paragraph("<b>Medie</b>", cell_bold), Paragraph("<b>Absențe</b>", cell_bold)]]
-        
-        for name, start_col in MODULE_TH:
-            notes = []
-            for k in range(10):
-                n_val = ws_th.cell(row=student_row, column=start_col + (k * 2)).value
-                d_val = ws_th.cell(row=student_row, column=start_col + (k * 2) + 1).value
-                if n_val is not None and str(n_val).strip() != "":
-                    d_str = f" ({d_val})" if d_val else ""
-                    notes.append(f"{n_val}{d_str}")
-            absences = []
-            for k in range(30):
-                a_val = ws_th.cell(row=student_row, column=start_col + 21 + k).value
-                if a_val is not None and str(a_val).strip() != "":
-                    absences.append(str(a_val))
-            media_val = ws_th.cell(row=student_row, column=start_col + 20).value
-            media_str = safe_float_str(media_val)
+            for s_name, start_col in sub_list:
+                notes_list = []
+                for k in range(10):
+                    n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
+                    d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
+                    if n_val is not None and str(n_val).strip() != "":
+                        d_str = f" ({d_val})" if d_val else ""
+                        notes_list.append(f"{n_val}{d_str}")
+                        
+                abs_list = []
+                for k in range(30):
+                    a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
+                    if a_val is not None and str(a_val).strip() != "":
+                        abs_list.append(str(a_val))
+                        
+                m_val = ws.cell(row=s_row, column=start_col + 20).value
+                m_str = safe_float_str(m_val)
+                
+                table_data.append([
+                    Paragraph(s_name, cell_style),
+                    Paragraph(", ".join(notes_list) if notes_list else "-", cell_style),
+                    Paragraph(m_str, cell_bold),
+                    Paragraph(", ".join(abs_list) if abs_list else "-", cell_style)
+                ])
+                
+            t_sub = Table(table_data, colWidths=[160, 200, 50, 110])
+            t_sub.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2B6CB0")),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
+                ('PADDING', (0,0), (-1,-1), 4),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
+            ]))
+            story.append(t_sub)
+            story.append(Spacer(1, 8))
             
-            table_data_th.append([
-                Paragraph(name, cell_style),
-                Paragraph(", ".join(notes) if notes else "-", cell_style),
-                Paragraph(media_str, cell_bold),
-                Paragraph(", ".join(absences) if absences else "-", cell_style)
-            ])
-            
-        t_th = Table(table_data_th, colWidths=[160, 200, 50, 110])
-        t_th.setStyle(TableStyle([
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
-            ('PADDING', (0,0), (-1,-1), 4)
-        ]))
-        story.append(t_th)
         wb.close()
+
+    story.append(Spacer(1, 15))
+    story.append(Paragraph("<b>Profesor Diriginte:</b> ___________________________   |   <b>Semnătură:</b> ___________", cell_style))
 
     doc.build(story)
     buffer.seek(0)
     return buffer
 
-def generate_pdf_ticket(student_idx, file_path):
+def generate_pdf_ticket_student(student_idx, file_path):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=25,
-        leftMargin=25,
-        topMargin=20,
-        bottomMargin=20
+        buffer, pagesize=A4,
+        rightMargin=25, leftMargin=25, topMargin=20, bottomMargin=20
     )
     styles = getSampleStyleSheet()
-
+    
     title_style = ParagraphStyle(
-        'HeaderTitle', parent=styles['Heading1'],
-        fontName=PDF_FONT_BOLD, fontSize=11, leading=14,
+        'SchoolHeader', parent=styles['Heading1'],
+        fontName=PDF_FONT_BOLD, fontSize=12, leading=15,
         alignment=1, textColor=colors.HexColor("#1A365D")
     )
     sub_title_style = ParagraphStyle(
         'SubHeader', parent=styles['Normal'],
-        fontName=PDF_FONT, fontSize=8, leading=11,
+        fontName=PDF_FONT, fontSize=9, leading=12,
         alignment=1, textColor=colors.HexColor("#4A5568")
     )
     ticket_title = ParagraphStyle(
         'TicketTitle', parent=styles['Heading2'],
-        fontName=PDF_FONT_BOLD, fontSize=11, leading=14,
+        fontName=PDF_FONT_BOLD, fontSize=13, leading=16,
         alignment=1, textColor=colors.HexColor("#2B6CB0"),
-        spaceBefore=4, spaceAfter=4
+        spaceBefore=6, spaceAfter=6
     )
     label_style = ParagraphStyle(
         'Label', parent=styles['Normal'],
-        fontName=PDF_FONT_BOLD, fontSize=8.5, leading=11.5,
+        fontName=PDF_FONT_BOLD, fontSize=9, leading=12,
         textColor=colors.HexColor("#2D3748")
     )
     val_style = ParagraphStyle(
         'Val', parent=styles['Normal'],
-        fontName=PDF_FONT_BOLD, fontSize=9.5, leading=12.5,
+        fontName=PDF_FONT_BOLD, fontSize=10, leading=13,
         textColor=colors.HexColor("#1A365D")
     )
     pin_val_style = ParagraphStyle(
         'PinVal', parent=styles['Normal'],
-        fontName=PDF_FONT_BOLD, fontSize=12, leading=14,
+        fontName=PDF_FONT_BOLD, fontSize=13, leading=16,
         textColor=colors.HexColor("#C53030")
     )
     instr_head = ParagraphStyle(
         'InstrHead', parent=styles['Heading3'],
-        fontName=PDF_FONT_BOLD, fontSize=8.5, leading=11,
-        textColor=colors.HexColor("#1A365D"), spaceBefore=4, spaceAfter=2
+        fontName=PDF_FONT_BOLD, fontSize=10, leading=13,
+        textColor=colors.HexColor("#1A365D"), spaceBefore=6, spaceAfter=4
     )
     instr_body = ParagraphStyle(
         'InstrBody', parent=styles['Normal'],
-        fontName=PDF_FONT, fontSize=7.5, leading=10.5,
+        fontName=PDF_FONT, fontSize=8.5, leading=12,
         textColor=colors.HexColor("#2D3748")
     )
     img_label = ParagraphStyle(
         'ImgLabel', parent=styles['Normal'],
-        fontName=PDF_FONT_BOLD, fontSize=7.5, leading=10,
+        fontName=PDF_FONT_BOLD, fontSize=8.5, leading=11,
         alignment=1, textColor=colors.HexColor("#2B6CB0")
     )
     footer_style = ParagraphStyle(
         'FooterText', parent=styles['Normal'],
-        fontName=PDF_FONT, fontSize=6.5, leading=8.5,
+        fontName=PDF_FONT, fontSize=7, leading=9.5,
         alignment=1, textColor=colors.HexColor("#718096")
     )
 
     e_info = ELEVI[student_idx]
-    pin_val = PINS[student_idx] if student_idx < len(PINS) else "2951"
+    pin_val = PINS[student_idx] if student_idx < len(PINS) else "1234"
+    
     if os.path.exists(file_path):
         try:
             wb = openpyxl.load_workbook(file_path, data_only=True)
-            ws_c = wb["Centralizator Medii"]
-            excel_pin = ws_c.cell(row=9+student_idx, column=13).value
-            if excel_pin and str(excel_pin).strip():
-                pin_val = str(excel_pin).strip()
+            if "Centralizator Medii" in wb.sheetnames:
+                ws_c = wb["Centralizator Medii"]
+                row_idx = 9 + student_idx
+                pin_from_excel = ws_c.cell(row=row_idx, column=13).value
+                if pin_from_excel and str(pin_from_excel).strip():
+                    pin_val = str(pin_from_excel).strip()
             wb.close()
         except Exception:
             pass
 
+    android_img_path = "ghid_shortcut_android.png"
+    iphone_img_path = "ghid_shortcut_iphone.png"
+    
+    for candidate in ["ghid_shortcut_android.png", "CATALOG/ghid_shortcut_android.png", "/workspace/artifacts/ghid_shortcut_android.png"]:
+        if os.path.exists(candidate):
+            android_img_path = candidate
+            break
+            
+    for candidate in ["ghid_shortcut_iphone.png", "CATALOG/ghid_shortcut_iphone.png", "/workspace/artifacts/ghid_shortcut_iphone.png"]:
+        if os.path.exists(candidate):
+            iphone_img_path = candidate
+            break
+
+    portal_url = "https://catalog-online-5482kppsbvvl6nffpe332g.streamlit.app/"
+
     story = []
+
     story.append(Paragraph("COLEGIUL „EMIL NEGRUȚIU” TURDA", title_style))
     story.append(Paragraph("AN ȘCOLAR 2026–2027 | CLASA a IX-a TH (TURISM ȘI ALIMENTAȚIE)", sub_title_style))
     story.append(Paragraph("<b>Prof. Diriginte:</b> Prof. Ec. Gherman Octavian-Theodor", sub_title_style))
-    story.append(Spacer(1, 4))
-    story.append(Paragraph("BILET INDIVIDUAL DE ACCES — PORTAL PĂRINȚI", ticket_title))
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("🔑 BILET INDIVIDUAL DE ACCES — PORTAL PĂRINȚI", ticket_title))
+    story.append(Spacer(1, 6))
 
-    portal_url = "https://catalog-online-5482kppsbvvl6nffpe332g.streamlit.app/"
     cred_data = [
         [
             Paragraph("ELEV / ELEVĂ:", label_style),
@@ -454,55 +443,55 @@ def generate_pdf_ticket(student_idx, file_path):
         ]
     ]
     
-    t_cred = Table(cred_data, colWidths=[170, 375])
+    t_cred = Table(cred_data, colWidths=[180, 350])
     t_cred.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EDF2F7")),
         ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E0")),
         ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor("#E2E8F0")),
-        ('PADDING', (0,0), (-1,-1), 4),
+        ('PADDING', (0,0), (-1,-1), 5),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
     ]))
     story.append(t_cred)
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 8))
 
-    story.append(Paragraph("<b>INSTRUCȚIUNI DE CONECTARE ȘI ADĂUGARE PE ECRANUL TELEFONULUI:</b>", instr_head))
+    story.append(Paragraph("<b>📱 INSTRUCȚIUNI DE CONECTARE ȘI ADĂUGARE PE ECRANUL TELEFONULUI:</b>", instr_head))
+    
     instr_text = (
-        f"<b>1. Autentificare:</b> Deschideți adresa <b><font color='#2B6CB0'>{portal_url}</font></b> în browserul telefonului și introduceți Numărul Matricol și Codul PIN de mai sus.<br/>"
-        "<b>2. Telefoane Android (Samsung, Xiaomi, Motorola etc.):</b> Deschideți în Google Chrome ➔ apăsați pe cele 3 puncte (⋮) din dreapta sus ➔ Selectați opțiunea <b>„Adaugă pe ecranul de pornire” (sau „Instalează aplicația”)</b>.<br/>"
-        "<b>3. Telefoane iPhone (Apple iOS):</b> Deschideți în Safari ➔ apăsați butonul Partajare (⬆️) ➔ Selectați opțiunea <b>„Adaugă pe ecranul principal”</b>."
+        f"<b>1. Autentificare:</b> Accesați adresa <b><a href='{portal_url}'>{portal_url}</a></b> pe telefon și introduceți Numărul Matricol și Codul PIN de mai sus.<br/>"
+        "<b>2. Telefoane Android (Samsung, Xiaomi, Motorola etc.):</b> Deschideți în Google Chrome ➔ apăsați pe cele 3 puncte (⋮ dreapta sus) ➔ selectați <b>„Adaugă pe ecranul de pornire” (sau „Instalează aplicația”)</b>.<br/>"
+        "<b>3. Telefoane iPhone (Apple iOS):</b> Deschideți în Safari ➔ apăsați pe butonul Partajare (⬆️) ➔ selectați <b>„Adaugă pe ecranul principal”</b>."
     )
     story.append(Paragraph(instr_text, instr_body))
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 8))
 
-    android_path = find_image("ghid_shortcut_android.png")
-    iphone_path = find_image("ghid_shortcut_iphone.png")
+    img_w = 210
+    img_h = 281
+    
+    if os.path.exists(android_img_path) and os.path.exists(iphone_img_path):
+        img_android = RLImage(android_img_path, width=img_w, height=img_h)
+        img_iphone = RLImage(iphone_img_path, width=img_w, height=img_h)
 
-    img_w, img_h = 200, 268
-    img_android = RLImage(android_path, width=img_w, height=img_h)
-    img_iphone = RLImage(iphone_path, width=img_w, height=img_h)
-
-    img_table_data = [
-        [
-            Paragraph("<b>Ghid Adăugare Android (Google Chrome)</b>", img_label),
-            Paragraph("<b>Ghid Adăugare iPhone / iOS (Safari)</b>", img_label)
-        ],
-        [
-            img_android,
-            img_iphone
+        img_table_data = [
+            [
+                Paragraph("<b>Ghid Adăugare Android (Google Chrome)</b>", img_label),
+                Paragraph("<b>Ghid Adăugare iPhone / iOS (Safari)</b>", img_label)
+            ],
+            [
+                img_android,
+                img_iphone
+            ]
         ]
-    ]
-    
-    t_img = Table(img_table_data, colWidths=[270, 270])
-    t_img.setStyle(TableStyle([
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('PADDING', (0,0), (-1,-1), 2),
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F7FAFC")),
-        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#E2E8F0"))
-    ]))
-    
-    story.append(t_img)
-    story.append(Spacer(1, 6))
+        
+        t_img = Table(img_table_data, colWidths=[265, 265])
+        t_img.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('PADDING', (0,0), (-1,-1), 3),
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F7FAFC")),
+            ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#E2E8F0"))
+        ]))
+        story.append(t_img)
+        story.append(Spacer(1, 8))
 
     footer_text = (
         "<b>© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor</b> | Protejat de Legea nr. 8/1996 privind drepturile de autor.<br/>"
@@ -518,62 +507,134 @@ def generate_pdf_centralizator(file_path):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
     story = []
-
+    
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName=PDF_FONT_BOLD, fontSize=13, leading=16, alignment=1, textColor=colors.HexColor("#1A365D"))
-    subtitle_style = ParagraphStyle('SubtitleStyle', parent=styles['Normal'], fontName=PDF_FONT, fontSize=8, leading=11, alignment=1, textColor=colors.HexColor("#4A5568"))
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName=PDF_FONT_BOLD, fontSize=12, leading=15, alignment=1, textColor=colors.HexColor("#1A365D"))
     cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontName=PDF_FONT, fontSize=7, leading=9)
     cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=7, leading=9)
 
-    story.append(Paragraph("COLEGIUL 'EMIL NEGRUȚIU' TURDA", title_style))
-    story.append(Paragraph("CENTRALIZATOR GENERAL - SITUAȚIE ȘCOLARĂ ȘI PREMII", title_style))
-    story.append(Paragraph("Clasa a IX-a TH — Turism și Alimentație | An școlar 2026-2027", subtitle_style))
+    story.append(Paragraph("COLEGIUL 'EMIL NEGRUȚIU' TURDA — CENTRALIZATOR GENERAL CLASĂ (IX TH)", title_style))
     story.append(Spacer(1, 8))
-
+    
+    table_data = [[
+        Paragraph("<b>Nr.</b>", cell_bold),
+        Paragraph("<b>Nume și Prenume</b>", cell_bold),
+        Paragraph("<b>Matr.</b>", cell_bold),
+        Paragraph("<b>Med. CG</b>", cell_bold),
+        Paragraph("<b>Med. TH</b>", cell_bold),
+        Paragraph("<b>Med. Gen.</b>", cell_bold),
+        Paragraph("<b>Purtare</b>", cell_bold),
+        Paragraph("<b>Statut</b>", cell_bold),
+        Paragraph("<b>Tot. Abs.</b>", cell_bold),
+        Paragraph("<b>Rang</b>", cell_bold),
+        Paragraph("<b>Premiu</b>", cell_bold)
+    ]]
+    
     if os.path.exists(file_path):
         wb = openpyxl.load_workbook(file_path, data_only=True)
-        ws_c = wb["Centralizator Medii"]
-        
-        table_data = [[
-            Paragraph("<b>Nr.</b>", cell_bold),
-            Paragraph("<b>Nume și Prenume Elev</b>", cell_bold),
-            Paragraph("<b>Matricol</b>", cell_bold),
-            Paragraph("<b>Med. CG</b>", cell_bold),
-            Paragraph("<b>Med. TH</b>", cell_bold),
-            Paragraph("<b>Med. Gen.</b>", cell_bold),
-            Paragraph("<b>Purtare</b>", cell_bold),
-            Paragraph("<b>Statut</b>", cell_bold),
-            Paragraph("<b>Absențe</b>", cell_bold),
-            Paragraph("<b>Rang</b>", cell_bold),
-            Paragraph("<b>Premiu / Distincție</b>", cell_bold)
-        ]]
+        ws = wb["Centralizator Medii"]
         
         for idx in range(len(ELEVI)):
             r = 9 + idx
-            table_data.append([
-                Paragraph(safe_str(ws_c.cell(row=r, column=1).value), cell_style),
-                Paragraph(f"<b>{safe_str(ws_c.cell(row=r, column=2).value)}</b>", cell_style),
-                Paragraph(safe_str(ws_c.cell(row=r, column=4).value), cell_style),
-                Paragraph(safe_float_str(ws_c.cell(row=r, column=5).value), cell_style),
-                Paragraph(safe_float_str(ws_c.cell(row=r, column=6).value), cell_style),
-                Paragraph(safe_float_str(ws_c.cell(row=r, column=7).value), cell_bold),
-                Paragraph(safe_str(ws_c.cell(row=r, column=8).value), cell_style),
-                Paragraph(safe_str(ws_c.cell(row=r, column=9).value), cell_style),
-                Paragraph(safe_str(ws_c.cell(row=r, column=10).value), cell_style),
-                Paragraph(safe_str(ws_c.cell(row=r, column=11).value), cell_style),
-                Paragraph(safe_str(ws_c.cell(row=r, column=12).value), cell_style)
-            ])
+            nr = safe_str(ws.cell(row=r, column=1).value)
+            nume = safe_str(ws.cell(row=r, column=2).value)
+            matr = safe_str(ws.cell(row=r, column=4).value)
+            mcg = safe_float_str(ws.cell(row=r, column=5).value)
+            mth = safe_float_str(ws.cell(row=r, column=6).value)
+            mg = safe_float_str(ws.cell(row=r, column=7).value)
+            purt = safe_str(ws.cell(row=r, column=8).value)
+            statut = safe_str(ws.cell(row=r, column=9).value)
+            abs_tot = safe_str(ws.cell(row=r, column=10).value)
+            rang = safe_str(ws.cell(row=r, column=11).value)
+            premiu = safe_str(ws.cell(row=r, column=12).value)
             
-        t_cent = Table(table_data, colWidths=[25, 200, 50, 50, 50, 55, 45, 80, 50, 40, 150])
-        t_cent.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#EDF2F7")),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
-            ('PADDING', (0,0), (-1,-1), 3),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
-        ]))
-        story.append(t_cent)
+            table_data.append([
+                Paragraph(nr, cell_style),
+                Paragraph(nume, cell_style),
+                Paragraph(matr, cell_style),
+                Paragraph(mcg, cell_style),
+                Paragraph(mth, cell_style),
+                Paragraph(mg, cell_bold),
+                Paragraph(purt, cell_style),
+                Paragraph(statut, cell_style),
+                Paragraph(abs_tot, cell_style),
+                Paragraph(rang, cell_style),
+                Paragraph(premiu, cell_style)
+            ])
         wb.close()
 
+    t_cent = Table(table_data, colWidths=[25, 200, 50, 50, 50, 55, 45, 80, 50, 40, 70])
+    t_cent.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
+        ('PADDING', (0,0), (-1,-1), 3),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
+    ]))
+    story.append(t_cent)
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+def generate_pdf_pins(file_path):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName=PDF_FONT_BOLD, fontSize=13, leading=16, alignment=1, textColor=colors.HexColor("#1A365D"))
+    subtitle_style = ParagraphStyle('SubtitleStyle', parent=styles['Normal'], fontName=PDF_FONT, fontSize=9, leading=12, alignment=1, textColor=colors.HexColor("#4A5568"))
+    cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontName=PDF_FONT, fontSize=8.5, leading=11)
+    cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=8.5, leading=11)
+    pin_style = ParagraphStyle('PinCell', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=10, leading=12, textColor=colors.HexColor("#C53030"))
+
+    story.append(Paragraph("COLEGIUL 'EMIL NEGRUȚIU' TURDA — CLASA A IX-A TH", title_style))
+    story.append(Paragraph("LISTĂ CODURI PIN CONFIDENȚIALE PENTRU PORTALUL PĂRINȚILOR", title_style))
+    story.append(Paragraph("An școlar 2026-2027 | Document Confidențial - Destinat Exclusiv Dirigintelui", subtitle_style))
+    story.append(Spacer(1, 10))
+
+    table_data = [[
+        Paragraph("<b>Nr.</b>", cell_bold),
+        Paragraph("<b>Nume și Prenume Elev</b>", cell_bold),
+        Paragraph("<b>Nr. Matricol</b>", cell_bold),
+        Paragraph("<b>Cod PIN Confidențial</b>", cell_bold)
+    ]]
+
+    if os.path.exists(file_path):
+        try:
+            wb = openpyxl.load_workbook(file_path, data_only=True)
+            ws_c = wb["Centralizator Medii"]
+            for idx in range(len(ELEVI)):
+                r = 9 + idx
+                nr = str(idx + 1)
+                nume = ELEVI[idx][1]
+                matr = ELEVI[idx][3]
+                pin_val = ws_c.cell(row=r, column=13).value or PINS[idx]
+                table_data.append([
+                    Paragraph(nr, cell_style),
+                    Paragraph(nume, cell_style),
+                    Paragraph(matr, cell_style),
+                    Paragraph(str(pin_val), pin_style)
+                ])
+            wb.close()
+        except Exception:
+            for idx in range(len(ELEVI)):
+                table_data.append([
+                    Paragraph(str(idx + 1), cell_style),
+                    Paragraph(ELEVI[idx][1], cell_style),
+                    Paragraph(ELEVI[idx][3], cell_style),
+                    Paragraph(PINS[idx], pin_style)
+                ])
+
+    t_pins = Table(table_data, colWidths=[30, 260, 110, 120])
+    t_pins.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
+        ('PADDING', (0,0), (-1,-1), 4),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
+    ]))
+    story.append(t_pins)
     doc.build(story)
     buffer.seek(0)
     return buffer
@@ -582,39 +643,38 @@ def generate_pdf_raport(file_path):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     story = []
-
+    
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName=PDF_FONT_BOLD, fontSize=13, leading=16, alignment=1, textColor=colors.HexColor("#1A365D"))
-    subtitle_style = ParagraphStyle('SubtitleStyle', parent=styles['Normal'], fontName=PDF_FONT, fontSize=8, leading=11, alignment=1, textColor=colors.HexColor("#4A5568"))
     heading_style = ParagraphStyle('HeadingStyle', parent=styles['Heading2'], fontName=PDF_FONT_BOLD, fontSize=10, leading=13, textColor=colors.HexColor("#1A365D"), spaceBefore=10, spaceAfter=4)
     cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontName=PDF_FONT, fontSize=8, leading=11)
     cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=8, leading=11)
 
     story.append(Paragraph("COLEGIUL 'EMIL NEGRUȚIU' TURDA", title_style))
-    story.append(Paragraph("RAPORT SINTETIC AL DIRIGINTELUI - CLASA a IX-a TH", title_style))
-    story.append(Paragraph("An școlar 2026-2027 | Semestrul I / Anual", subtitle_style))
+    story.append(Paragraph("RAPORT SEMESTRIAL / ANUAL AL DIRIGINTELUI", title_style))
     story.append(Spacer(1, 10))
-
+    
     if os.path.exists(file_path):
         wb = openpyxl.load_workbook(file_path, data_only=True)
         ws_r = wb["Raport Diriginte"]
         
-        story.append(Paragraph("INDICATORI CHEIE DE PERFORMANȚĂ", heading_style))
+        tot_el = safe_str(ws_r.cell(row=6, column=1).value)
+        promov = safe_str(ws_r.cell(row=6, column=3).value)
+        med_clasa = safe_float_str(ws_r.cell(row=6, column=5).value)
+        med_purt = safe_float_str(ws_r.cell(row=6, column=7).value)
+        tot_abs = safe_str(ws_r.cell(row=6, column=9).value)
+        
         kpi_data = [
             [Paragraph("<b>Total Elevi</b>", cell_bold), Paragraph("<b>Promovabilitate</b>", cell_bold), Paragraph("<b>Media Clasei</b>", cell_bold), Paragraph("<b>Media Purtare</b>", cell_bold), Paragraph("<b>Total Absențe</b>", cell_bold)],
-            [
-                Paragraph(safe_str(ws_r.cell(row=6, column=1).value), cell_style),
-                Paragraph(safe_str(ws_r.cell(row=6, column=3).value), cell_style),
-                Paragraph(safe_float_str(ws_r.cell(row=6, column=5).value), cell_style),
-                Paragraph(safe_float_str(ws_r.cell(row=6, column=7).value), cell_style),
-                Paragraph(safe_str(ws_r.cell(row=6, column=9).value), cell_style)
-            ]
+            [Paragraph(tot_el, cell_style), Paragraph(promov, cell_style), Paragraph(med_clasa, cell_style), Paragraph(med_purt, cell_style), Paragraph(tot_abs, cell_style)]
         ]
         t_kpi = Table(kpi_data, colWidths=[100, 100, 100, 100, 120])
         t_kpi.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#EDF2F7")),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2B6CB0")),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
-            ('PADDING', (0,0), (-1,-1), 5)
+            ('PADDING', (0,0), (-1,-1), 5),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER')
         ]))
         story.append(t_kpi)
         story.append(Spacer(1, 10))
@@ -635,59 +695,6 @@ def generate_pdf_raport(file_path):
         ]))
         story.append(t_dist)
         wb.close()
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-def generate_pdf_pins_list(file_path):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
-    story = []
-
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName=PDF_FONT_BOLD, fontSize=12, leading=16, alignment=1, textColor=colors.HexColor("#1A365D"))
-    subtitle_style = ParagraphStyle('SubtitleStyle', parent=styles['Normal'], fontName=PDF_FONT, fontSize=9, leading=12, alignment=1, textColor=colors.HexColor("#4A5568"))
-    cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontName=PDF_FONT, fontSize=9, leading=12)
-    cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=9, leading=12)
-
-    story.append(Paragraph("COLEGIUL 'EMIL NEGRUȚIU' TURDA", title_style))
-    story.append(Paragraph("LISTĂ CODURI PIN CONFIDENȚIALE PĂRINȚI — CLASA a IX-a TH", title_style))
-    story.append(Paragraph("An școlar 2026-2027 | Document Confidențial al Dirigintelui", subtitle_style))
-    story.append(Spacer(1, 12))
-
-    table_data = [[Paragraph("<b>Nr.</b>", cell_bold), Paragraph("<b>Nume și Prenume Elev</b>", cell_bold), Paragraph("<b>Nr. Matricol</b>", cell_bold), Paragraph("<b>Cod PIN Părinte</b>", cell_bold)]]
-    
-    pins_list = list(PINS)
-    if os.path.exists(file_path):
-        try:
-            wb = openpyxl.load_workbook(file_path, data_only=True)
-            ws_c = wb["Centralizator Medii"]
-            for idx in range(len(ELEVI)):
-                val = ws_c.cell(row=9+idx, column=13).value
-                if val and str(val).strip():
-                    pins_list[idx] = str(val).strip()
-            wb.close()
-        except Exception:
-            pass
-
-    for idx, e in enumerate(ELEVI):
-        p_val = pins_list[idx] if idx < len(pins_list) else "-"
-        table_data.append([
-            Paragraph(str(e[0]), cell_style),
-            Paragraph(f"<b>{e[1]}</b>", cell_style),
-            Paragraph(e[3], cell_style),
-            Paragraph(f"<font color='#C53030'><b>{p_val}</b></font>", cell_bold)
-        ])
-
-    t_pins = Table(table_data, colWidths=[35, 250, 110, 110])
-    t_pins.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#EDF2F7")),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
-        ('PADDING', (0,0), (-1,-1), 5),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
-    ]))
-    story.append(t_pins)
 
     doc.build(story)
     buffer.seek(0)
@@ -837,35 +844,26 @@ with tab3:
 
 # --- TAB 4: FIȘĂ ELEV ---
 with tab4:
-    st.subheader("Fișă Elev & Generare Documente Individuale")
-    elev_idx_v = st.selectbox("Alege Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_v")
-    
-    col_pdf1, col_pdf2 = st.columns(2)
-    with col_pdf1:
+    st.subheader("Fișă Elev & Rezumat Access")
+    col_v1, col_v2, col_v3 = st.columns([2, 1, 1])
+    with col_v1:
+        elev_idx_v = st.selectbox("Alege Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_v")
+    with col_v2:
+        st.write("")
+        st.write("")
         try:
             pdf_bytes = generate_pdf_student(elev_idx_v, selected_file)
-            st.download_button(
-                "🖨️ Descarcă Fișă Școlară PDF",
-                data=pdf_bytes,
-                file_name=f"Fisa_Elev_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+            st.download_button("🖨️ Descarcă Fișă Școlară PDF", data=pdf_bytes, file_name=f"Fisa_Elev_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
         except Exception as ex:
-            st.error(f"Eroare PDF Fișă Elev: {ex}")
-            
-    with col_pdf2:
+            st.error(f"Eroare PDF Fișă: {ex}")
+    with col_v3:
+        st.write("")
+        st.write("")
         try:
-            ticket_bytes = generate_pdf_ticket(elev_idx_v, selected_file)
-            st.download_button(
-                "🔑 Descarcă Bilet Acces Părinte PDF",
-                data=ticket_bytes,
-                file_name=f"Bilet_Acces_Parinte_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+            pdf_ticket_bytes = generate_pdf_ticket_student(elev_idx_v, selected_file)
+            st.download_button("🔑 Descarcă Bilet Acces Părinte PDF", data=pdf_ticket_bytes, file_name=f"Bilet_Acces_Parinte_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
         except Exception as ex:
-            st.error(f"Eroare PDF Bilet Acces: {ex}")
+            st.error(f"Eroare PDF Bilet: {ex}")
 
     if os.path.exists(selected_file):
         try:
@@ -908,34 +906,32 @@ with tab4:
 
 # --- TAB 5: CENTRALIZATOR CLASĂ ---
 with tab5:
-    st.subheader("📈 Centralizator General Clasă (Situție Școlară, Premii & Coduri PIN)")
-    col_c1, col_c2 = st.columns(2)
-    with col_c1:
-        try:
-            pdf_cent_bytes = generate_pdf_centralizator(selected_file)
-            st.download_button(
-                "🖨️ Descarcă Centralizator PDF",
-                data=pdf_cent_bytes,
-                file_name="Centralizator_General_IX_TH.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
-        except Exception as ex:
-            st.error(f"Eroare PDF Centralizator: {ex}")
-            
+    st.subheader("📈 Centralizator General Clasă (Situție Școlară & Premii)")
+    col_c1, col_c2, col_c3 = st.columns([2, 1, 1])
     with col_c2:
         try:
-            pdf_pins_bytes = generate_pdf_pins_list(selected_file)
-            st.download_button(
-                "🖨️ Descarcă Listă PIN-uri Părinți PDF",
-                data=pdf_pins_bytes,
-                file_name="Lista_Coduri_PIN_Parinti_IX_TH.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+            pdf_cent_bytes = generate_pdf_centralizator(selected_file)
+            st.download_button("🖨️ Descarcă Centralizator PDF", data=pdf_cent_bytes, file_name="Centralizator_General_IX_TH.pdf", mime="application/pdf", use_container_width=True)
         except Exception as ex:
-            st.error(f"Eroare PDF Listă PIN-uri: {ex}")
-            
+            st.error(f"Eroare PDF Centralizator: {ex}")
+    with col_c3:
+        if os.path.exists(selected_file):
+            try:
+                with open(selected_file, "rb") as f_ex:
+                    st.download_button("📥 Descarcă Catalog Excel (.xlsx)", data=f_ex.read(), file_name=os.path.basename(selected_file), mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            except Exception as ex:
+                st.error(f"Eroare descărcare Excel: {ex}")
+
+    st.divider()
+    st.markdown("#### 🔐 Coduri PIN Confidențiale Părinți (Gestiune Acces Portal)")
+    col_p1, col_p2 = st.columns([3, 1])
+    with col_p2:
+        try:
+            pdf_pins_bytes = generate_pdf_pins(selected_file)
+            st.download_button("🖨️ Descarcă Listă PIN-uri (PDF)", data=pdf_pins_bytes, file_name="Lista_PIN_uri_Parinti_IX_TH.pdf", mime="application/pdf", use_container_width=True)
+        except Exception as ex:
+            st.error(f"Eroare PDF PIN-uri: {ex}")
+
     if os.path.exists(selected_file):
         try:
             wb = openpyxl.load_workbook(selected_file, data_only=True)
@@ -944,15 +940,11 @@ with tab5:
             c_data = []
             for idx in range(len(ELEVI)):
                 r = 9 + idx
-                pin_code = safe_str(ws_c.cell(row=r, column=13).value)
-                if not pin_code and idx < len(PINS):
-                    pin_code = PINS[idx]
-                    
+                pin_val = ws_c.cell(row=r, column=13).value or PINS[idx]
                 c_data.append({
                     "Nr.": safe_str(ws_c.cell(row=r, column=1).value),
                     "Nume și Prenume": safe_str(ws_c.cell(row=r, column=2).value),
                     "Matricol": safe_str(ws_c.cell(row=r, column=4).value),
-                    "Cod PIN Părinte": pin_code,
                     "Media CG": safe_float_str(ws_c.cell(row=r, column=5).value),
                     "Media TH": safe_float_str(ws_c.cell(row=r, column=6).value),
                     "Media Generală": safe_float_str(ws_c.cell(row=r, column=7).value),
@@ -960,7 +952,8 @@ with tab5:
                     "Statut Școlar": safe_str(ws_c.cell(row=r, column=9).value),
                     "Total Absențe": safe_str(ws_c.cell(row=r, column=10).value),
                     "Rang": safe_str(ws_c.cell(row=r, column=11).value),
-                    "Premiu": safe_str(ws_c.cell(row=r, column=12).value)
+                    "Premiu": safe_str(ws_c.cell(row=r, column=12).value),
+                    "COD PIN": str(pin_val)
                 })
             st.dataframe(c_data, use_container_width=True)
             wb.close()
@@ -974,13 +967,7 @@ with tab6:
     with col_r2:
         try:
             pdf_rap_bytes = generate_pdf_raport(selected_file)
-            st.download_button(
-                "🖨️ Descarcă Raport PDF",
-                data=pdf_rap_bytes,
-                file_name="Raport_Diriginte_IX_TH.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+            st.download_button("🖨️ Descarcă Raport PDF", data=pdf_rap_bytes, file_name="Raport_Diriginte_IX_TH.pdf", mime="application/pdf", use_container_width=True)
         except Exception as ex:
             st.error(f"Eroare PDF Raport: {ex}")
             
@@ -1027,15 +1014,12 @@ with tab6:
         except Exception as ex:
             st.error(f"Eroare la citire raport: {ex}")
 
-# FOOTER COPYRIGHT
-st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: #718096; font-size: 0.85rem; padding: 10px; background-color: #F7FAFC; border-radius: 5px; border: 1px solid #E2E8F0;'>"
-    "<b>© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor</b><br/>"
-    "<i>Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.<br/>"
-    "Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.</i><br/>"
-    "<b>🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!</b><br/>"
-    "<i>Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.</i>"
-    "</div>",
-    unsafe_allow_html=True
-)
+st.divider()
+st.markdown("""
+<div style="background-color: #F7FAFC; padding: 12px; border-radius: 8px; border: 1px solid #E2E8F0; text-align: center; font-size: 12px; color: #4A5568;">
+    <b>© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor</b> | Protejat de Legea nr. 8/1996 privind drepturile de autor.<br/>
+    Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.<br/>
+    <b>🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!</b><br/>
+    Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.
+</div>
+""", unsafe_allow_html=True)
