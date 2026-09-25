@@ -1,15 +1,15 @@
 import datetime
 import os
+import io
 import openpyxl
 import streamlit as st
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, Image as RLImage
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-import io
 
 st.set_page_config(
     page_title="Catalog Școlar Online IX TH",
@@ -89,20 +89,24 @@ if not st.session_state["authenticated"]:
                 st.rerun()
             else:
                 st.error("❌ Parolă incorectă! Vă rugăm să încercați din nou.")
-                
-    st.divider()
-    st.markdown("""
-    <div style="text-align: center; font-size: 0.8em; color: #718096; padding: 10px; background-color: #F7FAFC; border-radius: 5px; border: 1px solid #E2E8F0;">
-        <b>© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor</b><br/>
-        <i>Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996).</i><br/>
-        <b>🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!</b> Utilizare gratuită acordată exclusiv persoanelor autorizate.
-    </div>
-    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; text-align: center; font-size: 0.85rem; color: #495057;">
+            <strong>© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor</strong><br/>
+            <em>Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.<br/>
+            Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.</em><br/>
+            <strong style="color: #dc3545;">🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!</strong><br/>
+            <em>Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.</em>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     st.stop()
 
 # --- APLICAȚIA PRINCIPALA PENTRU PROFESORI ---
 
-# Lista celor 32 de elevi
 ELEVI = [
     (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76"),
     (2, "BARA D. ADRIAN DANIEL", 14, "126/77"),
@@ -178,6 +182,18 @@ def find_excel_file():
             return c
     return "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
 
+def find_image_file(filename):
+    candidates = [
+        filename,
+        os.path.join(os.path.dirname(__file__), filename) if '__file__' in globals() else filename,
+        os.path.join("/workspace/artifacts/", filename),
+        os.path.join("CATALOG", filename)
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return filename
+
 excel_path = find_excel_file()
 
 st.title("🏫 Colegiul 'Emil Negruțiu' Turda — Catalog Școlar Online (IX TH Turism)")
@@ -188,11 +204,17 @@ with st.sidebar:
     selected_file = st.text_input("Fișier Excel Sursă:", value=excel_path)
     st.info("💡 Fișierul se salvează automat la fiecare modificare.")
     st.divider()
-    st.markdown("""
-    **© Prof. Ec. Gherman Octavian-Theodor**  
-    Drepturi de autor rezervate.  
-    **Comercializarea interzisă.**
-    """)
+    st.markdown(
+        """
+        <div style="font-size: 0.8rem; color: #6c757d; text-align: center;">
+            <strong>© Prof. Ec. Gherman Octavian-Theodor</strong><br/>
+            Drepturi de autor rezervate.<br/>
+            <span style="color: #dc3545; font-weight: bold;">Comercializarea interzisă.</span><br/>
+            Utilizare gratuită acordată exclusiv de autor.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     st.divider()
     if st.button("🚪 Deconectare (Logout)", use_container_width=True):
         st.session_state["authenticated"] = False
@@ -212,130 +234,8 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
 elev_options = [f"{e[0]}. {e[1]} (Matr. {e[2]})" for e in ELEVI]
 
-# --- GENERATOR PDF BILET ACCES PARENTE (A4 FULL PAGE WITH IMAGES) ---
-def generate_pdf_ticket(student_idx, file_path):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, pagesize=A4,
-        rightMargin=20, leftMargin=20, topMargin=18, bottomMargin=18
-    )
-    story = []
-    styles = getSampleStyleSheet()
-    
-    title_style = ParagraphStyle('THead', parent=styles['Heading1'], fontName=PDF_FONT_BOLD, fontSize=13, leading=16, alignment=1, textColor=colors.HexColor("#1A365D"))
-    sub_title_style = ParagraphStyle('TSub', parent=styles['Normal'], fontName=PDF_FONT, fontSize=9, leading=12, alignment=1, textColor=colors.HexColor("#4A5568"))
-    ticket_title = ParagraphStyle('TTitle', parent=styles['Heading2'], fontName=PDF_FONT_BOLD, fontSize=12, leading=15, alignment=1, textColor=colors.HexColor("#2B6CB0"), spaceBefore=4, spaceAfter=4)
-    label_style = ParagraphStyle('TLabel', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=9, leading=12, textColor=colors.HexColor("#2D3748"))
-    val_style = ParagraphStyle('TVal', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=10, leading=13, textColor=colors.HexColor("#1A365D"))
-    pin_val_style = ParagraphStyle('TPinVal', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=12, leading=15, textColor=colors.HexColor("#C53030"))
-    instr_head = ParagraphStyle('TIHead', parent=styles['Heading3'], fontName=PDF_FONT_BOLD, fontSize=9.5, leading=12, textColor=colors.HexColor("#1A365D"), spaceBefore=4, spaceAfter=2)
-    instr_body = ParagraphStyle('TIBody', parent=styles['Normal'], fontName=PDF_FONT, fontSize=8, leading=11, textColor=colors.HexColor("#2D3748"))
-    img_label = ParagraphStyle('TImgLabel', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=8, leading=10, alignment=1, textColor=colors.HexColor("#2B6CB0"))
-    footer_style = ParagraphStyle('TFoot', parent=styles['Normal'], fontName=PDF_FONT, fontSize=7, leading=9, alignment=1, textColor=colors.HexColor("#718096"))
+# --- GENERATOARE PDF ---
 
-    e_info = ELEVI[student_idx]
-    pin = PINS[student_idx]
-    
-    # Try reading PIN from Excel if present
-    if os.path.exists(file_path):
-        try:
-            wb = openpyxl.load_workbook(file_path, data_only=True)
-            ws_c = wb["Centralizator Medii"]
-            p_val = ws_c.cell(row=9 + student_idx, column=13).value
-            if p_val and str(p_val).strip() != "":
-                pin = str(p_val).strip()
-            wb.close()
-        except Exception:
-            pass
-
-    # Header
-    story.append(Paragraph("COLEGIUL „EMIL NEGRUȚIU” TURDA", title_style))
-    story.append(Paragraph("AN ȘCOLAR 2026–2027 | CLASA a IX-a TH (TURISM ȘI ALIMENTAȚIE)", sub_title_style))
-    story.append(Paragraph("<b>Prof. Diriginte:</b> Prof. Ec. Gherman Octavian-Theodor", sub_title_style))
-    story.append(Spacer(1, 4))
-    story.append(Paragraph("BILET INDIVIDUAL DE ACCES — PORTAL PĂRINȚI", ticket_title))
-    story.append(Spacer(1, 4))
-
-    # Credentials Box
-    cred_data = [
-        [Paragraph("ELEV / ELEVĂ:", label_style), Paragraph(f"<b>{e_info[1]}</b>", val_style)],
-        [Paragraph("NUMĂR MATRICOL (UTILIZATOR):", label_style), Paragraph(f"<b>{e_info[3]}</b> &nbsp;&nbsp;<i>(sau numărul simplu: {e_info[2]})</i>", val_style)],
-        [Paragraph("COD PIN CONFIDENȚIAL (PAROLĂ):", label_style), Paragraph(f"<b>{pin}</b>", pin_val_style)],
-        [Paragraph("ADRESĂ WEB PORTAL:", label_style), Paragraph("<font color='#2B6CB0'><u>https://catalog-online-5482kppsbvvl6nffpe332g.streamlit.app/</u></font>", val_style)]
-    ]
-    
-    t_cred = Table(cred_data, colWidths=[180, 375])
-    t_cred.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EDF2F7")),
-        ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E0")),
-        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor("#E2E8F0")),
-        ('PADDING', (0,0), (-1,-1), 5),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-    ]))
-    story.append(t_cred)
-    story.append(Spacer(1, 6))
-
-    # Instructions
-    story.append(Paragraph("<b>INSTRUCȚIUNI DE CONECTARE ȘI ADĂUGARE PE ECRANUL TELEFONULUI:</b>", instr_head))
-    
-    portal_link = "https://catalog-online-5482kppsbvvl6nffpe332g.streamlit.app/"
-    instr_text = (
-        f"<b>1. Autentificare:</b> Deschideți adresa <font color='#2B6CB0'><b>{portal_link}</b></font> în browserul telefonului și introduceți Numărul Matricol și Codul PIN de mai sus.<br/>"
-        "<b>2. Telefoane Android (Samsung, Xiaomi, Motorola etc.):</b> Deschideți în Chrome ➔ apăsați pe cele 3 puncte (⋮ din dreapta sus) ➔ Selectați opțiunea <b>„Adaugă pe ecranul de pornire” (sau „Instalează aplicația”)</b>.<br/>"
-        "<b>3. Telefoane iPhone / iOS (Apple):</b> Deschideți în Safari ➔ apăsați butonul Partajare ⬆️ ➔ Selectați opțiunea <b>„Adaugă pe ecranul principal”</b>."
-    )
-    story.append(Paragraph(instr_text, instr_body))
-    story.append(Spacer(1, 6))
-
-    # Find Image Paths
-    android_img_path = None
-    iphone_img_path = None
-    for p in ["/workspace/artifacts/ghid_shortcut_android.png", "ghid_shortcut_android.png", "/workspace/scratch/ghid_shortcut_android.png"]:
-        if os.path.exists(p):
-            android_img_path = p
-            break
-    for p in ["/workspace/artifacts/ghid_shortcut_iphone.png", "ghid_shortcut_iphone.png", "/workspace/scratch/ghid_shortcut_iphone.png"]:
-        if os.path.exists(p):
-            iphone_img_path = p
-            break
-
-    if android_img_path and iphone_img_path:
-        img_w = 220
-        img_h = 294  # 220 * (1200 / 896)
-        img_android = RLImage(android_img_path, width=img_w, height=img_h)
-        img_iphone = RLImage(iphone_img_path, width=img_w, height=img_h)
-
-        img_table_data = [
-            [
-                Paragraph("<b>Ghid Adăugare Android (Google Chrome)</b>", img_label),
-                Paragraph("<b>Ghid Adăugare iPhone / iOS (Safari)</b>", img_label)
-            ],
-            [img_android, img_iphone]
-        ]
-        
-        t_img = Table(img_table_data, colWidths=[270, 270])
-        t_img.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('PADDING', (0,0), (-1,-1), 2),
-            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F7FAFC")),
-            ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#E2E8F0"))
-        ]))
-        story.append(t_img)
-        story.append(Spacer(1, 6))
-
-    # Footer
-    footer_text = (
-        "<b>© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor</b> | Protejat de Legea nr. 8/1996 privind drepturile de autor.<br/>"
-        "Comercializarea este interzisă! Produs utilizat gratuit exclusiv de persoanele autorizate de autor."
-    )
-    story.append(Paragraph(footer_text, footer_style))
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-# --- GENERATOARE PDF EXISTENTE ---
 def generate_pdf_student(student_idx, file_path):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
@@ -427,6 +327,176 @@ def generate_pdf_student(student_idx, file_path):
     buffer.seek(0)
     return buffer
 
+
+def generate_pdf_ticket(student_idx, file_path=None):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=25,
+        leftMargin=25,
+        topMargin=20,
+        bottomMargin=20
+    )
+    
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle(
+        'SchoolHeader', parent=styles['Heading1'],
+        fontName=PDF_FONT_BOLD, fontSize=11, leading=14,
+        alignment=1, textColor=colors.HexColor("#1A365D")
+    )
+    sub_title_style = ParagraphStyle(
+        'SubHeader', parent=styles['Normal'],
+        fontName=PDF_FONT, fontSize=8, leading=11,
+        alignment=1, textColor=colors.HexColor("#4A5568")
+    )
+    ticket_title = ParagraphStyle(
+        'TicketTitle', parent=styles['Heading2'],
+        fontName=PDF_FONT_BOLD, fontSize=11, leading=14,
+        alignment=1, textColor=colors.HexColor("#2B6CB0"),
+        spaceBefore=4, spaceAfter=4
+    )
+    label_style = ParagraphStyle(
+        'Label', parent=styles['Normal'],
+        fontName=PDF_FONT_BOLD, fontSize=8, leading=11,
+        textColor=colors.HexColor("#2D3748")
+    )
+    val_style = ParagraphStyle(
+        'Val', parent=styles['Normal'],
+        fontName=PDF_FONT_BOLD, fontSize=9, leading=12,
+        textColor=colors.HexColor("#1A365D")
+    )
+    pin_val_style = ParagraphStyle(
+        'PinVal', parent=styles['Normal'],
+        fontName=PDF_FONT_BOLD, fontSize=11, leading=13,
+        textColor=colors.HexColor("#C53030")
+    )
+    instr_head = ParagraphStyle(
+        'InstrHead', parent=styles['Heading3'],
+        fontName=PDF_FONT_BOLD, fontSize=8.5, leading=11,
+        textColor=colors.HexColor("#1A365D"), spaceBefore=4, spaceAfter=2
+    )
+    instr_body = ParagraphStyle(
+        'InstrBody', parent=styles['Normal'],
+        fontName=PDF_FONT, fontSize=7.5, leading=10.5,
+        textColor=colors.HexColor("#2D3748")
+    )
+    img_label = ParagraphStyle(
+        'ImgLabel', parent=styles['Normal'],
+        fontName=PDF_FONT_BOLD, fontSize=7.5, leading=10,
+        alignment=1, textColor=colors.HexColor("#2B6CB0")
+    )
+    footer_style = ParagraphStyle(
+        'FooterText', parent=styles['Normal'],
+        fontName=PDF_FONT, fontSize=6.5, leading=8.5,
+        alignment=1, textColor=colors.HexColor("#718096")
+    )
+
+    e_info = ELEVI[student_idx]
+    pin = PINS[student_idx]
+
+    # Obținem calea imaginilor
+    android_img_path = find_image_file("ghid_shortcut_android.png")
+    iphone_img_path = find_image_file("ghid_shortcut_iphone.png")
+
+    story = []
+
+    # Header
+    story.append(Paragraph("COLEGIUL „EMIL NEGRUȚIU” TURDA", title_style))
+    story.append(Paragraph("AN ȘCOLAR 2026–2027 | CLASA a IX-a TH (TURISM ȘI ALIMENTAȚIE)", sub_title_style))
+    story.append(Paragraph("<b>Prof. Diriginte:</b> Prof. Ec. Gherman Octavian-Theodor", sub_title_style))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("BILET INDIVIDUAL DE ACCES — PORTAL PĂRINȚI", ticket_title))
+    story.append(Spacer(1, 4))
+
+    # Caseta Date de Conectare
+    cred_data = [
+        [
+            Paragraph("ELEV / ELEVĂ:", label_style),
+            Paragraph(f"<b>{e_info[1]}</b>", val_style)
+        ],
+        [
+            Paragraph("NUMĂR MATRICOL (UTILIZATOR):", label_style),
+            Paragraph(f"<b>{e_info[3]}</b> &nbsp;&nbsp;<i>(sau numărul simplu: {e_info[2]})</i>", val_style)
+        ],
+        [
+            Paragraph("COD PIN CONFIDENȚIAL (PAROLĂ):", label_style),
+            Paragraph(f"<b>{pin}</b>", pin_val_style)
+        ],
+        [
+            Paragraph("ADRESĂ WEB PORTAL PĂRINȚI:", label_style),
+            Paragraph("<font color='#2B6CB0'><u>https://catalog-online-5482kppsbvvl6nffpe332g.streamlit.app/</u></font>", val_style)
+        ]
+    ]
+    
+    t_cred = Table(cred_data, colWidths=[170, 360])
+    t_cred.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EDF2F7")),
+        ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E0")),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor("#E2E8F0")),
+        ('PADDING', (0,0), (-1,-1), 3),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    story.append(t_cred)
+    story.append(Spacer(1, 6))
+
+    # Instrucțiuni
+    story.append(Paragraph("<b>INSTRUCȚIUNI DE CONECTARE ȘI ADĂUGARE PE ECRANUL TELEFONULUI:</b>", instr_head))
+    
+    instr_text = (
+        "<b>1. Autentificare:</b> Deschideți adresa <b>https://catalog-online-5482kppsbvvl6nffpe332g.streamlit.app/</b> în browserul telefonului și introduceți Numărul Matricol și Codul PIN de mai sus.<br/>"
+        "<b>2. Telefoane Android (Samsung, Xiaomi, Motorola etc.):</b> Deschideți în Chrome ➔ apăsați pe cele 3 puncte (din dreapta sus) ➔ Selectați opțiunea <b>„Adaugă pe ecranul de pornire” (sau „Instalează aplicația”)</b>.<br/>"
+        "<b>3. Telefoane iPhone (Apple iOS):</b> Deschideți în Safari ➔ apăsați butonul Partajare (săgeată în sus) ➔ Selectați opțiunea <b>„Adaugă pe ecranul principal”</b>."
+    )
+    story.append(Paragraph(instr_text, instr_body))
+    story.append(Spacer(1, 6))
+
+    # Imagini alăturate (Ghid vizual)
+    img_w = 170
+    img_h = 227  # 170 * (1200 / 896)
+    
+    has_android = os.path.exists(android_img_path)
+    has_iphone = os.path.exists(iphone_img_path)
+
+    if has_android and has_iphone:
+        img_android = RLImage(android_img_path, width=img_w, height=img_h)
+        img_iphone = RLImage(iphone_img_path, width=img_w, height=img_h)
+
+        img_table_data = [
+            [
+                Paragraph("<b>Ghid Adăugare Android (Google Chrome)</b>", img_label),
+                Paragraph("<b>Ghid Adăugare iPhone / iOS (Safari)</b>", img_label)
+            ],
+            [
+                img_android,
+                img_iphone
+            ]
+        ]
+        
+        t_img = Table(img_table_data, colWidths=[260, 260])
+        t_img.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('PADDING', (0,0), (-1,-1), 2),
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F7FAFC")),
+            ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#E2E8F0"))
+        ]))
+        story.append(t_img)
+        story.append(Spacer(1, 6))
+
+    # Footer Drepturi Autor
+    footer_text = (
+        "<b>© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor</b> | Protejat de Legea nr. 8/1996 privind drepturile de autor.<br/>"
+        "Comercializarea este interzisă! Produs utilizat gratuit exclusiv de persoanele autorizate de autor."
+    )
+    story.append(Paragraph(footer_text, footer_style))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
 def generate_pdf_centralizator(file_path):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
@@ -500,6 +570,7 @@ def generate_pdf_centralizator(file_path):
     buffer.seek(0)
     return buffer
 
+
 def generate_pdf_raport(file_path):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
@@ -561,6 +632,7 @@ def generate_pdf_raport(file_path):
     buffer.seek(0)
     return buffer
 
+
 def generate_pdf_pins(file_path):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
@@ -570,7 +642,6 @@ def generate_pdf_pins(file_path):
     title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName=PDF_FONT_BOLD, fontSize=13, leading=16, alignment=1, textColor=colors.HexColor("#1A365D"))
     cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontName=PDF_FONT, fontSize=8, leading=11)
     cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=8, leading=11)
-    pin_style = ParagraphStyle('PinStyle', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=9, leading=12, textColor=colors.HexColor("#C53030"))
 
     story.append(Paragraph("COLEGIUL 'EMIL NEGRUȚIU' TURDA", title_style))
     story.append(Paragraph("LISTĂ CODURI PIN CONFIDENȚIALE PĂRINȚI (IX TH)", title_style))
@@ -579,25 +650,25 @@ def generate_pdf_pins(file_path):
     table_data = [[
         Paragraph("<b>Nr.</b>", cell_bold),
         Paragraph("<b>Nume și Prenume Elev</b>", cell_bold),
-        Paragraph("<b>Matricol</b>", cell_bold),
+        Paragraph("<b>Nr. Matricol</b>", cell_bold),
         Paragraph("<b>Cod PIN Confidențial</b>", cell_bold)
     ]]
     
     for idx, e in enumerate(ELEVI):
-        pin_val = PINS[idx]
+        pin = PINS[idx]
         table_data.append([
             Paragraph(str(e[0]), cell_style),
             Paragraph(e[1], cell_style),
             Paragraph(e[3], cell_style),
-            Paragraph(pin_val, pin_style)
+            Paragraph(f"<b>{pin}</b>", cell_bold)
         ])
         
-    t_pins = Table(table_data, colWidths=[30, 260, 100, 130])
+    t_pins = Table(table_data, colWidths=[30, 240, 120, 130])
     t_pins.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
-        ('PADDING', (0,0), (-1,-1), 5),
+        ('PADDING', (0,0), (-1,-1), 4),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
     ]))
     story.append(t_pins)
@@ -747,26 +818,36 @@ with tab3:
             except Exception as ex:
                 st.error(f"Eroare: {ex}")
 
-# --- TAB 4: FIȘĂ ELEV & GENERARE BILETE ---
+# --- TAB 4: FIȘĂ ELEV ---
 with tab4:
-    st.subheader("Fișă Elev, Rezumat & Bilet de Acces Părinte")
+    st.subheader("Fișă Elev & Generare Documente Individuale")
     col_v1, col_v2, col_v3 = st.columns([2, 1, 1])
     with col_v1:
         elev_idx_v = st.selectbox("Alege Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_v")
+    
     with col_v2:
-        st.write("")
-        st.write("")
         try:
             pdf_bytes = generate_pdf_student(elev_idx_v, selected_file)
-            st.download_button("🖨️ Descarcă Fișă Școlară PDF", data=pdf_bytes, file_name=f"Fisa_Elev_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
+            st.download_button(
+                "🖨️ Descarcă Fișă Școlară PDF",
+                data=pdf_bytes,
+                file_name=f"Fisa_Elev_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
         except Exception as ex:
             st.error(f"Eroare PDF Fișă: {ex}")
+
     with col_v3:
-        st.write("")
-        st.write("")
         try:
             ticket_bytes = generate_pdf_ticket(elev_idx_v, selected_file)
-            st.download_button("🔑 Descarcă Bilet Acces Părinte PDF", data=ticket_bytes, file_name=f"Bilet_Acces_Parinte_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
+            st.download_button(
+                "🔑 Descarcă Bilet Acces Părinte PDF",
+                data=ticket_bytes,
+                file_name=f"Bilet_Acces_Parinte_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
         except Exception as ex:
             st.error(f"Eroare PDF Bilet: {ex}")
 
@@ -809,23 +890,36 @@ with tab4:
         except Exception as ex:
             st.error(f"Eroare la citire fișă: {ex}")
 
-# --- TAB 5: CENTRALIZATOR CLASĂ & PIN-URI ---
+# --- TAB 5: CENTRALIZATOR CLASĂ ---
 with tab5:
-    st.subheader("📈 Centralizator General Clasă & Coduri PIN Părinți")
+    st.subheader("📈 Centralizator General Clasă (Situție Școlară & Premii)")
     col_c1, col_c2, col_c3 = st.columns([2, 1, 1])
+    
     with col_c2:
         try:
             pdf_cent_bytes = generate_pdf_centralizator(selected_file)
-            st.download_button("🖨️ Descarcă Centralizator PDF", data=pdf_cent_bytes, file_name="Centralizator_General_IX_TH.pdf", mime="application/pdf", use_container_width=True)
+            st.download_button(
+                "🖨️ Descarcă Centralizator PDF",
+                data=pdf_cent_bytes,
+                file_name="Centralizator_General_IX_TH.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
         except Exception as ex:
             st.error(f"Eroare PDF Centralizator: {ex}")
+
     with col_c3:
-        if os.path.exists(selected_file):
-            try:
-                with open(selected_file, "rb") as xl_f:
-                    st.download_button("📥 Descarcă Catalog Excel (.xlsx)", data=xl_f.read(), file_name="catalog_scolar_clasa_IX_TH_Turda-v15.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-            except Exception as ex:
-                st.error(f"Eroare descărcare Excel: {ex}")
+        try:
+            pdf_pins_bytes = generate_pdf_pins(selected_file)
+            st.download_button(
+                "🔑 Descarcă Listă PIN-uri PDF",
+                data=pdf_pins_bytes,
+                file_name="Lista_Coduri_PIN_Parinti_IX_TH.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        except Exception as ex:
+            st.error(f"Eroare PDF PIN-uri: {ex}")
             
     if os.path.exists(selected_file):
         try:
@@ -853,26 +947,6 @@ with tab5:
         except Exception as ex:
             st.error(f"Eroare la citire centralizator: {ex}")
 
-    st.divider()
-    st.markdown("#### 🔐 Coduri PIN Confidențiale Părinți")
-    col_p1, col_p2 = st.columns([3, 1])
-    with col_p2:
-        try:
-            pins_pdf_bytes = generate_pdf_pins(selected_file)
-            st.download_button("🖨️ Descarcă Listă PIN-uri PDF", data=pins_pdf_bytes, file_name="Lista_PIN_Parinti_IX_TH.pdf", mime="application/pdf", use_container_width=True)
-        except Exception as ex:
-            st.error(f"Eroare PDF PIN-uri: {ex}")
-            
-    pin_table_data = []
-    for idx, e in enumerate(ELEVI):
-        pin_table_data.append({
-            "Nr.": e[0],
-            "Nume și Prenume Elev": e[1],
-            "Număr Matricol": e[3],
-            "Cod PIN Confidențial Părinte": PINS[idx]
-        })
-    st.dataframe(pin_table_data, use_container_width=True)
-
 # --- TAB 6: RAPORT DIRIGINTE ---
 with tab6:
     st.subheader("📋 Raport Sintetic al Dirigintelui")
@@ -880,7 +954,13 @@ with tab6:
     with col_r2:
         try:
             pdf_rap_bytes = generate_pdf_raport(selected_file)
-            st.download_button("🖨️ Descarcă Raport PDF", data=pdf_rap_bytes, file_name="Raport_Diriginte_IX_TH.pdf", mime="application/pdf", use_container_width=True)
+            st.download_button(
+                "🖨️ Descarcă Raport PDF",
+                data=pdf_rap_bytes,
+                file_name="Raport_Diriginte_IX_TH.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
         except Exception as ex:
             st.error(f"Eroare PDF Raport: {ex}")
             
@@ -927,11 +1007,13 @@ with tab6:
         except Exception as ex:
             st.error(f"Eroare la citire raport: {ex}")
 
-# Footer
-st.divider()
-st.markdown("""
-<div style="text-align: center; font-size: 0.85em; color: #718096; padding: 12px; background-color: #EDF2F7; border-radius: 6px; border: 1px solid #CBD5E0;">
-    <b>© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor</b> | Protejat de Legea nr. 8/1996 privind drepturile de autor.<br/>
-    <b>🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!</b> Produs utilizat gratuit exclusiv de persoanele autorizate de autor.
-</div>
-""", unsafe_allow_html=True)
+st.markdown("---")
+st.markdown(
+    """
+    <div style="background-color: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e9ecef; text-align: center; font-size: 0.8rem; color: #495057;">
+        <strong>© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor</strong> | Protejat de Legea nr. 8/1996 privind drepturile de autor.<br/>
+        <span style="color: #dc3545; font-weight: bold;">🚫 Comercializarea este strict interzisă!</span> Acest produs este utilizat în mod gratuit exclusiv de persoanele autorizate de autor.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
