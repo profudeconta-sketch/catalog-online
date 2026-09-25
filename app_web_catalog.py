@@ -69,6 +69,46 @@ def safe_float_str(val):
     except Exception:
         return str(val)
 
+def clean_pdf_text(text):
+    if PDF_FONT == "Helvetica":
+        rep = {'ă':'a', 'Ă':'A', 'â':'a', 'Â':'A', 'î':'i', 'Î':'I', 'ș':'s', 'Ș':'S', 'ț':'t', 'Ț':'T'}
+        for k, v in rep.items():
+            text = text.replace(k, v)
+    return text
+
+def render_copyright_footer():
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="text-align: center; color: #4A5568; font-size: 0.83rem; line-height: 1.6; padding: 16px 12px; background-color: #F7FAFC; border-radius: 8px; border: 1px solid #E2E8F0; margin-top: 25px; margin-bottom: 10px;">
+            <div style="font-size: 0.95rem; font-weight: bold; color: #1A365D; margin-bottom: 4px;">
+                © Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor
+            </div>
+            <div>
+                Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.<br/>
+                Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.<br/>
+                <span style="color: #C53030; font-weight: bold;">🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!</span><br/>
+                Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+def render_sidebar_copyright():
+    st.sidebar.divider()
+    st.sidebar.markdown(
+        """
+        <div style='font-size: 0.78rem; color: #718096; line-height: 1.4;'>
+            <b>© Prof. Ec. Gherman Octavian-Theodor</b><br/>
+            Drepturi de autor rezervate.<br/>
+            <span style='color: #E53E3E; font-weight: bold;'>Comercializarea interzisă.</span><br/>
+            Utilizare gratuită doar cu acordul autorului.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 # AUTENTIFICARE PROFESORI
 PAROLA_PROFESORI = "profesori2026"
 
@@ -89,11 +129,12 @@ if not st.session_state["authenticated"]:
                 st.rerun()
             else:
                 st.error("❌ Parolă incorectă! Vă rugăm să încercați din nou.")
+    
+    render_copyright_footer()
     st.stop()
 
-# --- APLICAȚIA PRINCIPALA PENTRU PROFESORI ---
+# --- APLICAȚIA PRINCIPALĂ PENTRU PROFESORI ---
 
-# Lista celor 32 de elevi
 ELEVI = [
     (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76"),
     (2, "BARA D. ADRIAN DANIEL", 14, "126/77"),
@@ -160,7 +201,7 @@ def find_excel_file():
         "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
         "CATALOG/catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
         "/workspace/artifacts/catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
-        "catalog_scolar_clasa_IX_TH_Turda-v14.xlsx"
+        "/workspace/out/catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
     ]
     for c in candidates:
         if os.path.exists(c):
@@ -176,11 +217,23 @@ with st.sidebar:
     st.header("⚙️ Opțiuni Catalog")
     selected_file = st.text_input("Fișier Excel Sursă:", value=excel_path)
     st.info("💡 Fișierul se salvează automat la fiecare modificare.")
-    st.caption("© 2026 Prof. Ec. Gherman Octavian-Theodor. Toate drepturile de autor rezervate.")
+    
+    if os.path.exists(selected_file):
+        with open(selected_file, "rb") as f_ex:
+            st.download_button(
+                "📥 Descarcă Catalog Excel (.xlsx)",
+                data=f_ex.read(),
+                file_name="catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+            
     st.divider()
     if st.button("🚪 Deconectare (Logout)", use_container_width=True):
         st.session_state["authenticated"] = False
         st.rerun()
+        
+    render_sidebar_copyright()
 
 if not os.path.exists(selected_file):
     st.warning(f"⚠️ Fișierul catalog '{selected_file}' nu a fost găsit în directorul curent.")
@@ -211,13 +264,13 @@ def generate_pdf_student(student_idx, file_path):
 
     e_info = ELEVI[student_idx]
     
-    story.append(Paragraph("COLEGIUL 'EMIL NEGRUȚIU' TURDA", title_style))
-    story.append(Paragraph("FIȘĂ INDIVIDUALĂ DE EVALUARE ȘI FRECVENȚĂ ȘCOLARĂ", title_style))
-    story.append(Paragraph("Clasa a IX-a TH — Turism și Alimentație | An școlar 2026-2027", subtitle_style))
+    story.append(Paragraph(clean_pdf_text("COLEGIUL 'EMIL NEGRUȚIU' TURDA"), title_style))
+    story.append(Paragraph(clean_pdf_text("FIȘĂ INDIVIDUALĂ DE EVALUARE ȘI FRECVENȚĂ ȘCOLARĂ"), title_style))
+    story.append(Paragraph(clean_pdf_text("Clasa a IX-a TH — Turism și Alimentație | An școlar 2026-2027"), subtitle_style))
     story.append(Spacer(1, 10))
     
     meta_data = [
-        [Paragraph(f"<b>Nume și Prenume:</b> {e_info[1]}", cell_style), Paragraph(f"<b>Nr. Matricol:</b> {e_info[3]}", cell_style), Paragraph(f"<b>RM/PG:</b> {e_info[2]}", cell_style)]
+        [Paragraph(clean_pdf_text(f"<b>Nume și Prenume:</b> {e_info[1]}"), cell_style), Paragraph(clean_pdf_text(f"<b>Nr. Matricol:</b> {e_info[3]}"), cell_style), Paragraph(clean_pdf_text(f"<b>RM/PG:</b> {e_info[2]}"), cell_style)]
     ]
     t_meta = Table(meta_data, colWidths=[240, 150, 130])
     t_meta.setStyle(TableStyle([
@@ -233,14 +286,14 @@ def generate_pdf_student(student_idx, file_path):
         s_row = 9 + student_idx
         
         for cat_title, sheet_n, sub_list in [("DISCIPLINE CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG), ("MODULE TEHNOLOGICE", "Module Tehnologice", MODULE_TH)]:
-            story.append(Paragraph(cat_title, heading_style))
+            story.append(Paragraph(clean_pdf_text(cat_title), heading_style))
             ws = wb[sheet_n]
             
             table_data = [[
-                Paragraph("<b>Disciplină / Modul</b>", cell_bold),
-                Paragraph("<b>Note & Date</b>", cell_bold),
-                Paragraph("<b>Medie</b>", cell_bold),
-                Paragraph("<b>Absențe</b>", cell_bold)
+                Paragraph(clean_pdf_text("<b>Disciplină / Modul</b>"), cell_bold),
+                Paragraph(clean_pdf_text("<b>Note & Date</b>"), cell_bold),
+                Paragraph(clean_pdf_text("<b>Medie</b>"), cell_bold),
+                Paragraph(clean_pdf_text("<b>Absențe</b>"), cell_bold)
             ]]
             
             for s_name, start_col in sub_list:
@@ -262,10 +315,10 @@ def generate_pdf_student(student_idx, file_path):
                 m_str = safe_float_str(m_val)
                 
                 table_data.append([
-                    Paragraph(s_name, cell_style),
-                    Paragraph(", ".join(notes_list) if notes_list else "-", cell_style),
-                    Paragraph(m_str, cell_bold),
-                    Paragraph(", ".join(abs_list) if abs_list else "-", cell_style)
+                    Paragraph(clean_pdf_text(s_name), cell_style),
+                    Paragraph(clean_pdf_text(", ".join(notes_list) if notes_list else "-"), cell_style),
+                    Paragraph(clean_pdf_text(m_str), cell_bold),
+                    Paragraph(clean_pdf_text(", ".join(abs_list) if abs_list else "-"), cell_style)
                 ])
                 
             t_sub = Table(table_data, colWidths=[160, 200, 50, 110])
@@ -282,7 +335,7 @@ def generate_pdf_student(student_idx, file_path):
         wb.close()
 
     story.append(Spacer(1, 15))
-    story.append(Paragraph("<b>Profesor Diriginte:</b> ___________________________   |   <b>Semnătură:</b> ___________", cell_style))
+    story.append(Paragraph(clean_pdf_text("<b>Profesor Diriginte:</b> ___________________________   |   <b>Semnătură:</b> ___________"), cell_style))
 
     doc.build(story)
     buffer.seek(0)
@@ -298,21 +351,21 @@ def generate_pdf_centralizator(file_path):
     cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontName=PDF_FONT, fontSize=7, leading=9)
     cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=7, leading=9)
 
-    story.append(Paragraph("COLEGIUL 'EMIL NEGRUȚIU' TURDA — CENTRALIZATOR GENERAL CLASĂ (IX TH)", title_style))
+    story.append(Paragraph(clean_pdf_text("COLEGIUL 'EMIL NEGRUȚIU' TURDA — CENTRALIZATOR GENERAL CLASĂ (IX TH)"), title_style))
     story.append(Spacer(1, 8))
     
     table_data = [[
-        Paragraph("<b>Nr.</b>", cell_bold),
-        Paragraph("<b>Nume și Prenume</b>", cell_bold),
-        Paragraph("<b>Matr.</b>", cell_bold),
-        Paragraph("<b>Med. CG</b>", cell_bold),
-        Paragraph("<b>Med. TH</b>", cell_bold),
-        Paragraph("<b>Med. Gen.</b>", cell_bold),
-        Paragraph("<b>Purtare</b>", cell_bold),
-        Paragraph("<b>Statut</b>", cell_bold),
-        Paragraph("<b>Tot. Abs.</b>", cell_bold),
-        Paragraph("<b>Rang</b>", cell_bold),
-        Paragraph("<b>Premiu</b>", cell_bold)
+        Paragraph(clean_pdf_text("<b>Nr.</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>Nume și Prenume</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>Matr.</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>Med. CG</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>Med. TH</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>Med. Gen.</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>Purtare</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>Statut</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>Tot. Abs.</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>Rang</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>Premiu</b>"), cell_bold)
     ]]
     
     if os.path.exists(file_path):
@@ -334,17 +387,17 @@ def generate_pdf_centralizator(file_path):
             premiu = safe_str(ws.cell(row=r, column=12).value)
             
             table_data.append([
-                Paragraph(nr, cell_style),
-                Paragraph(nume, cell_style),
-                Paragraph(matr, cell_style),
-                Paragraph(mcg, cell_style),
-                Paragraph(mth, cell_style),
-                Paragraph(mg, cell_bold),
-                Paragraph(purt, cell_style),
-                Paragraph(statut, cell_style),
-                Paragraph(abs_tot, cell_style),
-                Paragraph(rang, cell_style),
-                Paragraph(premiu, cell_style)
+                Paragraph(clean_pdf_text(nr), cell_style),
+                Paragraph(clean_pdf_text(nume), cell_style),
+                Paragraph(clean_pdf_text(matr), cell_style),
+                Paragraph(clean_pdf_text(mcg), cell_style),
+                Paragraph(clean_pdf_text(mth), cell_style),
+                Paragraph(clean_pdf_text(mg), cell_bold),
+                Paragraph(clean_pdf_text(purt), cell_style),
+                Paragraph(clean_pdf_text(statut), cell_style),
+                Paragraph(clean_pdf_text(abs_tot), cell_style),
+                Paragraph(clean_pdf_text(rang), cell_style),
+                Paragraph(clean_pdf_text(premiu), cell_style)
             ])
         wb.close()
 
@@ -372,8 +425,8 @@ def generate_pdf_raport(file_path):
     cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontName=PDF_FONT, fontSize=8, leading=11)
     cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=8, leading=11)
 
-    story.append(Paragraph("COLEGIUL 'EMIL NEGRUȚIU' TURDA", title_style))
-    story.append(Paragraph("RAPORT SEMESTRIAL / ANUAL AL DIRIGINTELUI", title_style))
+    story.append(Paragraph(clean_pdf_text("COLEGIUL 'EMIL NEGRUȚIU' TURDA"), title_style))
+    story.append(Paragraph(clean_pdf_text("RAPORT SEMESTRIAL / ANUAL AL DIRIGINTELUI"), title_style))
     story.append(Spacer(1, 10))
     
     if os.path.exists(file_path):
@@ -387,8 +440,8 @@ def generate_pdf_raport(file_path):
         tot_abs = safe_str(ws_r.cell(row=6, column=9).value)
         
         kpi_data = [
-            [Paragraph("<b>Total Elevi</b>", cell_bold), Paragraph("<b>Promovabilitate</b>", cell_bold), Paragraph("<b>Media Clasei</b>", cell_bold), Paragraph("<b>Media Purtare</b>", cell_bold), Paragraph("<b>Total Absențe</b>", cell_bold)],
-            [Paragraph(tot_el, cell_style), Paragraph(promov, cell_style), Paragraph(med_clasa, cell_style), Paragraph(med_purt, cell_style), Paragraph(tot_abs, cell_style)]
+            [Paragraph(clean_pdf_text("<b>Total Elevi</b>"), cell_bold), Paragraph(clean_pdf_text("<b>Promovabilitate</b>"), cell_bold), Paragraph(clean_pdf_text("<b>Media Clasei</b>"), cell_bold), Paragraph(clean_pdf_text("<b>Media Purtare</b>"), cell_bold), Paragraph(clean_pdf_text("<b>Total Absențe</b>"), cell_bold)],
+            [Paragraph(clean_pdf_text(tot_el), cell_style), Paragraph(clean_pdf_text(promov), cell_style), Paragraph(clean_pdf_text(med_clasa), cell_style), Paragraph(clean_pdf_text(med_purt), cell_style), Paragraph(clean_pdf_text(tot_abs), cell_style)]
         ]
         t_kpi = Table(kpi_data, colWidths=[100, 100, 100, 100, 120])
         t_kpi.setStyle(TableStyle([
@@ -401,14 +454,14 @@ def generate_pdf_raport(file_path):
         story.append(t_kpi)
         story.append(Spacer(1, 10))
         
-        story.append(Paragraph("DISTRIBUȚIA MEDIILOR ȘI FRECVENȚA", heading_style))
-        dist_data = [[Paragraph("<b>Tranșă Medie</b>", cell_bold), Paragraph("<b>Nr. Elevi</b>", cell_bold), Paragraph("<b>Pondere</b>", cell_bold)]]
+        story.append(Paragraph(clean_pdf_text("DISTRIBUȚIA MEDIILOR ȘI FRECVENȚA"), heading_style))
+        dist_data = [[Paragraph(clean_pdf_text("<b>Tranșă Medie</b>"), cell_bold), Paragraph(clean_pdf_text("<b>Nr. Elevi</b>"), cell_bold), Paragraph(clean_pdf_text("<b>Pondere</b>"), cell_bold)]]
         
         for row_idx in range(11, 17):
             transa = safe_str(ws_r.cell(row=row_idx, column=1).value)
             nr_e = safe_str(ws_r.cell(row=row_idx, column=2).value)
             pond = safe_str(ws_r.cell(row=row_idx, column=4).value)
-            dist_data.append([Paragraph(transa, cell_style), Paragraph(nr_e, cell_style), Paragraph(pond, cell_style)])
+            dist_data.append([Paragraph(clean_pdf_text(transa), cell_style), Paragraph(clean_pdf_text(nr_e), cell_style), Paragraph(clean_pdf_text(pond), cell_style)])
             
         t_dist = Table(dist_data, colWidths=[250, 120, 150])
         t_dist.setStyle(TableStyle([
@@ -418,6 +471,59 @@ def generate_pdf_raport(file_path):
         story.append(t_dist)
         wb.close()
 
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+def generate_pdf_pins(file_path):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName=PDF_FONT_BOLD, fontSize=13, leading=16, alignment=1, textColor=colors.HexColor("#1A365D"))
+    subtitle_style = ParagraphStyle('SubtitleStyle', parent=styles['Normal'], fontName=PDF_FONT, fontSize=9, leading=12, alignment=1, textColor=colors.HexColor("#4A5568"))
+    cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontName=PDF_FONT, fontSize=8, leading=11)
+    cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=8, leading=11)
+
+    story.append(Paragraph(clean_pdf_text("COLEGIUL 'EMIL NEGRUȚIU' TURDA"), title_style))
+    story.append(Paragraph(clean_pdf_text("LISTA CODURILOR PIN CONFIDENȚIALE PENTRU PORTALUL PĂRINȚILOR"), title_style))
+    story.append(Paragraph(clean_pdf_text("Clasa a IX-a TH — Turism și Alimentație | Document Confidențial (Diriginte)"), subtitle_style))
+    story.append(Spacer(1, 12))
+    
+    pin_table_data = [[
+        Paragraph(clean_pdf_text("<b>Nr.</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>Nume și Prenume Elev</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>Nr. Matricol</b>"), cell_bold),
+        Paragraph(clean_pdf_text("<b>COD PIN ACCES PĂRINTE</b>"), cell_bold)
+    ]]
+    
+    if os.path.exists(file_path):
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+        ws_c = wb["Centralizator Medii"]
+        for idx in range(len(ELEVI)):
+            r = 9 + idx
+            nr = safe_str(ws_c.cell(row=r, column=1).value)
+            nume = safe_str(ws_c.cell(row=r, column=2).value)
+            matr = safe_str(ws_c.cell(row=r, column=4).value)
+            pin_code = safe_str(ws_c.cell(row=r, column=13).value)
+            pin_table_data.append([
+                Paragraph(clean_pdf_text(nr), cell_style),
+                Paragraph(clean_pdf_text(nume), cell_style),
+                Paragraph(clean_pdf_text(matr), cell_style),
+                Paragraph(clean_pdf_text(f"<b>{pin_code}</b>"), cell_bold)
+            ])
+        wb.close()
+        
+    t_pin = Table(pin_table_data, colWidths=[30, 240, 100, 150])
+    t_pin.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
+        ('PADDING', (0,0), (-1,-1), 5),
+        ('ALIGN', (3,0), (3,-1), 'CENTER')
+    ]))
+    story.append(t_pin)
     doc.build(story)
     buffer.seek(0)
     return buffer
@@ -621,7 +727,7 @@ with tab4:
 # --- TAB 5: CENTRALIZATOR CLASĂ ---
 with tab5:
     st.subheader("📈 Centralizator General Clasă (Situție Școlară & Premii)")
-    col_c1, col_c2 = st.columns([3, 1])
+    col_c1, col_c2 = st.columns([2, 1])
     with col_c2:
         try:
             pdf_cent_bytes = generate_pdf_centralizator(selected_file)
@@ -651,6 +757,29 @@ with tab5:
                     "Premiu": safe_str(ws_c.cell(row=r, column=12).value)
                 })
             st.dataframe(c_data, use_container_width=True)
+            
+            st.divider()
+            st.subheader("🔐 Coduri PIN Confidențiale Părinți")
+            st.caption("Fișierul cu codurile de acces necesare părinților pentru autentificare în portalul lor.")
+            
+            col_p1, col_p2 = st.columns([3, 1])
+            with col_p2:
+                try:
+                    pdf_pins_bytes = generate_pdf_pins(selected_file)
+                    st.download_button("🖨️ Descarcă Listă PIN-uri (PDF)", data=pdf_pins_bytes, file_name="Lista_Coduri_PIN_Parinti_IX_TH.pdf", mime="application/pdf", use_container_width=True)
+                except Exception as ex:
+                    st.error(f"Eroare PDF PIN-uri: {ex}")
+            
+            pin_display_data = []
+            for idx in range(len(ELEVI)):
+                r = 9 + idx
+                pin_display_data.append({
+                    "Nr.": safe_str(ws_c.cell(row=r, column=1).value),
+                    "Nume și Prenume Elev": safe_str(ws_c.cell(row=r, column=2).value),
+                    "Număr Matricol": safe_str(ws_c.cell(row=r, column=4).value),
+                    "COD PIN ACCES PĂRINTE": safe_str(ws_c.cell(row=r, column=13).value)
+                })
+            st.dataframe(pin_display_data, use_container_width=True)
             wb.close()
         except Exception as ex:
             st.error(f"Eroare la citire centralizator: {ex}")
@@ -708,3 +837,5 @@ with tab6:
             wb.close()
         except Exception as ex:
             st.error(f"Eroare la citire raport: {ex}")
+
+render_copyright_footer()
