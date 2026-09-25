@@ -11,7 +11,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Lista celor 32 de elevi (ID, Nume, Nr. Matr. Simplu, Nr. Matr. Registru/Complet)
 ELEVI = [
     (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76"),
     (2, "BARA D. ADRIAN DANIEL", 14, "126/77"),
@@ -46,6 +45,17 @@ ELEVI = [
     (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5"),
     (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6")
 ]
+
+PINS = {
+    "126/76": "2951", "126/77": "6234", "126/78": "9233", "126/79": "9385",
+    "126/80": "2681", "126/81": "4658", "126/82": "7891", "126/83": "9975",
+    "126/84": "9042", "126/85": "8226", "126/86": "4931", "126/87": "1041",
+    "126/88": "2322", "126/89": "2814", "126/90": "5706", "126/91": "2606",
+    "126/92": "8367", "126/93": "1188", "126/94": "9032", "126/95": "6148",
+    "126/96": "4444", "126/97": "7508", "126/98": "5120", "126/99": "6696",
+    "126/100": "6843", "126/101": "7166", "128/1": "9414", "128/2": "2250",
+    "128/3": "6577", "128/4": "2469", "128/5": "9815", "128/6": "5786"
+}
 
 DISCIPLINE_CG = [
     ("Limba și literatura română", 8),
@@ -106,115 +116,132 @@ excel_path = find_excel_file()
 
 st.title("🏫 Colegiul 'Emil Negruțiu' Turda")
 st.subheader("👨‍👩‍👧‍👦 Portal Părinți — Vizualizare Fișă Școlară Elev (IX TH)")
-st.info("🔒 Acces securizat pentru părinți. Vă rugăm să vă autentificați mai jos cu Numărul Matricol al elevului pentru a consulta situația școlară.")
+st.info("🔒 Acces securizat pentru părinți. Vă rugăm să vă autentificați mai jos cu Numărul Matricol și Codul PIN al elevului.")
 
-# Zona de Autentificare
-col_auth1, col_auth2 = st.columns([2, 1])
+col_auth1, col_auth2 = st.columns(2)
 
 with col_auth1:
     nr_matricol_input = st.text_input(
-        "🔑 Introduceți Numărul Matricol al elevului (ex: 126/76 sau numărul simplu 13):",
+        "🔑 Număr Matricol (ex: 126/76 sau 13):",
         value="",
         placeholder="Exemplu: 126/76",
-        help="Numărul matricol se găsește pe carnetul de elev sau adeverința de înscriere."
+        help="Numărul matricol se găsește pe biletul de acces primit în privat."
     ).strip()
 
-def safe_str(val):
-    if val is None:
-        return ""
-    return str(val).strip()
+with col_auth2:
+    pin_input = st.text_input(
+        "🔒 Cod PIN (4 cifre):",
+        value="",
+        type="password",
+        placeholder="Exemplu: 2951",
+        help="Codul PIN confidențial de pe biletul de acces."
+    ).strip()
 
-def safe_float_str(val):
-    if val is None or val == "":
-        return "-"
-    try:
-        return f"{float(val):.2f}"
-    except Exception:
-        return str(val)
-
-# Verificare elev pe bază de număr matricol
-student_found = None
+matched_student = None
 if nr_matricol_input:
-    for e in ELEVI:
-        if nr_matricol_input == str(e[2]) or nr_matricol_input == str(e[3]) or nr_matricol_input.lower() == str(e[3]).lower():
-            student_found = e
+    for student in ELEVI:
+        if nr_matricol_input.lower() == str(student[2]).lower() or nr_matricol_input.lower() == str(student[3]).lower():
+            matched_student = student
             break
 
 if not nr_matricol_input:
-    st.warning("👈 Vă rugăm să introduceți Numărul Matricol în căsuța de mai sus.")
-elif not student_found:
-    st.error("❌ Nu s-a găsit niciun elev cu acest Număr Matricol. Verificați carnetul elevului și încercați din nou.")
+    st.warning("👉 Vă rugăm să introduceți Numărul Matricol în caseta de mai sus.")
+elif matched_student is None:
+    st.error("❌ Numărul Matricol introdus nu a fost găsit în baza de date! Verificați biletul de acces.")
+elif not pin_input:
+    st.info("🔑 Vă rugăm să introduceți și Codul PIN de 4 cifre pentru a debloca fișa elevului.")
 else:
-    st.success(f"✅ Autentificare reușită pentru elevul: **{student_found[1]}** (Matricol {student_found[3]})")
-    
-    # Inregistrare automata in Google Sheets
-    log_parent_access(student_found[1], student_found[3])
-    
-    st.divider()
-
-    if not os.path.exists(excel_path):
-        st.error(f"Fișierul catalog '{excel_path}' nu a fost găsit.")
+    correct_pin = PINS.get(matched_student[3], "")
+    if pin_input != correct_pin:
+        st.error("❌ Codul PIN introdus este incorect! Vă rugăm să verificați biletul individual de acces.")
     else:
-        try:
-            wb = openpyxl.load_workbook(excel_path, data_only=True)
-            s_idx = student_found[0] - 1
-            s_row = 9 + s_idx
+        # Autentificare reusita cu PIN
+        idx_elev = matched_student[0] - 1
+        st.success(f"✅ Autentificare reușită pentru elevul: **{matched_student[1]}** (Nr. Matricol: {matched_student[3]})")
+        
+        # Inregistrare automata in Google Sheets
+        log_parent_access(matched_student[1], matched_student[3])
+        
+        if os.path.exists(excel_path):
+            try:
+                wb = openpyxl.load_workbook(excel_path, data_only=True)
+                
+                def safe_str(val):
+                    return str(val).strip() if val is not None else ""
+                def safe_float_str(val):
+                    if val is None or val == "":
+                        return "-"
+                    try:
+                        return f"{float(val):.2f}"
+                    except Exception:
+                        return str(val)
 
-            # Preluare sumare din Centralizator și Absențe
-            ws_c = wb["Centralizator Medii"]
-            ws_a = wb["Absențe & Purtare"]
+                # Preluare date din Absențe & Purtare
+                abs_sheet = wb["Absențe & Purtare"]
+                student_row_abs = 9 + idx_elev
+                abs_nem = abs_sheet.cell(row=student_row_abs, column=5).value or 0
+                abs_mot = abs_sheet.cell(row=student_row_abs, column=6).value or 0
+                abs_tot = abs_sheet.cell(row=student_row_abs, column=7).value or 0
+                purtare = abs_sheet.cell(row=student_row_abs, column=8).value or 10
 
-            media_cg = safe_float_str(ws_c.cell(row=s_row, column=5).value)
-            media_th = safe_float_str(ws_c.cell(row=s_row, column=6).value)
-            media_gen = safe_float_str(ws_c.cell(row=s_row, column=7).value)
-            nota_purtare = safe_str(ws_a.cell(row=s_row, column=8).value)
-            abs_nem = safe_str(ws_a.cell(row=s_row, column=5).value)
-            abs_mot = safe_str(ws_a.cell(row=s_row, column=6).value)
-            abs_tot = safe_str(ws_a.cell(row=s_row, column=7).value)
+                # Preluare medii din Centralizator
+                cent_sheet = wb["Centralizator Medii"]
+                student_row_cent = 9 + idx_elev
+                med_cg = cent_sheet.cell(row=student_row_cent, column=5).value
+                med_th = cent_sheet.cell(row=student_row_cent, column=6).value
+                med_gen = cent_sheet.cell(row=student_row_cent, column=7).value
 
-            col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
-            col_kpi1.metric("Media Cultură Gen.", media_cg)
-            col_kpi2.metric("Media Module TH.", media_th)
-            col_kpi3.metric("Media Generală", media_gen)
-            col_kpi4.metric("Nota la Purtare", nota_purtare if nota_purtare else "10")
-            col_kpi5.metric("Total Absențe", f"{abs_tot if abs_tot else '0'} ({abs_nem if abs_nem else '0'} nem.)")
+                m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
+                m_col1.metric("Media Cultură Gen.", safe_float_str(med_cg))
+                m_col2.metric("Media Module TH", safe_float_str(med_th))
+                m_col3.metric("Media Generală", safe_float_str(med_gen))
+                m_col4.metric("Notă Purtare", f"{purtare:.0f}" if isinstance(purtare, (int, float)) else str(purtare))
+                m_col5.metric("Total Absențe", f"{abs_tot} ({abs_nem} nem. / {abs_mot} mot.)")
 
-            st.divider()
+                st.divider()
 
-            # Tabel detaliat pe discipline
-            for cat_title, sheet_n, sub_list in [("📚 DISCIPLINE CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG), ("⚙️ MODULE TEHNOLOGICE", "Module Tehnologice", MODULE_TH)]:
-                st.markdown(f"#### {cat_title}")
-                ws = wb[sheet_n]
+                tab_cg, tab_th = st.tabs(["📚 Cultură Generală", "🛠️ Module Tehnologice"])
 
-                rows_data = []
-                for s_name, start_col in sub_list:
-                    notes = []
-                    for k in range(10):
-                        n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
-                        d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
-                        if n_val is not None and str(n_val).strip() != "":
-                            d_str = f" ({d_val})" if d_val else ""
-                            notes.append(f"{n_val}{d_str}")
-                    absences = []
-                    for k in range(30):
-                        a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
-                        if a_val is not None and str(a_val).strip() != "":
-                            absences.append(str(a_val))
-                    media_val = ws.cell(row=s_row, column=start_col + 20).value
-                    media_str = safe_float_str(media_val)
+                for tab_obj, cat_title, sheet_n, sub_list in [
+                    (tab_cg, "Cultură Generală", "Cultură Generală", DISCIPLINE_CG),
+                    (tab_th, "Module Tehnologice", "Module Tehnologice", MODULE_TH)
+                ]:
+                    with tab_obj:
+                        ws = wb[sheet_n]
+                        s_row = 9 + idx_elev
+                        rows_data = []
 
-                    rows_data.append({
-                        "Disciplină / Modul": s_name,
-                        "Note & Date": ", ".join(notes) if notes else "Fără note",
-                        "Absențe": ", ".join(absences) if absences else "Fără absențe",
-                        "Medie": media_str
-                    })
-                st.dataframe(rows_data, use_container_width=True)
+                        for s_name, start_col in sub_list:
+                            notes = []
+                            for k in range(10):
+                                n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
+                                d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
+                                if n_val is not None and str(n_val).strip() != "":
+                                    d_str = f" ({d_val})" if d_val else ""
+                                    notes.append(f"{n_val}{d_str}")
+                            absences = []
+                            for k in range(30):
+                                a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
+                                if a_val is not None and str(a_val).strip() != "":
+                                    absences.append(str(a_val))
+                            media_val = ws.cell(row=s_row, column=start_col + 20).value
+                            media_str = safe_float_str(media_val)
 
-            wb.close()
-        except Exception as ex:
-            st.error(f"Eroare la încărcarea fișei elevului: {ex}")
+                            rows_data.append({
+                                "Disciplină / Modul": s_name,
+                                "Note & Date": ", ".join(notes) if notes else "Fără note",
+                                "Absențe Înregistrate": ", ".join(absences) if absences else "Fără absențe",
+                                "Medie Actuală": media_str
+                            })
 
-st.markdown("---")
+                        st.dataframe(rows_data, use_container_width=True, hide_index=True)
+
+                wb.close()
+            except Exception as ex:
+                st.error(f"Eroare la încărcarea datelor elevului: {ex}")
+        else:
+            st.warning("⚠️ Baza de date a catalogului este momentan indisponibilă. Vă rugăm să reîncercați mai târziu.")
+
+st.divider()
 st.caption("© 2026 Prof. Ec. Gherman Octavian-Theodor. Toate drepturile de autor rezervate.")
 st.caption("🏫 Colegiul 'Emil Negruțiu' Turda — Sistem Școlar Securizat pentru Părinți | Date actualizate în timp real.")
