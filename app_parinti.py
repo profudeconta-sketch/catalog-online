@@ -2,6 +2,9 @@ import datetime
 import os
 import openpyxl
 import streamlit as st
+import urllib.request
+import urllib.parse
+import json
 
 st.set_page_config(
     page_title="Portal Părinți - Catalog IX TH",
@@ -9,21 +12,42 @@ st.set_page_config(
     layout="wide"
 )
 
+# CLOUD SYNC & LOGGING CONFIGURATION
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxZTSWP9ciRZ-gsFRzxFyLZ4TN-v4eeyNDAhIY8_bBi9z9y9fXI6TQBUIGNHINDhGYF/exec"
+JSONBIN_URL = "https://api.jsonbin.io/v3/b/68d50fe2301f22312bd31d27"
+
+def get_cloud_data():
+    try:
+        req = urllib.request.Request(JSONBIN_URL, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            res = json.loads(resp.read().decode('utf-8'))
+            return res.get('record', {'grades': [], 'absences': []})
+    except Exception:
+        return {'grades': [], 'absences': []}
+
+def log_parent_access(elev_nume, matricol):
+    if "logged_students" not in st.session_state:
+        st.session_state["logged_students"] = set()
+    key = f"{elev_nume}_{matricol}"
+    if key not in st.session_state["logged_students"]:
+        st.session_state["logged_students"].add(key)
+        try:
+            params = urllib.parse.urlencode({"elev": elev_nume, "matricol": matricol})
+            full_url = f"{WEBAPP_URL}?{params}"
+            req = urllib.request.Request(full_url, headers={'User-Agent': 'Mozilla/5.0'})
+            urllib.request.urlopen(req, timeout=3)
+        except Exception:
+            pass
+
 def render_copyright_footer():
     st.markdown("---")
     st.markdown(
         """
-        <div style="text-align: center; color: #4A5568; font-size: 0.83rem; line-height: 1.6; padding: 16px 12px; background-color: #F7FAFC; border-radius: 8px; border: 1px solid #E2E8F0; margin-top: 25px; margin-bottom: 10px;">
-            <div style="font-size: 0.95rem; font-weight: bold; color: #1A365D; margin-bottom: 4px;">
-                © Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor
-            </div>
-            <div>
-                Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.<br/>
-                Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.<br/>
-                <span style="color: #C53030; font-weight: bold;">🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!</span><br/>
-                Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.
-            </div>
-        </div>
+        **© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor**  
+        *Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.*  
+        *Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.*  
+        **🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!**  
+        *Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.*
         """,
         unsafe_allow_html=True
     )
@@ -32,12 +56,10 @@ def render_sidebar_copyright():
     st.sidebar.divider()
     st.sidebar.markdown(
         """
-        <div style='font-size: 0.78rem; color: #718096; line-height: 1.4;'>
-            <b>© Prof. Ec. Gherman Octavian-Theodor</b><br/>
-            Drepturi de autor rezervate.<br/>
-            <span style='color: #E53E3E; font-weight: bold;'>Comercializarea interzisă.</span><br/>
-            Utilizare gratuită doar cu acordul autorului.
-        </div>
+        **© Prof. Ec. Gherman Octavian-Theodor**  
+        Drepturi de autor rezervate.  
+        Comercializarea interzisă.  
+        Utilizare gratuită doar cu acordul autorului.
         """,
         unsafe_allow_html=True
     )
@@ -188,17 +210,23 @@ elif pin_input != expected_pin:
     render_copyright_footer()
 else:
     st.success(f"✅ Autentificare reușită pentru elevul: **{student_found[1]}** (Matricol {student_found[3]})")
+    log_parent_access(student_found[1], student_found[3])
     st.divider()
-
+    
     try:
         wb = openpyxl.load_workbook(excel_path, data_only=True)
         s_idx = student_found[0] - 1
         s_row = 9 + s_idx
+        
+        # Cloud data live sync
+        cloud_data = get_cloud_data()
+        c_grades = cloud_data.get('grades', [])
+        c_absences = cloud_data.get('absences', [])
 
         # Preluare sumare din Centralizator și Absențe
         ws_c = wb["Centralizator Medii"]
         ws_a = wb["Absențe & Purtare"]
-
+        
         media_cg = safe_float_str(ws_c.cell(row=s_row, column=5).value)
         media_th = safe_float_str(ws_c.cell(row=s_row, column=6).value)
         media_gen = safe_float_str(ws_c.cell(row=s_row, column=7).value)
@@ -220,9 +248,9 @@ else:
         for cat_title, sheet_n, sub_list in [("📚 DISCIPLINE CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG), ("⚙️ MODULE TEHNOLOGICE", "Module Tehnologice", MODULE_TH)]:
             st.markdown(f"#### {cat_title}")
             ws = wb[sheet_n]
-
             rows_data = []
-            for s_name, start_col in sub_list:
+            
+            for mat_idx, (s_name, start_col) in enumerate(sub_list):
                 notes = []
                 for k in range(10):
                     n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
@@ -230,11 +258,21 @@ else:
                     if n_val is not None and str(n_val).strip() != "":
                         d_str = f" ({d_val})" if d_val else ""
                         notes.append(f"{n_val}{d_str}")
+                for cg in c_grades:
+                    if cg.get('student_idx') == s_idx and cg.get('cat') == ("Cultură Generală" if "CULTURĂ" in cat_title else "Module Tehnologice") and cg.get('mat_idx') == mat_idx:
+                        notes.append(f"{cg.get('nota')} ({cg.get('data')})")
+
                 absences = []
                 for k in range(30):
                     a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
                     if a_val is not None and str(a_val).strip() != "":
                         absences.append(str(a_val))
+                for ca in c_absences:
+                    if ca.get('student_idx') == s_idx and ca.get('cat') == ("Cultură Generală" if "CULTURĂ" in cat_title else "Module Tehnologice") and ca.get('mat_idx') == mat_idx:
+                        a_str = f"{ca.get('data')}{'m' if ca.get('is_mot') else ''}"
+                        if a_str not in absences:
+                            absences.append(a_str)
+
                 media_val = ws.cell(row=s_row, column=start_col + 20).value
                 media_str = safe_float_str(media_val)
 
