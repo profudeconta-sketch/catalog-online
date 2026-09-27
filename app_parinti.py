@@ -18,8 +18,8 @@ JSONBIN_URL = "https://api.jsonbin.io/v3/b/68d50fe2301f22312bd31d27"
 
 def get_cloud_data():
     try:
-        req = urllib.request.Request(JSONBIN_URL, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=3) as resp:
+        req = urllib.request.Request(JSONBIN_URL, headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'})
+        with urllib.request.urlopen(req, timeout=4) as resp:
             res = json.loads(resp.read().decode('utf-8'))
             return res.get('record', {'grades': [], 'absences': []})
     except Exception:
@@ -48,18 +48,6 @@ def render_copyright_footer():
         *Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.*  
         **🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!**  
         *Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.*
-        """,
-        unsafe_allow_html=True
-    )
-
-def render_sidebar_copyright():
-    st.sidebar.divider()
-    st.sidebar.markdown(
-        """
-        **© Prof. Ec. Gherman Octavian-Theodor**  
-        Drepturi de autor rezervate.  
-        Comercializarea interzisă.  
-        Utilizare gratuită doar cu acordul autorului.
         """,
         unsafe_allow_html=True
     )
@@ -98,8 +86,6 @@ ELEVI = [
     (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5"),
     (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6")
 ]
-
-PINS = ['2951', '6234', '9233', '9385', '2681', '4658', '7891', '9975', '9042', '8226', '4931', '1041', '2322', '2814', '5706', '2606', '8367', '1188', '9032', '6148', '4444', '7508', '5120', '6696', '6843', '7166', '9414', '2250', '6577', '2469', '9815', '5786']
 
 DISCIPLINE_CG = [
     ("Limba și literatura română", 8),
@@ -142,248 +128,135 @@ excel_path = find_excel_file()
 
 st.title("🏫 Colegiul 'Emil Negruțiu' Turda")
 st.subheader("👨‍👩‍👧‍👦 Portal Părinți — Vizualizare Fișă Școlară Elev (IX TH)")
-st.info("🔒 Acces securizat pentru părinți. Vă rugăm să vă autentificați mai jos cu Numărul Matricol și Codul PIN confidențial al elevului.")
+st.info("🔒 Acces securizat pentru părinți. Vă rugăm să vă autentificați mai jos cu Numărul Matricol al elevului pentru a consulta situația școlară.")
 
 with st.sidebar:
     st.header("ℹ️ Portal Părinți")
     st.info("Accesul este securizat și individualizat pentru fiecare elev.")
-    render_sidebar_copyright()
+    st.caption("**© Prof. Ec. Gherman Octavian-Theodor**\nDrepturi de autor rezervate.")
 
-# Formular Autentificare Părinte
-col_auth1, col_auth2 = st.columns(2)
+col_auth1, col_auth2 = st.columns([2, 1])
 
 with col_auth1:
     nr_matricol_input = st.text_input(
-        "🔑 Număr Matricol Elev (ex: 126/76 sau 13):",
+        "🔑 Introduceți Numărul Matricol al elevului (ex: 126/76 sau numărul simplu 13):",
         value="",
         placeholder="Exemplu: 126/76",
         help="Numărul matricol se găsește pe carnetul de elev sau adeverința de înscriere."
     ).strip()
 
-with col_auth2:
-    pin_input = st.text_input(
-        "🔐 Cod PIN Confidențial (4 cifre):",
-        value="",
-        type="password",
-        placeholder="Exemplu: 2951",
-        help="Codul PIN confidențial transmis de către diriginte."
-    ).strip()
-
 def safe_str(val):
-    if val is None:
-        return ""
+    if val is None: return ""
     return str(val).strip()
 
 def safe_float_str(val):
-    if val is None or val == "":
-        return "-"
-    try:
-        return f"{float(val):.2f}"
-    except Exception:
-        return str(val)
+    if val is None or val == "": return "-"
+    try: return f"{float(val):.2f}"
+    except Exception: return str(val)
 
-def compute_student_subject_data(ws, s_row, start_col, cat_title, mat_idx, s_idx, c_grades, c_absences):
-    notes = []
-    notes_num = []
-    for k in range(10):
-        n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
-        d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
-        if n_val is not None and str(n_val).strip() != "":
-            d_str = f" ({d_val})" if d_val else ""
-            notes.append(f"{n_val}{d_str}")
-            try:
-                notes_num.append(float(n_val))
-            except Exception:
-                pass
-
-    for cg in c_grades:
-        if cg.get('student_idx') == s_idx and cg.get('cat') == cat_title and cg.get('mat_idx') == mat_idx:
-            notes.append(f"{cg.get('nota')} ({cg.get('data')})")
-            try:
-                notes_num.append(float(cg.get('nota')))
-            except Exception:
-                pass
-
-    absences = []
-    for k in range(30):
-        a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
-        if a_val is not None and str(a_val).strip() != "":
-            absences.append(str(a_val).strip())
-
-    for ca in c_absences:
-        if ca.get('student_idx') == s_idx and ca.get('cat') == cat_title and ca.get('mat_idx') == mat_idx:
-            a_str = f"{ca.get('data')}{'m' if ca.get('is_mot') else ''}"
-            if a_str not in absences:
-                absences.append(a_str)
-
-    avg = (sum(notes_num) / len(notes_num)) if notes_num else None
-    
-    if avg is None:
-        m_excel = ws.cell(row=s_row, column=start_col + 20).value
-        if m_excel is not None and str(m_excel).strip() != "":
-            try:
-                avg = float(m_excel)
-            except Exception:
-                pass
-
-    return notes, absences, avg
-
-def compute_all_student_summary(wb, s_idx, c_grades, c_absences):
-    s_row = 9 + s_idx
-    ws_cg = wb["Cultură Generală"]
-    ws_th = wb["Module Tehnologice"]
-    ws_abs = wb["Absențe & Purtare"]
-    ws_cent = wb["Centralizator Medii"]
-
-    cg_avgs = []
-    all_absences = []
-
-    for mat_idx, (s_name, start_col) in enumerate(DISCIPLINE_CG):
-        _, abs_list, avg = compute_student_subject_data(ws_cg, s_row, start_col, "Cultură Generală", mat_idx, s_idx, c_grades, c_absences)
-        if avg is not None:
-            cg_avgs.append(avg)
-        all_absences.extend(abs_list)
-
-    th_avgs = []
-    for mat_idx, (s_name, start_col) in enumerate(MODULE_TH):
-        _, abs_list, avg = compute_student_subject_data(ws_th, s_row, start_col, "Module Tehnologice", mat_idx, s_idx, c_grades, c_absences)
-        if avg is not None:
-            th_avgs.append(avg)
-        all_absences.extend(abs_list)
-
-    med_cg = (sum(cg_avgs) / len(cg_avgs)) if cg_avgs else None
-    med_th = (sum(th_avgs) / len(th_avgs)) if th_avgs else None
-
-    if med_cg is not None and med_th is not None:
-        med_gen = (med_cg + med_th) / 2.0
-    elif med_cg is not None:
-        med_gen = med_cg
-    elif med_th is not None:
-        med_gen = med_th
-    else:
-        med_gen = None
-
-    purtare = ws_abs.cell(row=s_row, column=8).value
-    if purtare is None or str(purtare).strip() == "":
-        purtare = 10
-
-    total_abs = len(all_absences)
-    mot_abs = sum(1 for a in all_absences if str(a).endswith('m'))
-    nem_abs = total_abs - mot_abs
-
-    if total_abs == 0:
-        a_nem_ex = ws_abs.cell(row=s_row, column=5).value or 0
-        a_mot_ex = ws_abs.cell(row=s_row, column=6).value or 0
-        a_tot_ex = ws_abs.cell(row=s_row, column=7).value or 0
-        try:
-            total_abs = int(a_tot_ex)
-            nem_abs = int(a_nem_ex)
-            mot_abs = int(a_mot_ex)
-        except Exception:
-            pass
-
-    if med_cg is None:
-        m_cg_ex = ws_cent.cell(row=s_row, column=5).value
-        if m_cg_ex is not None:
-            try: med_cg = float(m_cg_ex)
-            except Exception: pass
-
-    if med_th is None:
-        m_th_ex = ws_cent.cell(row=s_row, column=6).value
-        if m_th_ex is not None:
-            try: med_th = float(m_th_ex)
-            except Exception: pass
-
-    if med_gen is None:
-        m_gen_ex = ws_cent.cell(row=s_row, column=7).value
-        if m_gen_ex is not None:
-            try: med_gen = float(m_gen_ex)
-            except Exception: pass
-
-    return {
-        'med_cg': med_cg,
-        'med_th': med_th,
-        'med_gen': med_gen,
-        'purtare': purtare,
-        'total_abs': total_abs,
-        'nem_abs': nem_abs,
-        'mot_abs': mot_abs
-    }
-
-# Verificare elev și PIN
+# Verificare elev pe bază de număr matricol
 student_found = None
-s_idx_matched = None
-expected_pin = None
-
 if nr_matricol_input:
-    for idx, e in enumerate(ELEVI):
-        if nr_matricol_input == str(e[0]) or nr_matricol_input == str(e[2]) or nr_matricol_input.lower() == str(e[3]).lower():
+    for e in ELEVI:
+        if nr_matricol_input == str(e[2]) or nr_matricol_input == str(e[3]) or nr_matricol_input.lower() == str(e[3]).lower():
             student_found = e
-            s_idx_matched = idx
-            expected_pin = PINS[idx]
             break
 
-if not nr_matricol_input or not pin_input:
-    st.warning("👈 Vă rugăm să completați atât Numărul Matricol, cât și Codul PIN confidențial de mai sus.")
+if not nr_matricol_input:
+    st.warning("👈 Vă rugăm să introduceți Numărul Matricol în căsuța de mai sus.")
     render_copyright_footer()
 elif not student_found:
     st.error("❌ Nu s-a găsit niciun elev cu acest Număr Matricol. Verificați carnetul elevului și încercați din nou.")
-    render_copyright_footer()
-elif pin_input != expected_pin:
-    st.error("❌ Codul PIN introdus este incorect pentru acest elev! Vă rugăm să verificați codul transmis de diriginte.")
     render_copyright_footer()
 else:
     st.success(f"✅ Autentificare reușită pentru elevul: **{student_found[1]}** (Matricol {student_found[3]})")
     log_parent_access(student_found[1], student_found[3])
     st.divider()
+
+    s_idx = student_found[0] - 1
+    s_row = 9 + s_idx
     
+    # Preia datele live din cloud
+    cloud_data = get_cloud_data()
+    c_grades = cloud_data.get('grades', [])
+    c_absences = cloud_data.get('absences', [])
+
+    wb_loaded = False
+    media_cg, media_th, media_gen, nota_purtare = "-", "-", "-", "10"
+    abs_nem_cnt, abs_mot_cnt, abs_tot_cnt = 0, 0, 0
+
     if os.path.exists(excel_path):
         try:
             wb = openpyxl.load_workbook(excel_path, data_only=True)
-            
-            # Cloud data live sync
-            cloud_data = get_cloud_data()
-            c_grades = cloud_data.get('grades', [])
-            c_absences = cloud_data.get('absences', [])
+            wb_loaded = True
+            ws_c, ws_a = wb["Centralizator Medii"], wb["Absențe & Purtare"]
+            media_cg = safe_float_str(ws_c.cell(row=s_row, column=5).value)
+            media_th = safe_float_str(ws_c.cell(row=s_row, column=6).value)
+            media_gen = safe_float_str(ws_c.cell(row=s_row, column=7).value)
+            nota_purtare = safe_str(ws_a.cell(row=s_row, column=8).value) or "10"
+            abs_nem_cnt = int(ws_a.cell(row=s_row, column=5).value or 0)
+            abs_mot_cnt = int(ws_a.cell(row=s_row, column=6).value or 0)
+            abs_tot_cnt = int(ws_a.cell(row=s_row, column=7).value or 0)
+        except Exception: pass
 
-            sum_d = compute_all_student_summary(wb, s_idx_matched, c_grades, c_absences)
+    # Adaugă numărătoarea absențelor din Cloud Live
+    c_student_abs = [ca for ca in c_absences if ca.get('student_idx') == s_idx]
+    for ca in c_student_abs:
+        abs_tot_cnt += 1
+        if ca.get('is_mot'): abs_mot_cnt += 1
+        else: abs_nem_cnt += 1
 
-            media_cg = safe_float_str(sum_d['med_cg'])
-            media_th = safe_float_str(sum_d['med_th'])
-            media_gen = safe_float_str(sum_d['med_gen'])
-            nota_purtare = str(sum_d['purtare'])
-            abs_tot = f"{sum_d['total_abs']} ({sum_d['nem_abs']} nem. / {sum_d['mot_abs']} mot.)"
+    col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
+    col_kpi1.metric("Media Cultură Gen.", media_cg)
+    col_kpi2.metric("Media Module TH.", media_th)
+    col_kpi3.metric("Media Generală", media_gen)
+    col_kpi4.metric("Nota la Purtare", nota_purtare)
+    col_kpi5.metric("Total Absențe", f"{abs_tot_cnt} ({abs_nem_cnt} nem. / {abs_mot_cnt} mot.)")
 
-            col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
-            col_kpi1.metric("Media Cultură Gen.", media_cg)
-            col_kpi2.metric("Media Module TH.", media_th)
-            col_kpi3.metric("Media Generală", media_gen)
-            col_kpi4.metric("Nota la Purtare", nota_purtare)
-            col_kpi5.metric("Total Absențe", abs_tot)
+    st.divider()
 
-            st.divider()
+    # Tabel detaliat pe discipline și module
+    for cat_title, sheet_n, sub_list in [("📚 DISCIPLINE CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG), ("⚙️ MODULE TEHNOLOGICE", "Module Tehnologice", MODULE_TH)]:
+        st.markdown(f"#### {cat_title}")
+        rows_data = []
+        ws = wb[sheet_n] if wb_loaded else None
+        cat_key = "Cultură Generală" if "CULTURĂ" in cat_title else "Module Tehnologice"
 
-            # Tabel detaliat pe discipline
-            for cat_title, sheet_n, sub_list in [("📚 DISCIPLINE CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG), ("⚙️ MODULE TEHNOLOGICE", "Module Tehnologice", MODULE_TH)]:
-                st.markdown(f"#### {cat_title}")
-                ws = wb[sheet_n]
-                rows_data = []
-                
-                cat_clean = "Cultură Generală" if "CULTURĂ" in cat_title else "Module Tehnologice"
-                for mat_idx, (s_name, start_col) in enumerate(sub_list):
-                    notes, absences, avg_val = compute_student_subject_data(ws, 9 + s_idx_matched, start_col, cat_clean, mat_idx, s_idx_matched, c_grades, c_absences)
-                    media_str = safe_float_str(avg_val)
+        for mat_idx, (s_name, start_col) in enumerate(sub_list):
+            notes = []
+            if ws:
+                for k in range(10):
+                    n_val, d_val = ws.cell(row=s_row, column=start_col + (k * 2)).value, ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
+                    if n_val is not None and str(n_val).strip() != "":
+                        d_str = f" ({d_val})" if d_val else ""
+                        notes.append(f"{n_val}{d_str}")
+            # Note din cloud live
+            for cg in c_grades:
+                if cg.get('student_idx') == s_idx and cg.get('cat') == cat_key and cg.get('mat_idx') == mat_idx:
+                    notes.append(f"{cg.get('nota')} ({cg.get('data')})")
 
-                    rows_data.append({
-                        "Disciplină / Modul": s_name,
-                        "Note & Date": ", ".join(notes) if notes else "Fără note",
-                        "Absențe": ", ".join(absences) if absences else "Fără absențe",
-                        "Medie": media_str
-                    })
-                st.dataframe(rows_data, use_container_width=True)
+            absences = []
+            if ws:
+                for k in range(30):
+                    a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
+                    if a_val is not None and str(a_val).strip() != "":
+                        absences.append(str(a_val))
+            # Absențe din cloud live
+            for ca in c_student_abs:
+                if ca.get('cat') == cat_key and ca.get('mat_idx') == mat_idx:
+                    a_str = f"{ca.get('data')}{'m' if ca.get('is_mot') else ''}"
+                    if a_str not in absences: absences.append(a_str)
 
-            wb.close()
-        except Exception as ex:
-            st.error(f"Eroare la încărcarea fișei elevului: {ex}")
+            media_val = ws.cell(row=s_row, column=start_col + 20).value if ws else None
+            media_str = safe_float_str(media_val)
 
+            rows_data.append({
+                "Disciplină / Modul": s_name,
+                "Note & Date": ", ".join(notes) if notes else "Fără note",
+                "Absențe": ", ".join(absences) if absences else "Fără absențe",
+                "Medie": media_str
+            })
+        st.dataframe(rows_data, use_container_width=True)
+
+    if wb_loaded: wb.close()
     render_copyright_footer()
