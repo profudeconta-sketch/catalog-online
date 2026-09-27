@@ -2,6 +2,9 @@ import datetime
 import os
 import openpyxl
 import streamlit as st
+import urllib.request
+import urllib.parse
+import json
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak
@@ -80,6 +83,27 @@ MODULE_TH = [
     ("M6: Curriculum de aprofundare și inserție profesională", 273)
 ]
 
+# CLOUD SYNC CONFIGURATION
+JSONBIN_URL = "https://api.jsonbin.io/v3/b/68d50fe2301f22312bd31d27"
+
+def get_cloud_data():
+    try:
+        req = urllib.request.Request(JSONBIN_URL, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            res = json.loads(resp.read().decode('utf-8'))
+            return res.get('record', {'grades': [], 'absences': []})
+    except Exception:
+        return {'grades': [], 'absences': []}
+
+def save_cloud_data(data):
+    try:
+        req_data = json.dumps(data).encode('utf-8')
+        req = urllib.request.Request(JSONBIN_URL, data=req_data, headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'}, method='PUT')
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            return True
+    except Exception:
+        return False
+
 # --- CONFIGURARE FONT UNICODE PENTRU DIACRITICE (PDF) ---
 def get_pdf_font():
     font_paths = [
@@ -102,7 +126,8 @@ def get_pdf_font():
                 pdfmetrics.registerFont(TTFont("CustomUnicode", fp))
                 font_name = "CustomUnicode"
                 break
-            except Exception: pass
+            except Exception:
+                pass
                 
     for fbp in font_bold_paths:
         if os.path.exists(fbp):
@@ -110,7 +135,8 @@ def get_pdf_font():
                 pdfmetrics.registerFont(TTFont("CustomUnicodeBold", fbp))
                 font_bold_name = "CustomUnicodeBold"
                 break
-            except Exception: pass
+            except Exception:
+                pass
                 
     return font_name, font_bold_name
 
@@ -128,6 +154,137 @@ def safe_float_str(val):
         return f"{float(val):.2f}"
     except Exception:
         return str(val)
+
+# CALCULATOR DINAMIC NOTE, ABSENȚE ȘI MEDII
+def compute_student_subject_data(ws, s_row, start_col, cat_title, mat_idx, s_idx, c_grades, c_absences):
+    notes = []
+    notes_num = []
+    for k in range(10):
+        n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
+        d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
+        if n_val is not None and str(n_val).strip() != "":
+            d_str = f" ({d_val})" if d_val else ""
+            notes.append(f"{n_val}{d_str}")
+            try:
+                notes_num.append(float(n_val))
+            except Exception:
+                pass
+
+    for cg in c_grades:
+        if cg.get('student_idx') == s_idx and cg.get('cat') == cat_title and cg.get('mat_idx') == mat_idx:
+            notes.append(f"{cg.get('nota')} ({cg.get('data')})")
+            try:
+                notes_num.append(float(cg.get('nota')))
+            except Exception:
+                pass
+
+    absences = []
+    for k in range(30):
+        a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
+        if a_val is not None and str(a_val).strip() != "":
+            absences.append(str(a_val).strip())
+
+    for ca in c_absences:
+        if ca.get('student_idx') == s_idx and ca.get('cat') == cat_title and ca.get('mat_idx') == mat_idx:
+            a_str = f"{ca.get('data')}{'m' if ca.get('is_mot') else ''}"
+            if a_str not in absences:
+                absences.append(a_str)
+
+    avg = (sum(notes_num) / len(notes_num)) if notes_num else None
+    
+    # Verificare dacă există o medie pre-calculată în Excel când nu sunt note adăugate în sesiune
+    if avg is None:
+        m_excel = ws.cell(row=s_row, column=start_col + 20).value
+        if m_excel is not None and str(m_excel).strip() != "":
+            try:
+                avg = float(m_excel)
+            except Exception:
+                pass
+
+    return notes, absences, avg
+
+def compute_all_student_summary(wb, s_idx, c_grades, c_absences):
+    s_row = 9 + s_idx
+    ws_cg = wb["Cultură Generală"]
+    ws_th = wb["Module Tehnologice"]
+    ws_abs = wb["Absențe & Purtare"]
+    ws_cent = wb["Centralizator Medii"]
+
+    cg_avgs = []
+    all_absences = []
+
+    for mat_idx, (s_name, start_col) in enumerate(DISCIPLINE_CG):
+        _, abs_list, avg = compute_student_subject_data(ws_cg, s_row, start_col, "Cultură Generală", mat_idx, s_idx, c_grades, c_absences)
+        if avg is not None:
+            cg_avgs.append(avg)
+        all_absences.extend(abs_list)
+
+    th_avgs = []
+    for mat_idx, (s_name, start_col) in enumerate(MODULE_TH):
+        _, abs_list, avg = compute_student_subject_data(ws_th, s_row, start_col, "Module Tehnologice", mat_idx, s_idx, c_grades, c_absences)
+        if avg is not None:
+            th_avgs.append(avg)
+        all_absences.extend(abs_list)
+
+    med_cg = (sum(cg_avgs) / len(cg_avgs)) if cg_avgs else None
+    med_th = (sum(th_avgs) / len(th_avgs)) if th_avgs else None
+
+    if med_cg is not None and med_th is not None:
+        med_gen = (med_cg + med_th) / 2.0
+    elif med_cg is not None:
+        med_gen = med_cg
+    elif med_th is not None:
+        med_gen = med_th
+    else:
+        med_gen = None
+
+    purtare = ws_abs.cell(row=s_row, column=8).value
+    if purtare is None or str(purtare).strip() == "":
+        purtare = 10
+
+    total_abs = len(all_absences)
+    mot_abs = sum(1 for a in all_absences if str(a).endswith('m'))
+    nem_abs = total_abs - mot_abs
+
+    # Fallback la Excel dacă datele dinamice sunt goale
+    if total_abs == 0:
+        a_nem_ex = ws_abs.cell(row=s_row, column=5).value or 0
+        a_mot_ex = ws_abs.cell(row=s_row, column=6).value or 0
+        a_tot_ex = ws_abs.cell(row=s_row, column=7).value or 0
+        try:
+            total_abs = int(a_tot_ex)
+            nem_abs = int(a_nem_ex)
+            mot_abs = int(a_mot_ex)
+        except Exception:
+            pass
+
+    if med_cg is None:
+        m_cg_ex = ws_cent.cell(row=s_row, column=5).value
+        if m_cg_ex is not None:
+            try: med_cg = float(m_cg_ex)
+            except Exception: pass
+
+    if med_th is None:
+        m_th_ex = ws_cent.cell(row=s_row, column=6).value
+        if m_th_ex is not None:
+            try: med_th = float(m_th_ex)
+            except Exception: pass
+
+    if med_gen is None:
+        m_gen_ex = ws_cent.cell(row=s_row, column=7).value
+        if m_gen_ex is not None:
+            try: med_gen = float(m_gen_ex)
+            except Exception: pass
+
+    return {
+        'med_cg': med_cg,
+        'med_th': med_th,
+        'med_gen': med_gen,
+        'purtare': purtare,
+        'total_abs': total_abs,
+        'nem_abs': nem_abs,
+        'mot_abs': mot_abs
+    }
 
 # AUTENTIFICARE PROFESORI
 PAROLA_PROFESORI = "profesori2026"
@@ -149,13 +306,12 @@ if not st.session_state["authenticated"]:
                 st.rerun()
             else:
                 st.error("❌ Parolă incorectă! Vă rugăm să încercați din nou.")
-    
     st.markdown("---")
     st.info("""
-    **© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor**  
-    *Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.*  
-    *Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.*  
-    **🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!**  
+    **© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor**
+    *Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.*
+    *Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.*
+    **🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!**
     *Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.*
     """)
     st.stop()
@@ -182,7 +338,6 @@ with st.sidebar:
     st.header("⚙️ Opțiuni Catalog")
     selected_file = st.text_input("Fișier Excel Sursă:", value=excel_path)
     st.info("💡 Fișierul se salvează automat la fiecare modificare.")
-    
     if os.path.exists(selected_file):
         try:
             with open(selected_file, "rb") as f:
@@ -193,13 +348,12 @@ with st.sidebar:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
-        except Exception: pass
-
+        except Exception:
+            pass
     st.divider()
     if st.button("🚪 Deconectare (Logout)", use_container_width=True):
         st.session_state["authenticated"] = False
         st.rerun()
-        
     st.caption("---")
     st.caption("**© Prof. Ec. Gherman Octavian-Theodor**\nDrepturi de autor rezervate.\nComercializarea interzisă.\nUtilizare gratuită acordată de autor.")
 
@@ -215,10 +369,9 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📋 Raport Diriginte"
 ])
 
-elev_options = [f"{e[0]}. {e[1]} (Matr. {e[2]})" for e in ELEVI]
+elev_options = [f"{e[0]}. {e[1]} (Matr. {e[3]})" for e in ELEVI]
 
 # --- GENERATOARE PDF ---
-
 def generate_pdf_ticket_student(student_idx, file_path):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -229,59 +382,95 @@ def generate_pdf_ticket_student(student_idx, file_path):
         topMargin=20,
         bottomMargin=20
     )
-    
     styles = getSampleStyleSheet()
-    
     title_style = ParagraphStyle(
-        'SchoolHeader', parent=styles['Heading1'],
-        fontName=PDF_FONT_BOLD, fontSize=11, leading=14,
-        alignment=1, textColor=colors.HexColor("#1A365D")
+        'SchoolHeader',
+        parent=styles['Heading1'],
+        fontName=PDF_FONT_BOLD,
+        fontSize=11,
+        leading=14,
+        alignment=1,
+        textColor=colors.HexColor("#1A365D")
     )
     sub_title_style = ParagraphStyle(
-        'SubHeader', parent=styles['Normal'],
-        fontName=PDF_FONT, fontSize=8, leading=11,
-        alignment=1, textColor=colors.HexColor("#4A5568")
+        'SubHeader',
+        parent=styles['Normal'],
+        fontName=PDF_FONT,
+        fontSize=8,
+        leading=11,
+        alignment=1,
+        textColor=colors.HexColor("#4A5568")
     )
     ticket_title = ParagraphStyle(
-        'TicketTitle', parent=styles['Heading2'],
-        fontName=PDF_FONT_BOLD, fontSize=11, leading=14,
-        alignment=1, textColor=colors.HexColor("#2B6CB0"),
-        spaceBefore=4, spaceAfter=4
+        'TicketTitle',
+        parent=styles['Heading2'],
+        fontName=PDF_FONT_BOLD,
+        fontSize=11,
+        leading=14,
+        alignment=1,
+        textColor=colors.HexColor("#2B6CB0"),
+        spaceBefore=4,
+        spaceAfter=4
     )
     label_style = ParagraphStyle(
-        'Label', parent=styles['Normal'],
-        fontName=PDF_FONT_BOLD, fontSize=8, leading=11,
+        'Label',
+        parent=styles['Normal'],
+        fontName=PDF_FONT_BOLD,
+        fontSize=8,
+        leading=11,
         textColor=colors.HexColor("#2D3748")
     )
     val_style = ParagraphStyle(
-        'Val', parent=styles['Normal'],
-        fontName=PDF_FONT_BOLD, fontSize=9, leading=12,
+        'Val',
+        parent=styles['Normal'],
+        fontName=PDF_FONT_BOLD,
+        fontSize=9,
+        leading=12,
         textColor=colors.HexColor("#1A365D")
     )
     pin_val_style = ParagraphStyle(
-        'PinVal', parent=styles['Normal'],
-        fontName=PDF_FONT_BOLD, fontSize=11, leading=13,
+        'PinVal',
+        parent=styles['Normal'],
+        fontName=PDF_FONT_BOLD,
+        fontSize=11,
+        leading=13,
         textColor=colors.HexColor("#C53030")
     )
     instr_head = ParagraphStyle(
-        'InstrHead', parent=styles['Heading3'],
-        fontName=PDF_FONT_BOLD, fontSize=8.5, leading=11,
-        textColor=colors.HexColor("#1A365D"), spaceBefore=4, spaceAfter=2
+        'InstrHead',
+        parent=styles['Heading3'],
+        fontName=PDF_FONT_BOLD,
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.HexColor("#1A365D"),
+        spaceBefore=4,
+        spaceAfter=2
     )
     instr_body = ParagraphStyle(
-        'InstrBody', parent=styles['Normal'],
-        fontName=PDF_FONT, fontSize=7.5, leading=10.5,
+        'InstrBody',
+        parent=styles['Normal'],
+        fontName=PDF_FONT,
+        fontSize=7.5,
+        leading=10.5,
         textColor=colors.HexColor("#2D3748")
     )
     img_label = ParagraphStyle(
-        'ImgLabel', parent=styles['Normal'],
-        fontName=PDF_FONT_BOLD, fontSize=7.5, leading=10,
-        alignment=1, textColor=colors.HexColor("#2B6CB0")
+        'ImgLabel',
+        parent=styles['Normal'],
+        fontName=PDF_FONT_BOLD,
+        fontSize=7.5,
+        leading=10,
+        alignment=1,
+        textColor=colors.HexColor("#2B6CB0")
     )
     footer_style = ParagraphStyle(
-        'FooterText', parent=styles['Normal'],
-        fontName=PDF_FONT, fontSize=6.5, leading=8.5,
-        alignment=1, textColor=colors.HexColor("#718096")
+        'FooterText',
+        parent=styles['Normal'],
+        fontName=PDF_FONT,
+        fontSize=6.5,
+        leading=8.5,
+        alignment=1,
+        textColor=colors.HexColor("#718096")
     )
 
     android_img_path = "/workspace/artifacts/ghid_shortcut_android.png"
@@ -289,7 +478,6 @@ def generate_pdf_ticket_student(student_idx, file_path):
 
     e = ELEVI[student_idx]
     pin = PINS[student_idx]
-    
     if os.path.exists(file_path):
         try:
             wb = openpyxl.load_workbook(file_path, data_only=True)
@@ -300,13 +488,13 @@ def generate_pdf_ticket_student(student_idx, file_path):
                 if pin_val and str(pin_val).strip():
                     pin = str(pin_val).strip()
             wb.close()
-        except Exception: pass
+        except Exception:
+            pass
 
     story = []
-
     story.append(Paragraph("COLEGIUL „EMIL NEGRUȚIU” TURDA", title_style))
     story.append(Paragraph("AN ȘCOLAR 2026–2027 | CLASA a IX-a TH (TURISM ȘI ALIMENTAȚIE)", sub_title_style))
-    story.append(Paragraph("<b>Prof. Diriginte:</b> Prof. Ec. Gherman Octavian-Theodor", sub_title_style))
+    story.append(Paragraph("Prof. Diriginte: Prof. Ec. Gherman Octavian-Theodor", sub_title_style))
     story.append(Spacer(1, 4))
     story.append(Paragraph("BILET INDIVIDUAL DE ACCES — PORTAL PĂRINȚI", ticket_title))
     story.append(Spacer(1, 4))
@@ -314,23 +502,23 @@ def generate_pdf_ticket_student(student_idx, file_path):
     cred_data = [
         [
             Paragraph("ELEV / ELEVĂ:", label_style),
-            Paragraph(f"<b>{e[1]}</b>", val_style)
+            Paragraph(f"{e[1]}", val_style)
         ],
         [
             Paragraph("NUMĂR MATRICOL (UTILIZATOR):", label_style),
-            Paragraph(f"<b>{e[3]}</b> &nbsp;&nbsp;<i>(sau numărul simplu: {e[2]})</i>", val_style)
+            Paragraph(f"{e[3]} (sau numărul simplu: {e[2]})", val_style)
         ],
         [
             Paragraph("COD PIN CONFIDENȚIAL (PAROLĂ):", label_style),
-            Paragraph(f"<b>{pin}</b>", pin_val_style)
+            Paragraph(f"{pin}", pin_val_style)
         ],
         [
             Paragraph("ADRESĂ WEB PORTAL:", label_style),
-            Paragraph("<font color='#2B6CB0'><u>https://catalog-online-5482kppsbvvl6nffpe332g.streamlit.app/</u></font>", val_style)
+            Paragraph("https://catalog-online-5482kppsbvvl6nffpe332g.streamlit.app/", val_style)
         ]
     ]
-    
-    t_cred = Table(cred_data, colWidths=[170, 360])
+
+    t_cred = Table(cred_data, colWidths=[180, 320])
     t_cred.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EDF2F7")),
         ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E0")),
@@ -341,35 +529,31 @@ def generate_pdf_ticket_student(student_idx, file_path):
     story.append(t_cred)
     story.append(Spacer(1, 6))
 
-    story.append(Paragraph("<b>INSTRUCȚIUNI DE CONECTARE ȘI ADĂUGARE PE ECRANUL TELEFONULUI:</b>", instr_head))
-    
+    story.append(Paragraph("INSTRUCȚIUNI DE CONECTARE ȘI ADĂUGARE PE ECRANUL TELEFONULUI:", instr_head))
     instr_text = (
-        "<b>1. Autentificare:</b> Accesați adresa <font color='#2B6CB0'><b>https://catalog-online-5482kppsbvvl6nffpe332g.streamlit.app/</b></font> și introduceți Numărul Matricol și Codul PIN de mai sus.<br/>"
-        "<b>2. Telefoane Android (Samsung, Xiaomi, Motorola etc.):</b> Deschideți în Google Chrome ➔ apăsați pe cele 3 puncte (dreapta sus) ➔ Selectați opțiunea <b>„Adaugă pe ecranul de pornire” (sau „Instalează aplicația”)</b>.<br/>"
-        "<b>3. Telefoane iPhone (Apple iOS):</b> Deschideți în Safari ➔ apăsați pe butonul Partajare ➔ Selectați opțiunea <b>„Adaugă pe ecranul principal”</b>."
+        "1. Autentificare: Accesați adresa https://catalog-online-5482kppsbvvl6nffpe332g.streamlit.app/ și introduceți Numărul Matricol și Codul PIN de mai sus. "
+        "2. Telefoane Android (Samsung, Xiaomi, Motorola etc.): Deschideți în Google Chrome ➔ apăsați pe cele 3 puncte (dreapta sus) ➔ Selectați opțiunea „Adaugă pe ecranul de pornire” (sau „Instalează aplicația”). "
+        "3. Telefoane iPhone (Apple iOS): Deschideți în Safari ➔ apăsați pe butonul Partajare ➔ Selectați opțiunea „Adaugă pe ecranul principal”."
     )
     story.append(Paragraph(instr_text, instr_body))
     story.append(Spacer(1, 6))
 
     img_w = 170
     img_h = 227
-    
     if os.path.exists(android_img_path) and os.path.exists(iphone_img_path):
         img_android = RLImage(android_img_path, width=img_w, height=img_h)
         img_iphone = RLImage(iphone_img_path, width=img_w, height=img_h)
-
         img_table_data = [
             [
-                Paragraph("<b>Ghid Adăugare Android (Google Chrome)</b>", img_label),
-                Paragraph("<b>Ghid Adăugare iPhone / iOS (Safari)</b>", img_label)
+                Paragraph("Ghid Adăugare Android (Google Chrome)", img_label),
+                Paragraph("Ghid Adăugare iPhone / iOS (Safari)", img_label)
             ],
             [
                 img_android,
                 img_iphone
             ]
         ]
-        
-        t_img = Table(img_table_data, colWidths=[260, 260])
+        t_img = Table(img_table_data, colWidths=[250, 250])
         t_img.setStyle(TableStyle([
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -381,7 +565,7 @@ def generate_pdf_ticket_student(student_idx, file_path):
         story.append(Spacer(1, 6))
 
     footer_text = (
-        "<b>© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor</b> | Protejat de Legea nr. 8/1996 privind drepturile de autor.<br/>"
+        "© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor | Protejat de Legea nr. 8/1996 privind drepturile de autor. "
         "Comercializarea este interzisă! Produs utilizat gratuit exclusiv de persoanele autorizate de autor."
     )
     story.append(Paragraph(footer_text, footer_style))
@@ -410,9 +594,9 @@ def generate_pdf_student(student_idx, file_path):
     story.append(Spacer(1, 10))
     
     meta_data = [
-        [Paragraph(f"<b>Nume și Prenume:</b> {e_info[1]}", cell_style), Paragraph(f"<b>Nr. Matricol:</b> {e_info[3]}", cell_style), Paragraph(f"<b>RM/PG:</b> {e_info[2]}", cell_style)]
+        [Paragraph(f"Nume și Prenume: {e_info[1]}", cell_style), Paragraph(f"Nr. Matricol: {e_info[3]}", cell_style), Paragraph(f"RM/PG: {e_info[2]}", cell_style)]
     ]
-    t_meta = Table(meta_data, colWidths=[240, 150, 130])
+    t_meta = Table(meta_data, colWidths=[200, 160, 160])
     t_meta.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EDF2F7")),
         ('PADDING', (0,0), (-1,-1), 6),
@@ -424,35 +608,24 @@ def generate_pdf_student(student_idx, file_path):
     if os.path.exists(file_path):
         wb = openpyxl.load_workbook(file_path, data_only=True)
         s_row = 9 + student_idx
+        c_data = get_cloud_data()
+        c_grades = c_data.get('grades', [])
+        c_absences = c_data.get('absences', [])
         
         for cat_title, sheet_n, sub_list in [("DISCIPLINE CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG), ("MODULE TEHNOLOGICE", "Module Tehnologice", MODULE_TH)]:
             story.append(Paragraph(cat_title, heading_style))
             ws = wb[sheet_n]
             
             table_data = [[
-                Paragraph("<b>Disciplină / Modul</b>", cell_bold),
-                Paragraph("<b>Note & Date</b>", cell_bold),
-                Paragraph("<b>Medie</b>", cell_bold),
-                Paragraph("<b>Absențe</b>", cell_bold)
+                Paragraph("Disciplină / Modul", cell_bold),
+                Paragraph("Note & Date", cell_bold),
+                Paragraph("Medie", cell_bold),
+                Paragraph("Absențe", cell_bold)
             ]]
             
-            for s_name, start_col in sub_list:
-                notes_list = []
-                for k in range(10):
-                    n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
-                    d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
-                    if n_val is not None and str(n_val).strip() != "":
-                        d_str = f" ({d_val})" if d_val else ""
-                        notes_list.append(f"{n_val}{d_str}")
-                        
-                abs_list = []
-                for k in range(30):
-                    a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
-                    if a_val is not None and str(a_val).strip() != "":
-                        abs_list.append(str(a_val))
-                        
-                m_val = ws.cell(row=s_row, column=start_col + 20).value
-                m_str = safe_float_str(m_val)
+            for mat_idx, (s_name, start_col) in enumerate(sub_list):
+                notes_list, abs_list, avg_val = compute_student_subject_data(ws, s_row, start_col, cat_title.replace("DISCIPLINE ", ""), mat_idx, student_idx, c_grades, c_absences)
+                m_str = safe_float_str(avg_val)
                 
                 table_data.append([
                     Paragraph(s_name, cell_style),
@@ -461,7 +634,7 @@ def generate_pdf_student(student_idx, file_path):
                     Paragraph(", ".join(abs_list) if abs_list else "-", cell_style)
                 ])
                 
-            t_sub = Table(table_data, colWidths=[160, 200, 50, 110])
+            t_sub = Table(table_data, colWidths=[180, 180, 50, 110])
             t_sub.setStyle(TableStyle([
                 ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2B6CB0")),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -475,7 +648,7 @@ def generate_pdf_student(student_idx, file_path):
         wb.close()
 
     story.append(Spacer(1, 15))
-    story.append(Paragraph("<b>Profesor Diriginte:</b> Prof. Ec. Gherman Octavian-Theodor   |   <b>Semnătură:</b> ___________", cell_style))
+    story.append(Paragraph("Profesor Diriginte: Prof. Ec. Gherman Octavian-Theodor | Semnătură: ___________", cell_style))
 
     doc.build(story)
     buffer.seek(0)
@@ -495,34 +668,39 @@ def generate_pdf_centralizator(file_path):
     story.append(Spacer(1, 8))
     
     table_data = [[
-        Paragraph("<b>Nr.</b>", cell_bold),
-        Paragraph("<b>Nume și Prenume</b>", cell_bold),
-        Paragraph("<b>Matr.</b>", cell_bold),
-        Paragraph("<b>Med. CG</b>", cell_bold),
-        Paragraph("<b>Med. TH</b>", cell_bold),
-        Paragraph("<b>Med. Gen.</b>", cell_bold),
-        Paragraph("<b>Purtare</b>", cell_bold),
-        Paragraph("<b>Statut</b>", cell_bold),
-        Paragraph("<b>Tot. Abs.</b>", cell_bold),
-        Paragraph("<b>Rang</b>", cell_bold),
-        Paragraph("<b>Premiu</b>", cell_bold)
+        Paragraph("Nr.", cell_bold),
+        Paragraph("Nume și Prenume", cell_bold),
+        Paragraph("Matr.", cell_bold),
+        Paragraph("Med. CG", cell_bold),
+        Paragraph("Med. TH", cell_bold),
+        Paragraph("Med. Gen.", cell_bold),
+        Paragraph("Purtare", cell_bold),
+        Paragraph("Statut", cell_bold),
+        Paragraph("Tot. Abs.", cell_bold),
+        Paragraph("Rang", cell_bold),
+        Paragraph("Premiu", cell_bold)
     ]]
     
     if os.path.exists(file_path):
         wb = openpyxl.load_workbook(file_path, data_only=True)
         ws = wb["Centralizator Medii"]
+        c_data = get_cloud_data()
+        c_grades = c_data.get('grades', [])
+        c_absences = c_data.get('absences', [])
         
         for idx in range(len(ELEVI)):
             r = 9 + idx
-            nr = safe_str(ws.cell(row=r, column=1).value)
-            nume = safe_str(ws.cell(row=r, column=2).value)
-            matr = safe_str(ws.cell(row=r, column=4).value)
-            mcg = safe_float_str(ws.cell(row=r, column=5).value)
-            mth = safe_float_str(ws.cell(row=r, column=6).value)
-            mg = safe_float_str(ws.cell(row=r, column=7).value)
-            purt = safe_str(ws.cell(row=r, column=8).value)
-            statut = safe_str(ws.cell(row=r, column=9).value)
-            abs_tot = safe_str(ws.cell(row=r, column=10).value)
+            sum_d = compute_all_student_summary(wb, idx, c_grades, c_absences)
+            
+            nr = safe_str(ws.cell(row=r, column=1).value or (idx + 1))
+            nume = ELEVI[idx][1]
+            matr = ELEVI[idx][3]
+            mcg = safe_float_str(sum_d['med_cg'])
+            mth = safe_float_str(sum_d['med_th'])
+            mg = safe_float_str(sum_d['med_gen'])
+            purt = str(sum_d['purtare'])
+            statut = "Promovat" if sum_d['med_gen'] and sum_d['med_gen'] >= 5.0 else "În curs"
+            abs_tot = f"{sum_d['total_abs']} ({sum_d['nem_abs']}n/{sum_d['mot_abs']}m)"
             rang = safe_str(ws.cell(row=r, column=11).value)
             premiu = safe_str(ws.cell(row=r, column=12).value)
             
@@ -541,7 +719,7 @@ def generate_pdf_centralizator(file_path):
             ])
         wb.close()
 
-    t_cent = Table(table_data, colWidths=[25, 200, 50, 50, 50, 55, 45, 80, 50, 40, 70])
+    t_cent = Table(table_data, colWidths=[25, 170, 50, 50, 50, 55, 45, 55, 75, 45, 70])
     t_cent.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -566,23 +744,29 @@ def generate_pdf_raport(file_path):
     cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontName=PDF_FONT_BOLD, fontSize=8, leading=11)
 
     story.append(Paragraph("COLEGIUL 'EMIL NEGRUȚIU' TURDA", title_style))
-    story.append(Paragraph("RAPORT SEMESTRIAL / ANUAL AL DIRIGINTELUI", title_style))
+    story.append(Paragraph("RAPORT SINTETIC AL DIRIGINTELUI", title_style))
     story.append(Paragraph("Prof. Diriginte: Prof. Ec. Gherman Octavian-Theodor", title_style))
     story.append(Spacer(1, 10))
     
     if os.path.exists(file_path):
         wb = openpyxl.load_workbook(file_path, data_only=True)
         ws_r = wb["Raport Diriginte"]
-        
-        tot_el = safe_str(ws_r.cell(row=6, column=1).value)
-        promov = safe_str(ws_r.cell(row=6, column=3).value)
-        med_clasa = safe_float_str(ws_r.cell(row=6, column=5).value)
-        med_purt = safe_float_str(ws_r.cell(row=6, column=7).value)
-        tot_abs = safe_str(ws_r.cell(row=6, column=9).value)
+        c_data = get_cloud_data()
+        c_grades = c_data.get('grades', [])
+        c_absences = c_data.get('absences', [])
+
+        all_summaries = [compute_all_student_summary(wb, i, c_grades, c_absences) for i in range(len(ELEVI))]
+        tot_el = len(ELEVI)
+        promov_count = sum(1 for s in all_summaries if s['med_gen'] and s['med_gen'] >= 5.0)
+        promov = f"{(promov_count / tot_el * 100):.1f}%" if tot_el else "100%"
+        all_mg = [s['med_gen'] for s in all_summaries if s['med_gen'] is not None]
+        med_clasa = f"{(sum(all_mg) / len(all_mg)):.2f}" if all_mg else safe_float_str(ws_r.cell(row=6, column=5).value)
+        med_purt = "10.00"
+        tot_abs = sum(s['total_abs'] for s in all_summaries)
         
         kpi_data = [
-            [Paragraph("<b>Total Elevi</b>", cell_bold), Paragraph("<b>Promovabilitate</b>", cell_bold), Paragraph("<b>Media Clasei</b>", cell_bold), Paragraph("<b>Media Purtare</b>", cell_bold), Paragraph("<b>Total Absențe</b>", cell_bold)],
-            [Paragraph(tot_el, cell_style), Paragraph(promov, cell_style), Paragraph(med_clasa, cell_style), Paragraph(med_purt, cell_style), Paragraph(tot_abs, cell_style)]
+            [Paragraph("Total Elevi", cell_bold), Paragraph("Promovabilitate", cell_bold), Paragraph("Media Clasei", cell_bold), Paragraph("Media Purtare", cell_bold), Paragraph("Total Absențe", cell_bold)],
+            [Paragraph(str(tot_el), cell_style), Paragraph(promov, cell_style), Paragraph(str(med_clasa), cell_style), Paragraph(med_purt, cell_style), Paragraph(str(tot_abs), cell_style)]
         ]
         t_kpi = Table(kpi_data, colWidths=[100, 100, 100, 100, 120])
         t_kpi.setStyle(TableStyle([
@@ -596,15 +780,28 @@ def generate_pdf_raport(file_path):
         story.append(Spacer(1, 10))
         
         story.append(Paragraph("DISTRIBUȚIA MEDIILOR ȘI FRECVENȚA", heading_style))
-        dist_data = [[Paragraph("<b>Tranșă Medie</b>", cell_bold), Paragraph("<b>Nr. Elevi</b>", cell_bold), Paragraph("<b>Pondere</b>", cell_bold)]]
+        dist_data = [[Paragraph("Tranșă Medie", cell_bold), Paragraph("Nr. Elevi", cell_bold), Paragraph("Pondere", cell_bold)]]
         
-        for row_idx in range(11, 17):
-            transa = safe_str(ws_r.cell(row=row_idx, column=1).value)
-            nr_e = safe_str(ws_r.cell(row=row_idx, column=2).value)
-            pond = safe_str(ws_r.cell(row=row_idx, column=4).value)
-            dist_data.append([Paragraph(transa, cell_style), Paragraph(nr_e, cell_style), Paragraph(pond, cell_style)])
+        t_10 = sum(1 for mg in all_mg if mg >= 9.50)
+        t_9 = sum(1 for mg in all_mg if 8.50 <= mg < 9.50)
+        t_8 = sum(1 for mg in all_mg if 7.50 <= mg < 8.50)
+        t_7 = sum(1 for mg in all_mg if 6.00 <= mg < 7.50)
+        t_5 = sum(1 for mg in all_mg if 5.00 <= mg < 6.00)
+        t_4 = sum(1 for mg in all_mg if mg < 5.00)
+
+        transe = [
+            ("9.50 - 10.00", t_10),
+            ("8.50 - 9.49", t_9),
+            ("7.50 - 8.49", t_8),
+            ("6.00 - 7.49", t_7),
+            ("5.00 - 5.99", t_5),
+            ("Sub 5.00", t_4)
+        ]
+        for tr_name, tr_cnt in transe:
+            pnd = f"{(tr_cnt / tot_el * 100):.1f}%" if tot_el else "0%"
+            dist_data.append([Paragraph(tr_name, cell_style), Paragraph(str(tr_cnt), cell_style), Paragraph(pnd, cell_style)])
             
-        t_dist = Table(dist_data, colWidths=[250, 120, 150])
+        t_dist = Table(dist_data, colWidths=[200, 150, 170])
         t_dist.setStyle(TableStyle([
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
             ('PADDING', (0,0), (-1,-1), 4)
@@ -631,7 +828,7 @@ def generate_pdf_pins_list(file_path):
     story.append(Paragraph("LISTĂ CODURI PIN CONFIDENȚIALE - PORTAL PĂRINȚI (IX TH)", title_style))
     story.append(Paragraph("Prof. Diriginte: Prof. Ec. Gherman Octavian-Theodor | CONFIDENȚIAL", subtitle_style))
     story.append(Spacer(1, 10))
-
+    
     pins_list = list(PINS)
     if os.path.exists(file_path):
         try:
@@ -643,24 +840,25 @@ def generate_pdf_pins_list(file_path):
                     if val and str(val).strip():
                         pins_list[idx] = str(val).strip()
             wb.close()
-        except Exception: pass
+        except Exception:
+            pass
 
     table_data = [[
-        Paragraph("<b>Nr.</b>", cell_bold),
-        Paragraph("<b>Nume și Prenume Elev</b>", cell_bold),
-        Paragraph("<b>Nr. Matricol</b>", cell_bold),
-        Paragraph("<b>Cod PIN Părinte</b>", cell_bold)
+        Paragraph("Nr.", cell_bold),
+        Paragraph("Nume și Prenume Elev", cell_bold),
+        Paragraph("Nr. Matricol", cell_bold),
+        Paragraph("Cod PIN Părinte", cell_bold)
     ]]
-
+    
     for idx, e in enumerate(ELEVI):
         table_data.append([
             Paragraph(str(e[0]), cell_style),
             Paragraph(e[1], cell_style),
             Paragraph(e[3], cell_style),
-            Paragraph(f"<b>{pins_list[idx]}</b>", cell_bold)
+            Paragraph(f"{pins_list[idx]}", cell_bold)
         ])
-
-    t_pins = Table(table_data, colWidths=[30, 240, 110, 120])
+        
+    t_pins = Table(table_data, colWidths=[40, 240, 120, 120])
     t_pins.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -712,7 +910,18 @@ with tab1:
                         break
                 if slot_found:
                     wb.save(selected_file)
-                    st.success(f"✅ Notă salvată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
+                    c_data = get_cloud_data()
+                    c_data.setdefault('grades', []).append({
+                        'student_idx': elev_idx_n,
+                        'cat': cat_n,
+                        'mat_idx': mat_idx_n,
+                        'nota': int(nota_val),
+                        'data': str(data_nota),
+                        'ts': datetime.datetime.now().isoformat()
+                    })
+                    save_cloud_data(c_data)
+                    st.success(f"✅ Notă salvată local + Cloud Live: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
+                    st.rerun()
                 else:
                     st.error("❌ Toate cele 10 sloturi de note sunt pline pentru această disciplină!")
                 wb.close()
@@ -757,7 +966,18 @@ with tab2:
                         break
                 if slot_found:
                     wb.save(selected_file)
-                    st.success(f"✅ Absență salvată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
+                    c_data = get_cloud_data()
+                    c_data.setdefault('absences', []).append({
+                        'student_idx': elev_idx_a,
+                        'cat': cat_a,
+                        'mat_idx': mat_idx_a,
+                        'data': str(data_abs.strip()),
+                        'is_mot': is_mot,
+                        'ts': datetime.datetime.now().isoformat()
+                    })
+                    save_cloud_data(c_data)
+                    st.success(f"✅ Absență salvată local + Cloud Live: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
+                    st.rerun()
                 else:
                     st.error("❌ Toate cele 30 de sloturi de absențe sunt pline pentru această disciplină!")
                 wb.close()
@@ -808,7 +1028,13 @@ with tab3:
                         
                 if found and cell_a.value == f"{target_d}m":
                     wb.save(selected_file)
+                    c_data = get_cloud_data()
+                    for ca in c_data.get('absences', []):
+                        if ca.get('student_idx') == elev_idx_m and ca.get('cat') == cat_m and ca.get('mat_idx') == mat_idx_m and ca.get('data') == target_d:
+                            ca['is_mot'] = True
+                    save_cloud_data(c_data)
                     st.success(f"✅ Absență motivată ('{target_d}m') pentru {ELEVI[elev_idx_m][1]} la {materii_m[mat_idx_m]}")
+                    st.rerun()
                 elif not found:
                     st.warning(f"Nu s-a găsit nicio absență nemotivată cu data '{target_d}'.")
                 wb.close()
@@ -842,29 +1068,21 @@ with tab4:
         try:
             wb = openpyxl.load_workbook(selected_file, data_only=True)
             e_info = ELEVI[elev_idx_v]
-            st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[2]})")
+            st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[3]})")
             
+            c_data = get_cloud_data()
+            c_grades = c_data.get('grades', [])
+            c_absences = c_data.get('absences', [])
+
             for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
                 st.markdown(f"#### {cat_title}")
                 ws = wb[sheet_n]
                 s_row = 9 + elev_idx_v
                 
                 rows_data = []
-                for s_name, start_col in sub_list:
-                    notes = []
-                    for k in range(10):
-                        n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
-                        d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
-                        if n_val is not None and str(n_val).strip() != "":
-                            d_str = f" ({d_val})" if d_val else ""
-                            notes.append(f"{n_val}{d_str}")
-                    absences = []
-                    for k in range(30):
-                        a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
-                        if a_val is not None and str(a_val).strip() != "":
-                            absences.append(str(a_val))
-                    media_val = ws.cell(row=s_row, column=start_col + 20).value
-                    media_str = safe_float_str(media_val)
+                for mat_idx, (s_name, start_col) in enumerate(sub_list):
+                    notes, absences, avg_val = compute_student_subject_data(ws, s_row, start_col, cat_title, mat_idx, elev_idx_v, c_grades, c_absences)
+                    media_str = safe_float_str(avg_val)
                     
                     rows_data.append({
                         "Disciplină / Modul": s_name,
@@ -880,7 +1098,7 @@ with tab4:
 # --- TAB 5: CENTRALIZATOR CLASĂ ---
 with tab5:
     st.subheader("📈 Centralizator General Clasă (Situție Școlară & Premii)")
-    col_c1, col_c2 = st.columns([2, 1])
+    col_c1, col_c2 = st.columns([3, 1])
     with col_c2:
         try:
             pdf_cent_bytes = generate_pdf_centralizator(selected_file)
@@ -892,24 +1110,28 @@ with tab5:
         try:
             wb = openpyxl.load_workbook(selected_file, data_only=True)
             ws_c = wb["Centralizator Medii"]
+            c_data = get_cloud_data()
+            c_grades = c_data.get('grades', [])
+            c_absences = c_data.get('absences', [])
             
-            c_data = []
+            c_data_rows = []
             for idx in range(len(ELEVI)):
                 r = 9 + idx
-                c_data.append({
-                    "Nr.": safe_str(ws_c.cell(row=r, column=1).value),
-                    "Nume și Prenume": safe_str(ws_c.cell(row=r, column=2).value),
-                    "Matricol": safe_str(ws_c.cell(row=r, column=4).value),
-                    "Media CG": safe_float_str(ws_c.cell(row=r, column=5).value),
-                    "Media TH": safe_float_str(ws_c.cell(row=r, column=6).value),
-                    "Media Generală": safe_float_str(ws_c.cell(row=r, column=7).value),
-                    "Nota Purtare": safe_str(ws_c.cell(row=r, column=8).value),
-                    "Statut Școlar": safe_str(ws_c.cell(row=r, column=9).value),
-                    "Total Absențe": safe_str(ws_c.cell(row=r, column=10).value),
+                sum_d = compute_all_student_summary(wb, idx, c_grades, c_absences)
+                c_data_rows.append({
+                    "Nr.": safe_str(ws_c.cell(row=r, column=1).value or (idx + 1)),
+                    "Nume și Prenume": ELEVI[idx][1],
+                    "Matricol": ELEVI[idx][3],
+                    "Media CG": safe_float_str(sum_d['med_cg']),
+                    "Media TH": safe_float_str(sum_d['med_th']),
+                    "Media Generală": safe_float_str(sum_d['med_gen']),
+                    "Nota Purtare": str(sum_d['purtare']),
+                    "Statut Școlar": "Promovat" if sum_d['med_gen'] and sum_d['med_gen'] >= 5.0 else "In curs",
+                    "Total Absențe": f"{sum_d['total_abs']} ({sum_d['nem_abs']}n/{sum_d['mot_abs']}m)",
                     "Rang": safe_str(ws_c.cell(row=r, column=11).value),
                     "Premiu": safe_str(ws_c.cell(row=r, column=12).value)
                 })
-            st.dataframe(c_data, use_container_width=True)
+            st.dataframe(c_data_rows, use_container_width=True)
             
             st.divider()
             st.markdown("#### 🔐 Coduri PIN Confidențiale Părinți")
@@ -942,38 +1164,64 @@ with tab6:
         try:
             wb = openpyxl.load_workbook(selected_file, data_only=True)
             ws_r = wb["Raport Diriginte"]
-            
+            c_data = get_cloud_data()
+            c_grades = c_data.get('grades', [])
+            c_absences = c_data.get('absences', [])
+
+            all_summaries = [compute_all_student_summary(wb, i, c_grades, c_absences) for i in range(len(ELEVI))]
+            tot_el = len(ELEVI)
+            promov_count = sum(1 for s in all_summaries if s['med_gen'] and s['med_gen'] >= 5.0)
+            promov = f"{(promov_count / tot_el * 100):.1f}%" if tot_el else "100%"
+            all_mg = [s['med_gen'] for s in all_summaries if s['med_gen'] is not None]
+            med_clasa = f"{(sum(all_mg) / len(all_mg)):.2f}" if all_mg else safe_float_str(ws_r.cell(row=6, column=5).value)
+            med_purt = "10.00"
+            tot_abs = sum(s['total_abs'] for s in all_summaries)
+
             st.markdown("#### 📊 Indicatori Cheie de Performanță Clasă")
             m1, m2, m3, m4, m5 = st.columns(5)
-            m1.metric("Total Elevi", safe_str(ws_r.cell(row=6, column=1).value))
-            m2.metric("Promovabilitate", safe_str(ws_r.cell(row=6, column=3).value))
-            m3.metric("Media Clasei", safe_float_str(ws_r.cell(row=6, column=5).value))
-            m4.metric("Media Purtare", safe_float_str(ws_r.cell(row=6, column=7).value))
-            m5.metric("Total Absențe", safe_str(ws_r.cell(row=6, column=9).value))
+            m1.metric("Total Elevi", str(tot_el))
+            m2.metric("Promovabilitate", promov)
+            m3.metric("Media Clasei", med_clasa)
+            m4.metric("Media Purtare", med_purt)
+            m5.metric("Total Absențe", str(tot_abs))
             
             st.markdown("#### 📈 Distribuția Mediilor Generale")
+            t_10 = sum(1 for mg in all_mg if mg >= 9.50)
+            t_9 = sum(1 for mg in all_mg if 8.50 <= mg < 9.50)
+            t_8 = sum(1 for mg in all_mg if 7.50 <= mg < 8.50)
+            t_7 = sum(1 for mg in all_mg if 6.00 <= mg < 7.50)
+            t_5 = sum(1 for mg in all_mg if 5.00 <= mg < 6.00)
+            t_4 = sum(1 for mg in all_mg if mg < 5.00)
+
+            transe = [
+                ("9.50 - 10.00", t_10),
+                ("8.50 - 9.49", t_9),
+                ("7.50 - 8.49", t_8),
+                ("6.00 - 7.49", t_7),
+                ("5.00 - 5.99", t_5),
+                ("Sub 5.00", t_4)
+            ]
             d_rows = []
-            for r_idx in range(11, 17):
+            for tr_name, tr_cnt in transe:
+                pnd = f"{(tr_cnt / tot_el * 100):.1f}%" if tot_el else "0%"
                 d_rows.append({
-                    "Tranșă Medie": safe_str(ws_r.cell(row=r_idx, column=1).value),
-                    "Număr Elevi": safe_str(ws_r.cell(row=r_idx, column=2).value),
-                    "Pondere (%)": safe_str(ws_r.cell(row=r_idx, column=4).value),
-                    "Categorie Disciplină": safe_str(ws_r.cell(row=r_idx, column=6).value),
-                    "Valoare": safe_str(ws_r.cell(row=r_idx, column=9).value)
+                    "Tranșă Medie": tr_name,
+                    "Număr Elevi": tr_cnt,
+                    "Pondere (%)": pnd
                 })
             st.dataframe(d_rows, use_container_width=True)
             
             st.markdown("#### 🏆 Top 5 Elevi ai Clasei")
+            sorted_students = sorted(enumerate(all_summaries), key=lambda x: x[1]['med_gen'] if x[1]['med_gen'] else 0, reverse=True)
             top_rows = []
-            for r_idx in range(21, 26):
+            for rank_idx, (s_i, s_sum) in enumerate(sorted_students[:5]):
                 top_rows.append({
-                    "Loc": r_idx - 20,
-                    "Nume și Prenume": safe_str(ws_r.cell(row=r_idx, column=2).value),
-                    "Matricol": safe_str(ws_r.cell(row=r_idx, column=5).value),
-                    "Media CG": safe_float_str(ws_r.cell(row=r_idx, column=6).value),
-                    "Media TH": safe_float_str(ws_r.cell(row=r_idx, column=7).value),
-                    "Media Generală": safe_float_str(ws_r.cell(row=r_idx, column=8).value),
-                    "Distincție": safe_str(ws_r.cell(row=r_idx, column=9).value)
+                    "Loc": rank_idx + 1,
+                    "Nume și Prenume": ELEVI[s_i][1],
+                    "Matricol": ELEVI[s_i][3],
+                    "Media CG": safe_float_str(s_sum['med_cg']),
+                    "Media TH": safe_float_str(s_sum['med_th']),
+                    "Media Generală": safe_float_str(s_sum['med_gen'])
                 })
             st.dataframe(top_rows, use_container_width=True)
             
@@ -983,9 +1231,9 @@ with tab6:
 
 st.markdown("---")
 st.info("""
-**© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor**  
-*Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.*  
-*Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.*  
-**🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!**  
+**© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor**
+*Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.*
+*Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.*
+**🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!**
 *Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.*
 """)
