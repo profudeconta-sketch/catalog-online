@@ -5,6 +5,7 @@ import streamlit as st
 import urllib.request
 import urllib.parse
 import json
+import base64
 
 st.set_page_config(
     page_title="Portal Părinți - Catalog IX TH",
@@ -12,54 +13,50 @@ st.set_page_config(
     layout="wide"
 )
 
-# CLOUD SYNC & LOGGING CONFIGURATION
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxZTSWP9ciRZ-gsFRzxFyLZ4TN-v4eeyNDAhIY8_bBi9z9y9fXI6TQBUIGNHINDhGYF/exec"
-JSONBIN_URL = "https://api.jsonbin.io/v3/b/68d50fe2301f22312bd31d27"
-
-def get_cloud_data():
+# --- FUNCTIE DE SINCRONIZARE SI DESCARCARE AUTOMATA EXCEL DIN GITHUB ---
+def sync_excel_from_github():
+    filename = "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
+    ts = int(datetime.datetime.now().timestamp())
+    raw_url = f"https://raw.githubusercontent.com/profudeconta-sketch/catalog-online/main/{filename}?t={ts}"
+    
+    token = os.environ.get("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
+    headers = {"User-Agent": "StreamlitApp"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+        
     try:
-        req = urllib.request.Request(JSONBIN_URL, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            res = json.loads(resp.read().decode('utf-8'))
-            return res.get('record', {'grades': [], 'absences': []})
+        req = urllib.request.Request(raw_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if resp.status == 200:
+                content = resp.read()
+                if len(content) > 2000:
+                    with open(filename, "wb") as f:
+                        f.write(content)
+                    return filename
     except Exception:
-        return {'grades': [], 'absences': []}
+        pass
 
-def log_parent_access(elev_nume, matricol):
-    if "logged_students" not in st.session_state:
-        st.session_state["logged_students"] = set()
-    key = f"{elev_nume}_{matricol}"
-    if key not in st.session_state["logged_students"]:
-        st.session_state["logged_students"].add(key)
-        try:
-            params = urllib.parse.urlencode({"elev": elev_nume, "matricol": matricol})
-            full_url = f"{WEBAPP_URL}?{params}"
-            req = urllib.request.Request(full_url, headers={'User-Agent': 'Mozilla/5.0'})
-            urllib.request.urlopen(req, timeout=3)
-        except Exception:
-            pass
+    try:
+        api_url = f"https://api.github.com/repos/profudeconta-sketch/catalog-online/contents/{filename}"
+        req_api = urllib.request.Request(api_url, headers=headers)
+        with urllib.request.urlopen(req_api, timeout=5) as resp:
+            if resp.status == 200:
+                res_json = json.loads(resp.read().decode('utf-8'))
+                content_b64 = res_json.get('content', '')
+                if content_b64:
+                    binary_data = base64.b64decode(content_b64)
+                    with open(filename, "wb") as f:
+                        f.write(binary_data)
+                    return filename
+    except Exception:
+        pass
 
-def render_copyright_footer():
-    st.markdown("---")
-    st.markdown(
-        """**© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor**  
-*Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.*  
-*Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.*  
-**🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!**  
-*Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.*""",
-        unsafe_allow_html=True
-    )
+    return filename
 
-def render_sidebar_copyright():
-    st.sidebar.divider()
-    st.sidebar.markdown(
-        """**© Prof. Ec. Gherman Octavian-Theodor**  
-Drepturi de autor rezervate.  
-Comercializarea interzisă.  
-Utilizare gratuită doar cu acordul autorului.""",
-        unsafe_allow_html=True
-    )
+# Sincronizare la incarcarea portalului
+sync_excel_from_github()
 
+# Lista celor 32 de elevi (ID, Nume, Nr. Matr. Simplu, Nr. Matr. Registru/Complet)
 ELEVI = [
     (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76"),
     (2, "BARA D. ADRIAN DANIEL", 14, "126/77"),
@@ -95,295 +92,196 @@ ELEVI = [
     (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6")
 ]
 
-PINS = ['2951', '6234', '9233', '9385', '2681', '4658', '7891', '9975', '9042', '8226', '4931', '1041', '2322', '2814', '5706', '2606', '8367', '1188', '9032', '6148', '4444', '7508', '5120', '6696', '6843', '7166', '9414', '2250', '6577', '2469', '9815', '5786']
+PIN_MAP = {
+    '126/76': '2951', '126/77': '6234', '126/78': '9233', '126/79': '9385',
+    '126/80': '2681', '126/81': '4658', '126/82': '7891', '126/83': '9975',
+    '126/84': '9042', '126/85': '8226', '126/86': '4931', '126/87': '1041',
+    '126/88': '2322', '126/89': '2814', '126/90': '5706', '126/91': '2606',
+    '126/92': '8367', '126/93': '1188', '126/94': '9032', '126/95': '6148',
+    '126/96': '4444', '126/97': '7508', '126/98': '5120', '126/99': '6696',
+    '126/100': '6843', '126/101': '7166', '128/1': '9414', '128/2': '2250',
+    '128/3': '6577', '128/4': '2469', '128/5': '9815', '128/6': '5786'
+}
 
-DISCIPLINE_CG = [
-    ("Limba și literatura română", 8),
-    ("Limba engleză (L1)", 61),
-    ("Limba franceză (L2)", 114),
-    ("Matematică", 167),
-    ("Fizică", 220),
-    ("Chimie", 273),
-    ("Biologie", 326),
-    ("Istorie", 379),
-    ("Geografie", 432),
-    ("Logică, argumentare și comunicare", 485),
-    ("Informatică / TIC", 538),
-    ("Educație fizică", 591),
-    ("Religie", 644),
-    ("Arte vizuale și educație plastică", 697)
-]
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxZTSWP9ciRZ-gsFRzxFyLZ4TN-v4eeyNDAhIY8_bBi9z9y9fXI6TQBUIGNHINDhGYF/exec"
 
-MODULE_TH = [
-    ("M1: Bazele contabilității", 8),
-    ("M2: Etică și comunicare", 61),
-    ("M3: Structuri de primire turistică", 114),
-    ("M4: Procese și calitate în HoReCa", 167),
-    ("M5: CDEOȘ (IP) - Instruire Practică", 220),
-    ("M6: Curriculum de aprofundare și inserție profesională", 273)
-]
+def log_parent_access(elev_nume, matricol):
+    if "logged_students" not in st.session_state:
+        st.session_state["logged_students"] = set()
+    
+    key = f"{elev_nume}_{matricol}"
+    if key not in st.session_state["logged_students"]:
+        st.session_state["logged_students"].add(key)
+        try:
+            params = urllib.parse.urlencode({"elev": elev_nume, "matricol": matricol})
+            full_url = f"{WEBAPP_URL}?{params}"
+            req = urllib.request.Request(full_url, headers={'User-Agent': 'Mozilla/5.0'})
+            urllib.request.urlopen(req, timeout=3)
+        except Exception:
+            pass
 
 def find_excel_file():
     candidates = [
         "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
         "CATALOG/catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
+        "catalog_scolar_clasa_IX_TH_Turda-v14.xlsx",
         "/workspace/artifacts/catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
     ]
     for c in candidates:
         if os.path.exists(c):
             return c
+    try:
+        for f in os.listdir("."):
+            if f.endswith(".xlsx") and "catalog" in f.lower():
+                return f
+    except Exception:
+        pass
     return "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
 
 excel_path = find_excel_file()
 
 st.title("🏫 Colegiul 'Emil Negruțiu' Turda")
 st.subheader("👨‍👩‍👧‍👦 Portal Părinți — Vizualizare Fișă Școlară Elev (IX TH)")
-st.info("🔒 Acces securizat pentru părinți. Vă rugăm să vă autentificați mai jos cu Numărul Matricol și Codul PIN confidențial al elevului.")
+st.info("🔒 Acces securizat pentru părinți. Vă rugăm să vă autentificați mai jos cu Numărul Matricol și Codul PIN confidențial de pe biletul individual de acces.")
 
-with st.sidebar:
-    st.header("ℹ️ Portal Părinți")
-    st.info("Accesul este securizat și individualizat pentru fiecare elev.")
-    render_sidebar_copyright()
-
-# Formular Autentificare Părinte
+# Zona de Autentificare
 col_auth1, col_auth2 = st.columns(2)
 
 with col_auth1:
     nr_matricol_input = st.text_input(
-        "🔑 Număr Matricol Elev (ex: 126/76 sau 13):",
+        "🔑 Introduceți Numărul Matricol (ex: 126/76 sau 13):",
         value="",
         placeholder="Exemplu: 126/76",
-        help="Numărul matricol se găsește pe carnetul de elev sau adeverința de înscriere."
+        help="Numărul matricol se găsește pe carnetul de elev sau pe biletul individual de acces."
     ).strip()
 
 with col_auth2:
     pin_input = st.text_input(
-        "🔐 Cod PIN Confidențial (4 cifre):",
+        "🔒 Introduceți Codul PIN (4 cifre):",
         value="",
         type="password",
         placeholder="Exemplu: 2951",
-        help="Codul PIN confidențial transmis de către diriginte."
+        help="Codul PIN de 4 cifre se găsește pe biletul individual de acces transmis în privat."
     ).strip()
 
-def safe_str(val):
-    if val is None:
-        return ""
-    return str(val).strip()
-
-def safe_float_str(val):
-    if val is None or val == "":
-        return "-"
-    try:
-        return f"{float(val):.2f}"
-    except Exception:
-        return str(val)
-
-def compute_student_subject_data(ws, s_row, start_col, cat_title, mat_idx, s_idx, c_grades, c_absences):
-    notes = []
-    notes_num = []
-    for k in range(10):
-        n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
-        d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
-        if n_val is not None and str(n_val).strip() != "":
-            d_str = f" ({d_val})" if d_val else ""
-            notes.append(f"{n_val}{d_str}")
-            try:
-                notes_num.append(float(n_val))
-            except Exception:
-                pass
-
-    for cg in c_grades:
-        if cg.get('student_idx') == s_idx and cg.get('cat') == cat_title and cg.get('mat_idx') == mat_idx:
-            n_item = f"{cg.get('nota')} ({cg.get('data')})"
-            if n_item not in notes:
-                notes.append(n_item)
-                try:
-                    notes_num.append(float(cg.get('nota')))
-                except Exception:
-                    pass
-
-    absences = []
-    for k in range(30):
-        a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
-        if a_val is not None and str(a_val).strip() != "":
-            absences.append(str(a_val).strip())
-
-    for ca in c_absences:
-        if ca.get('student_idx') == s_idx and ca.get('cat') == cat_title and ca.get('mat_idx') == mat_idx:
-            a_str = f"{ca.get('data')}{'m' if ca.get('is_mot') else ''}"
-            if a_str not in absences:
-                absences.append(a_str)
-
-    avg = (sum(notes_num) / len(notes_num)) if notes_num else None
-
-    if avg is None:
-        m_excel = ws.cell(row=s_row, column=start_col + 20).value
-        if m_excel is not None and str(m_excel).strip() != "":
-            try:
-                avg = float(m_excel)
-            except Exception:
-                pass
-
-    return notes, absences, avg
-
-def compute_all_student_summary(wb, s_idx, c_grades, c_absences):
-    s_row = 9 + s_idx
-    ws_cg = wb["Cultură Generală"]
-    ws_th = wb["Module Tehnologice"]
-    ws_abs = wb["Absențe & Purtare"]
-    ws_cent = wb["Centralizator Medii"]
-
-    cg_avgs = []
-    all_absences = []
-
-    for mat_idx, (s_name, start_col) in enumerate(DISCIPLINE_CG):
-        _, abs_list, avg = compute_student_subject_data(ws_cg, s_row, start_col, "Cultură Generală", mat_idx, s_idx, c_grades, c_absences)
-        if avg is not None:
-            cg_avgs.append(avg)
-        all_absences.extend(abs_list)
-
-    th_avgs = []
-    for mat_idx, (s_name, start_col) in enumerate(MODULE_TH):
-        _, abs_list, avg = compute_student_subject_data(ws_th, s_row, start_col, "Module Tehnologice", mat_idx, s_idx, c_grades, c_absences)
-        if avg is not None:
-            th_avgs.append(avg)
-        all_absences.extend(abs_list)
-
-    med_cg = (sum(cg_avgs) / len(cg_avgs)) if cg_avgs else None
-    med_th = (sum(th_avgs) / len(th_avgs)) if th_avgs else None
-
-    if med_cg is not None and med_th is not None:
-        med_gen = (med_cg + med_th) / 2.0
-    elif med_cg is not None:
-        med_gen = med_cg
-    elif med_th is not None:
-        med_gen = med_th
-    else:
-        med_gen = None
-
-    purtare = ws_abs.cell(row=s_row, column=8).value
-    if purtare is None or str(purtare).strip() == "":
-        purtare = 10
-
-    total_abs = len(all_absences)
-    mot_abs = sum(1 for a in all_absences if str(a).endswith('m'))
-    nem_abs = total_abs - mot_abs
-
-    if total_abs == 0:
-        a_nem_ex = ws_abs.cell(row=s_row, column=5).value or 0
-        a_mot_ex = ws_abs.cell(row=s_row, column=6).value or 0
-        a_tot_ex = ws_abs.cell(row=s_row, column=7).value or 0
-        try:
-            total_abs = int(a_tot_ex)
-            nem_abs = int(a_nem_ex)
-            mot_abs = int(a_mot_ex)
-        except Exception:
-            pass
-
-    if med_cg is None:
-        m_cg_ex = ws_cent.cell(row=s_row, column=5).value
-        if m_cg_ex is not None:
-            try: med_cg = float(m_cg_ex)
-            except Exception: pass
-
-    if med_th is None:
-        m_th_ex = ws_cent.cell(row=s_row, column=6).value
-        if m_th_ex is not None:
-            try: med_th = float(m_th_ex)
-            except Exception: pass
-
-    if med_gen is None:
-        m_gen_ex = ws_cent.cell(row=s_row, column=7).value
-        if m_gen_ex is not None:
-            try: med_gen = float(m_gen_ex)
-            except Exception: pass
-
-    return {
-        'med_cg': med_cg,
-        'med_th': med_th,
-        'med_gen': med_gen,
-        'purtare': purtare,
-        'total_abs': total_abs,
-        'nem_abs': nem_abs,
-        'mot_abs': mot_abs
-    }
-
-# Verificare elev și PIN
-student_found = None
-s_idx_matched = None
-expected_pin = None
-
+matched_student = None
 if nr_matricol_input:
-    for idx, e in enumerate(ELEVI):
-        if nr_matricol_input == str(e[0]) or nr_matricol_input == str(e[2]) or nr_matricol_input.lower() == str(e[3]).lower():
-            student_found = e
-            s_idx_matched = idx
-            expected_pin = PINS[idx]
+    for student in ELEVI:
+        if nr_matricol_input.lower() == str(student[2]).lower() or nr_matricol_input.lower() == str(student[3]).lower():
+            matched_student = student
             break
 
-if not nr_matricol_input or not pin_input:
-    st.warning("👈 Vă rugăm să completați atât Numărul Matricol, cât și Codul PIN confidențial de mai sus.")
-    render_copyright_footer()
-elif not student_found:
-    st.error("❌ Nu s-a găsit niciun elev cu acest Număr Matricol. Verificați carnetul elevului și încercați din nou.")
-    render_copyright_footer()
-elif pin_input != expected_pin:
-    st.error("❌ Codul PIN introdus este incorect pentru acest elev! Vă rugăm să verificați codul transmis de diriginte.")
-    render_copyright_footer()
+if not nr_matricol_input:
+    st.warning("👉 Vă rugăm să introduceți Numărul Matricol în caseta de mai sus pentru a afișa fișa elevului.")
+elif matched_student is None:
+    st.error("❌ Numărul Matricol introdus nu a fost găsit în baza de date a clasei a IX-a TH! Vă rugăm să verificați biletul de acces.")
+elif not pin_input:
+    st.info("🔑 Introduceți Codul PIN de 4 cifre transmis pe biletul individual de acces pentru a debloca fișa școlară.")
 else:
-    st.success(f"✅ Autentificare reușită pentru elevul: **{student_found[1]}** (Matricol {student_found[3]})")
-    log_parent_access(student_found[1], student_found[3])
-    st.divider()
-
-    if not os.path.exists(excel_path):
-        st.error(f"Fișierul catalog '{excel_path}' nu a fost găsit.")
+    correct_pin = PIN_MAP.get(matched_student[3], "")
+    if pin_input != correct_pin:
+        st.error("❌ Codul PIN introdus este incorect! Vă rugăm să verificați codul PIN de 4 cifre de pe biletul de acces.")
     else:
-        try:
-            wb = openpyxl.load_workbook(excel_path, data_only=True)
-            
-            # Cloud data live sync
-            cloud_data = get_cloud_data()
-            c_grades = cloud_data.get('grades', [])
-            c_absences = cloud_data.get('absences', [])
-
-            sum_d = compute_all_student_summary(wb, s_idx_matched, c_grades, c_absences)
-
-            media_cg = safe_float_str(sum_d['med_cg'])
-            media_th = safe_float_str(sum_d['med_th'])
-            media_gen = safe_float_str(sum_d['med_gen'])
-            nota_purtare = str(sum_d['purtare'])
-            abs_tot = f"{sum_d['total_abs']} ({sum_d['nem_abs']} nem. / {sum_d['mot_abs']} mot.)"
-
-            col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
-            col_kpi1.metric("Media Cultură Gen.", media_cg)
-            col_kpi2.metric("Media Module TH.", media_th)
-            col_kpi3.metric("Media Generală", media_gen)
-            col_kpi4.metric("Nota la Purtare", nota_purtare)
-            col_kpi5.metric("Total Absențe", abs_tot)
-
-            st.divider()
-
-            # Tabel detaliat pe discipline
-            for cat_title, sheet_n, sub_list in [("📚 DISCIPLINE CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG), ("⚙️ MODULE TEHNOLOGICE", "Module Tehnologice", MODULE_TH)]:
-                st.markdown(f"#### {cat_title}")
-                ws = wb[sheet_n]
-                rows_data = []
+        # Autentificare completă cu succes
+        idx_elev = matched_student[0] - 1
+        st.success(f"✅ Autentificare reușită pentru elevul: **{matched_student[1]}** (Nr. Matricol: {matched_student[3]})")
+        
+        # Sincronizare fortata din GitHub la fiecare autentificare
+        sync_excel_from_github()
+        
+        # Logare acces in Google Sheets
+        log_parent_access(matched_student[1], matched_student[3])
+        
+        if os.path.exists(excel_path):
+            try:
+                wb = openpyxl.load_workbook(excel_path, data_only=True)
                 
-                cat_clean = "Cultură Generală" if "CULTURĂ" in cat_title else "Module Tehnologice"
-                for mat_idx, (s_name, start_col) in enumerate(sub_list):
-                    notes, absences, avg_val = compute_student_subject_data(ws, 9 + s_idx_matched, start_col, cat_clean, mat_idx, s_idx_matched, c_grades, c_absences)
-                    media_str = safe_float_str(avg_val)
+                # Preluare date de sinteză din sheet-ul Absențe & Purtare
+                abs_sheet = wb["Absențe & Purtare"]
+                student_row_abs = 9 + idx_elev
+                abs_nem = abs_sheet.cell(row=student_row_abs, column=5).value or 0
+                abs_mot = abs_sheet.cell(row=student_row_abs, column=6).value or 0
+                abs_tot = abs_sheet.cell(row=student_row_abs, column=7).value or 0
+                purtare = abs_sheet.cell(row=student_row_abs, column=8).value or 10
 
-                    rows_data.append({
-                        "Disciplină / Modul": s_name,
-                        "Note & Date": ", ".join(notes) if notes else "Fără note",
-                        "Absențe": ", ".join(absences) if absences else "Fără absențe",
-                        "Medie": media_str
-                    })
-                st.dataframe(rows_data, use_container_width=True)
+                # Preluare medii din Centralizator
+                cent_sheet = wb["Centralizator Medii"]
+                student_row_cent = 9 + idx_elev
+                med_cg = cent_sheet.cell(row=student_row_cent, column=5).value
+                med_th = cent_sheet.cell(row=student_row_cent, column=6).value
+                med_gen = cent_sheet.cell(row=student_row_cent, column=7).value
 
-            wb.close()
-        except Exception as ex:
-            st.error(f"Eroare la încărcarea fișei elevului: {ex}")
+                def fmt_val(v):
+                    if isinstance(v, (int, float)):
+                        return f"{float(v):.2f}"
+                    return str(v) if v else "-"
 
-    render_copyright_footer()
+                # Carduri cu indicatori principali
+                m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
+                m_col1.metric("Media Cultură Gen.", fmt_val(med_cg))
+                m_col2.metric("Media Module TH", fmt_val(med_th))
+                m_col3.metric("Media Generală", fmt_val(med_gen))
+                m_col4.metric("Notă Purtare", f"{purtare:.0f}" if isinstance(purtare, (int, float)) else str(purtare))
+                m_col5.metric("Total Absențe", f"{abs_tot} ({abs_nem} nem. / {abs_mot} mot.)")
+
+                st.markdown("---")
+
+                disc_cg = [
+                    ("Limba și literatura română", 8), ("Limba engleză (L1)", 61), ("Limba franceză (L2)", 114),
+                    ("Matematică", 167), ("Fizică", 220), ("Chimie", 273), ("Biologie", 326), ("Istorie", 379),
+                    ("Geografie", 432), ("Logică, argumentare și comunicare", 485), ("Informatică / TIC", 538),
+                    ("Educație fizică", 591), ("Religie", 644), ("Arte vizuale și educație plastică", 697)
+                ]
+                mod_th = [
+                    ("M1: Bazele contabilității", 8), ("M2: Etică și comunicare", 61), ("M3: Structuri de primire turistică", 114),
+                    ("M4: Procese și calitate în HoReCa", 167), ("M5: CDEOȘ (IP) - Instruire Practică", 220), ("M6: Curriculum de aprofundare și inserție profesională", 273)
+                ]
+
+                # Situația detaliată pe discipline și module
+                tab_cg, tab_th = st.tabs(["📚 Cultură Generală", "🛠️ Module Tehnologice"])
+
+                for tab_obj, cat_title, sheet_n, sub_list in [
+                    (tab_cg, "Cultură Generală", "Cultură Generală", disc_cg),
+                    (tab_th, "Module Tehnologice", "Module Tehnologice", mod_th)
+                ]:
+                    with tab_obj:
+                        ws = wb[sheet_n]
+                        s_row = 9 + idx_elev
+                        rows_data = []
+
+                        for s_name, start_col in sub_list:
+                            notes = []
+                            for k in range(10):
+                                n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
+                                d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
+                                if n_val is not None and str(n_val).strip() != "":
+                                    d_str = f" ({d_val})" if d_val else ""
+                                    notes.append(f"{n_val}{d_str}")
+                                    
+                            absences = []
+                            for k in range(30):
+                                a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
+                                if a_val is not None and str(a_val).strip() != "":
+                                    absences.append(str(a_val).strip())
+                                            
+                            media_val = ws.cell(row=s_row, column=start_col + 20).value
+                            media_str = fmt_val(media_val)
+
+                            rows_data.append({
+                                "Disciplină / Modul": s_name,
+                                "Note Obtinute": ", ".join(notes) if notes else "Fără note înregistrate",
+                                "Absențe Înregistrate": ", ".join(absences) if absences else "Fără absențe",
+                                "Medie Actuală": media_str
+                            })
+
+                        st.dataframe(rows_data, use_container_width=True, hide_index=True)
+
+                wb.close()
+            except Exception as ex:
+                st.error(f"Eroare la încărcarea datelor elevului: {ex}")
+        else:
+            st.warning("⚠️ Baza de date a catalogului este momentan indisponibilă. Vă rugăm să reîncercați mai târziu.")
+
+st.markdown("---")
+st.caption("© 2026 Prof. Ec. Gherman Octavian-Theodor. Toate drepturile de autor rezervate.")
+st.caption("🏫 Colegiul 'Emil Negruțiu' Turda — Sistem Școlar Securizat pentru Părinți | Date actualizate în timp real.")
