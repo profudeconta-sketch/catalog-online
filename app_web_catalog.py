@@ -541,7 +541,7 @@ def generate_pdf_ticket_student(student_idx, file_path):
         ]
     ]
 
-    t_cred = Table(cred_data, colWidths=[200, 300])
+    t_cred = Table(cred_data, colWidths=)
     t_cred.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EDF2F7")),
         ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E0")),
@@ -576,7 +576,7 @@ def generate_pdf_ticket_student(student_idx, file_path):
                 img_iphone
             ]
         ]
-        t_img = Table(img_table_data, colWidths=[250, 250])
+        t_img = Table(img_table_data, colWidths=)
         t_img.setStyle(TableStyle([
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -619,7 +619,7 @@ def generate_pdf_student(student_idx, file_path):
     meta_data = [
         [Paragraph(f"Nume și Prenume: {e_info}", cell_style), Paragraph(f"Nr. Matricol: {e_info}", cell_style), Paragraph(f"Nr. Ord: {e_info}", cell_style)]
     ]
-    t_meta = Table(meta_data, colWidths=[200, 150, 150])
+    t_meta = Table(meta_data, colWidths=)
     t_meta.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EDF2F7")),
         ('PADDING', (0,0), (-1,-1), 6),
@@ -668,7 +668,7 @@ def generate_pdf_student(student_idx, file_path):
                     Paragraph(", ".join(abs_list) if abs_list else "-", cell_style)
                 ])
                 
-            t_sub = Table(table_data, colWidths=[180, 200, 60, 80])
+            t_sub = Table(table_data, colWidths=)
             t_sub.setStyle(TableStyle([
                 ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2B6CB0")),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -731,7 +731,7 @@ def generate_pdf_centralizator(file_path):
             Paragraph(s['premiu'], cell_style)
         ])
 
-    t_cent = Table(table_data, colWidths=[25, 160, 45, 45, 45, 50, 40, 60, 45, 35, 60])
+    t_cent = Table(table_data, colWidths=)
     t_cent.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -775,7 +775,7 @@ def generate_pdf_raport(file_path):
         [Paragraph("Total Elevi", cell_bold), Paragraph("Promovabilitate", cell_bold), Paragraph("Media Clasei", cell_bold), Paragraph("Media Purtare", cell_bold), Paragraph("Total Absențe", cell_bold)],
         [Paragraph(str(tot_el), cell_style), Paragraph(promov_str, cell_style), Paragraph(med_clasa, cell_style), Paragraph(med_purt, cell_style), Paragraph(tot_abs_str, cell_style)]
     ]
-    t_kpi = Table(kpi_data, colWidths=[90, 120, 90, 90, 100])
+    t_kpi = Table(kpi_data, colWidths=)
     t_kpi.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2B6CB0")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -804,7 +804,7 @@ def generate_pdf_raport(file_path):
         pond = f"{(cnt/len(valid_mgs)*100):.1f}%" if valid_mgs else "0%"
         dist_data.append([Paragraph(label, cell_style), Paragraph(str(cnt), cell_style), Paragraph(pond, cell_style)])
         
-    t_dist = Table(dist_data, colWidths=[180, 80, 80])
+    t_dist = Table(dist_data, colWidths=)
     t_dist.setStyle(TableStyle([
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
         ('PADDING', (0,0), (-1,-1), 4)
@@ -860,7 +860,7 @@ def generate_pdf_pins_list(file_path):
             Paragraph(f"{pins_list[idx]}", cell_bold)
         ])
         
-    t_pins = Table(table_data, colWidths=[30, 220, 90, 90])
+    t_pins = Table(table_data, colWidths=)
     t_pins.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
