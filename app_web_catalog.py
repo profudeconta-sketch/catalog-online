@@ -1,3 +1,4 @@
+```python
 import datetime
 import os
 import openpyxl
@@ -271,7 +272,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📋 Raport Diriginte"
 ])
 
-elev_options = [f"{e}. {e} (Matr. {e})" for e in ELEVI]
+elev_options = [f"{e[0]}. {e[1]} (Matr. {e[3]})" for e in ELEVI]
 
 # --- GENERATOARE PDF ---
 def generate_pdf_ticket_student(student_idx, file_path):
@@ -404,11 +405,11 @@ def generate_pdf_ticket_student(student_idx, file_path):
     cred_data = [
         [
             Paragraph("ELEV / ELEVĂ:", label_style),
-            Paragraph(f"{e}", val_style)
+            Paragraph(f"{e[1]}", val_style)
         ],
         [
             Paragraph("NUMĂR MATRICOL (UTILIZATOR):", label_style),
-            Paragraph(f"{e} (sau numărul simplu: {e})", val_style)
+            Paragraph(f"{e[3]} (sau numărul simplu: {e[2]})", val_style)
         ],
         [
             Paragraph("COD PIN CONFIDENȚIAL (PAROLĂ):", label_style),
@@ -420,7 +421,7 @@ def generate_pdf_ticket_student(student_idx, file_path):
         ]
     ]
 
-    t_cred = Table(cred_data, colWidths=)
+    t_cred = Table(cred_data, colWidths=[180, 320])
     t_cred.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EDF2F7")),
         ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E0")),
@@ -455,7 +456,7 @@ def generate_pdf_ticket_student(student_idx, file_path):
                 img_iphone
             ]
         ]
-        t_img = Table(img_table_data, colWidths=)
+        t_img = Table(img_table_data, colWidths=[180, 180])
         t_img.setStyle(TableStyle([
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -496,9 +497,9 @@ def generate_pdf_student(student_idx, file_path):
     story.append(Spacer(1, 10))
     
     meta_data = [
-        [Paragraph(f"Nume și Prenume: {e_info}", cell_style), Paragraph(f"Nr. Matricol: {e_info}", cell_style), Paragraph(f"RM/PG: {e_info}", cell_style)]
+        [Paragraph(f"Nume și Prenume: {e_info[1]}", cell_style), Paragraph(f"Nr. Matricol: {e_info[3]}", cell_style), Paragraph(f"RM/PG: {e_info[2]}", cell_style)]
     ]
-    t_meta = Table(meta_data, colWidths=)
+    t_meta = Table(meta_data, colWidths=[200, 160, 160])
     t_meta.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EDF2F7")),
         ('PADDING', (0,0), (-1,-1), 6),
@@ -547,7 +548,7 @@ def generate_pdf_student(student_idx, file_path):
                     Paragraph(", ".join(abs_list) if abs_list else "-", cell_style)
                 ])
                 
-            t_sub = Table(table_data, colWidths=)
+            t_sub = Table(table_data, colWidths=[140, 200, 50, 130])
             t_sub.setStyle(TableStyle([
                 ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2B6CB0")),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -627,7 +628,7 @@ def generate_pdf_centralizator(file_path):
             ])
         wb.close()
 
-    t_cent = Table(table_data, colWidths=)
+    t_cent = Table(table_data, colWidths=[25, 160, 50, 45, 45, 50, 40, 50, 45, 35, 60])
     t_cent.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -670,7 +671,7 @@ def generate_pdf_raport(file_path):
             [Paragraph("Total Elevi", cell_bold), Paragraph("Promovabilitate", cell_bold), Paragraph("Media Clasei", cell_bold), Paragraph("Media Purtare", cell_bold), Paragraph("Total Absențe", cell_bold)],
             [Paragraph(tot_el, cell_style), Paragraph(promov, cell_style), Paragraph(med_clasa, cell_style), Paragraph(med_purt, cell_style), Paragraph(tot_abs, cell_style)]
         ]
-        t_kpi = Table(kpi_data, colWidths=)
+        t_kpi = Table(kpi_data, colWidths=[100, 100, 100, 100, 100])
         t_kpi.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2B6CB0")),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -690,7 +691,7 @@ def generate_pdf_raport(file_path):
             pond = safe_str(ws_r.cell(row=row_idx, column=4).value)
             dist_data.append([Paragraph(transa, cell_style), Paragraph(nr_e, cell_style), Paragraph(pond, cell_style)])
             
-        t_dist = Table(dist_data, colWidths=)
+        t_dist = Table(dist_data, colWidths=[180, 120, 120])
         t_dist.setStyle(TableStyle([
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E0")),
             ('PADDING', (0,0), (-1,-1), 4)
@@ -741,13 +742,13 @@ def generate_pdf_pins_list(file_path):
     
     for idx, e in enumerate(ELEVI):
         table_data.append([
-            Paragraph(str(e), cell_style),
-            Paragraph(e, cell_style),
-            Paragraph(e, cell_style),
+            Paragraph(str(e[0]), cell_style),
+            Paragraph(e[1], cell_style),
+            Paragraph(e[3], cell_style),
             Paragraph(f"{pins_list[idx]}", cell_bold)
         ])
         
-    t_pins = Table(table_data, colWidths=)
+    t_pins = Table(table_data, colWidths=[30, 220, 100, 100])
     t_pins.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -782,7 +783,7 @@ with tab1:
                 sheet_name = "Cultură Generală" if cat_n == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
                 student_row = 9 + elev_idx_n
-                start_col = DISCIPLINE_CG[mat_idx_n] if cat_n == "Cultură Generală" else MODULE_TH[mat_idx_n]
+                start_col = DISCIPLINE_CG[mat_idx_n][1] if cat_n == "Cultură Generală" else MODULE_TH[mat_idx_n][1]
                 
                 slot_found = False
                 for k in range(10):
@@ -800,7 +801,7 @@ with tab1:
                 if slot_found:
                     wb.save(selected_file)
                     push_to_github(selected_file)
-                    st.success(f"✅ Notă salvată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n]}")
+                    st.success(f"✅ Notă salvată: {nota_val} pe {data_nota} la {materii[mat_idx_n][0]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
                     st.rerun()
                 else:
                     st.error("❌ Toate cele 10 sloturi de note sunt pline pentru această disciplină!")
@@ -830,7 +831,7 @@ with tab2:
                 sheet_name = "Cultură Generală" if cat_a == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
                 student_row = 9 + elev_idx_a
-                start_col = DISCIPLINE_CG[mat_idx_a] if cat_a == "Cultură Generală" else MODULE_TH[mat_idx_a]
+                start_col = DISCIPLINE_CG[mat_idx_a][1] if cat_a == "Cultură Generală" else MODULE_TH[mat_idx_a][1]
                 
                 abs_val = f"{data_abs.strip()}m" if is_mot else data_abs.strip()
                 
@@ -847,7 +848,7 @@ with tab2:
                 if slot_found:
                     wb.save(selected_file)
                     push_to_github(selected_file)
-                    st.success(f"✅ Absență salvată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a]}")
+                    st.success(f"✅ Absență salvată: '{abs_val}' la {materii_a[mat_idx_a][0]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
                     st.rerun()
                 else:
                     st.error("❌ Toate cele 30 de sloturi de absențe sunt pline pentru această disciplină!")
@@ -878,7 +879,7 @@ with tab3:
                 sheet_name = "Cultură Generală" if cat_m == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
                 student_row = 9 + elev_idx_m
-                start_col = DISCIPLINE_CG[mat_idx_m] if cat_m == "Cultură Generală" else MODULE_TH[mat_idx_m]
+                start_col = DISCIPLINE_CG[mat_idx_m][1] if cat_m == "Cultură Generală" else MODULE_TH[mat_idx_m][1]
                 
                 target_d = data_mot.strip()
                 found = False
@@ -900,7 +901,7 @@ with tab3:
                 if found and cell_a.value == f"{target_d}m":
                     wb.save(selected_file)
                     push_to_github(selected_file)
-                    st.success(f"✅ Absență motivată ('{target_d}m') pentru {ELEVI[elev_idx_m]} la {materii_m[mat_idx_m]}")
+                    st.success(f"✅ Absență motivată ('{target_d}m') pentru {ELEVI[elev_idx_m][1]} la {materii_m[mat_idx_m][0]}")
                     st.rerun()
                 elif not found:
                     st.warning(f"Nu s-a găsit nicio absență nemotivată cu data '{target_d}'.")
@@ -911,7 +912,7 @@ with tab3:
 # --- TAB 4: FIȘĂ ELEV ---
 with tab4:
     st.subheader("Fișă Elev & Rezumat")
-    col_v1, col_v2, col_v3 = st.columns()
+    col_v1, col_v2, col_v3 = st.columns([2, 1, 1])
     with col_v1:
         elev_idx_v = st.selectbox("Alege Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_v")
     with col_v2:
@@ -919,7 +920,7 @@ with tab4:
         st.write("")
         try:
             pdf_bytes = generate_pdf_student(elev_idx_v, selected_file)
-            st.download_button("🖨️ Descarcă Fișă Școlară PDF", data=pdf_bytes, file_name=f"Fisa_Elev_{ELEVI[elev_idx_v].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
+            st.download_button("🖨️ Descarcă Fișă Școlară PDF", data=pdf_bytes, file_name=f"Fisa_Elev_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
         except Exception as ex:
             st.error(f"Eroare PDF Fișă: {ex}")
     with col_v3:
@@ -927,7 +928,7 @@ with tab4:
         st.write("")
         try:
             ticket_bytes = generate_pdf_ticket_student(elev_idx_v, selected_file)
-            st.download_button("🔑 Descarcă Bilet Acces Părinte PDF", data=ticket_bytes, file_name=f"Bilet_Acces_Parinte_{ELEVI[elev_idx_v]:02d}_{ELEVI[elev_idx_v].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
+            st.download_button("🔑 Descarcă Bilet Acces Părinte PDF", data=ticket_bytes, file_name=f"Bilet_Acces_Parinte_{ELEVI[elev_idx_v][0]:02d}_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
         except Exception as ex:
             st.error(f"Eroare PDF Bilet: {ex}")
 
@@ -935,7 +936,7 @@ with tab4:
         try:
             wb = openpyxl.load_workbook(selected_file, data_only=True)
             e_info = ELEVI[elev_idx_v]
-            st.markdown(f"### 👤 {e_info} (Matricol {e_info})")
+            st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[3]})")
             
             for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
                 st.markdown(f"#### {cat_title}")
@@ -973,7 +974,7 @@ with tab4:
 # --- TAB 5: CENTRALIZATOR CLASĂ ---
 with tab5:
     st.subheader("📈 Centralizator General Clasă (Situție Școlară & Premii)")
-    col_c1, col_c2 = st.columns()
+    col_c1, col_c2 = st.columns([3, 1])
     with col_c2:
         try:
             pdf_cent_bytes = generate_pdf_centralizator(selected_file)
@@ -1006,7 +1007,7 @@ with tab5:
             
             st.divider()
             st.markdown("#### 🔐 Coduri PIN Confidențiale Părinți")
-            col_p1, col_p2 = st.columns()
+            col_p1, col_p2 = st.columns([3, 1])
             with col_p1:
                 st.caption("Fiecare elev are atribuit un cod PIN unic de 4 cifre necesar părinților pentru autentificare în portal.")
             with col_p2:
@@ -1023,7 +1024,7 @@ with tab5:
 # --- TAB 6: RAPORT DIRIGINTE ---
 with tab6:
     st.subheader("📋 Raport Sintetic al Dirigintelui")
-    col_r1, col_r2 = st.columns()
+    col_r1, col_r2 = st.columns([3, 1])
     with col_r2:
         try:
             pdf_rap_bytes = generate_pdf_raport(selected_file)
