@@ -13,6 +13,8 @@ st.set_page_config(
     layout="wide"
 )
 
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxf-chEeMc6pA02EU0-pwqMTVp8htzzku6TvX5Uhea_nqqCNEcT3D6RYrmke1n0tAwD/exec"
+
 # --- FUNCTIE DE SINCRONIZARE SI DESCARCARE AUTOMATA EXCEL DIN GITHUB ---
 def sync_excel_from_github():
     filename = "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
