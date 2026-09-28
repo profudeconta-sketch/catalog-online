@@ -20,7 +20,7 @@ def sync_excel_from_github():
     raw_url = f"https://raw.githubusercontent.com/profudeconta-sketch/catalog-online/main/{filename}?t={ts}"
     
     token = os.environ.get("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
-    headers = {"User-Agent": "StreamlitApp"}
+    headers = {"User-Agent": "StreamlitApp", "Cache-Control": "no-cache"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
         
@@ -37,14 +37,14 @@ def sync_excel_from_github():
         pass
 
     try:
-        api_url = f"https://api.github.com/repos/profudeconta-sketch/catalog-online/contents/{filename}"
+        api_url = f"https://api.github.com/repos/profudeconta-sketch/catalog-online/contents/{filename}?t={ts}"
         req_api = urllib.request.Request(api_url, headers=headers)
         with urllib.request.urlopen(req_api, timeout=5) as resp:
             if resp.status == 200:
                 res_json = json.loads(resp.read().decode('utf-8'))
                 content_b64 = res_json.get('content', '')
                 if content_b64:
-                    binary_data = base64.b64encode(content_b64)
+                    binary_data = base64.b64decode(content_b64)
                     with open(filename, "wb") as f:
                         f.write(binary_data)
                     return filename
@@ -92,39 +92,41 @@ ELEVI = [
     (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6", "5786")
 ]
 
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxZTSWP9ciRZ-gsFRzxFyLZ4TN-v4eeyNDAhIY8_bBi9z9y9fXI6TQBUIGNHINDhGYF/exec"
+DISCIPLINE_CG = [
+    ("Limba și literatura română", 8),
+    ("Limba engleză (L1)", 61),
+    ("Limba franceză (L2)", 114),
+    ("Matematică", 167),
+    ("Fizică", 220),
+    ("Chimie", 273),
+    ("Biologie", 326),
+    ("Istorie", 379),
+    ("Geografie", 432),
+    ("Logică, argumentare și comunicare", 485),
+    ("Informatică / TIC", 538),
+    ("Educație fizică", 591),
+    ("Religie", 644),
+    ("Arte vizuale și educație plastică", 697)
+]
 
-def log_parent_access(elev_nume, matricol):
-    if "logged_students" not in st.session_state:
-        st.session_state["logged_students"] = set()
-    
-    key = f"{elev_nume}_{matricol}"
-    if key not in st.session_state["logged_students"]:
-        st.session_state["logged_students"].add(key)
-        try:
-            params = urllib.parse.urlencode({"elev": elev_nume, "matricol": matricol})
-            full_url = f"{WEBAPP_URL}?{params}"
-            req = urllib.request.Request(full_url, headers={'User-Agent': 'Mozilla/5.0'})
-            urllib.request.urlopen(req, timeout=3)
-        except Exception:
-            pass
+MODULE_TH = [
+    ("M1: Bazele contabilității", 8),
+    ("M2: Etică și comunicare", 61),
+    ("M3: Structuri de primire turistică", 114),
+    ("M4: Procese și calitate în HoReCa", 167),
+    ("M5: CDEOȘ (IP) - Instruire Practică", 220),
+    ("M6: Curriculum de aprofundare și inserție profesională", 273)
+]
 
 def find_excel_file():
     candidates = [
         "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
         "CATALOG/catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
-        "catalog_scolar_clasa_IX_TH_Turda-v14.xlsx",
         "/workspace/artifacts/catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
     ]
     for c in candidates:
         if os.path.exists(c):
             return c
-    try:
-        for f in os.listdir("."):
-            if f.endswith(".xlsx") and "catalog" in f.lower():
-                return f
-    except Exception:
-        pass
     return "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
 
 excel_path = find_excel_file()
@@ -133,7 +135,6 @@ st.title("🏫 Colegiul 'Emil Negruțiu' Turda")
 st.subheader("👨‍👩‍👧‍👦 Portal Părinți — Vizualizare Fișă Școlară Elev (IX TH)")
 st.info("🔒 Acces securizat pentru părinți. Vă rugăm să vă autentificați mai jos cu Numărul Matricol și Codul PIN confidențial primit de la diriginte.")
 
-# Zona de Autentificare
 col_auth1, col_auth2 = st.columns(2)
 
 with col_auth1:
@@ -141,7 +142,7 @@ with col_auth1:
         "🔑 Introduceți Numărul Matricol (ex: 126/76 sau 13):",
         value="",
         placeholder="Exemplu: 126/76",
-        help="Numărul matricol se găsește pe carnetul de elev sau pe biletul individual de acces."
+        help="Numărul matricol se găsește pe carnetul de elev sau adeverința de înscriere."
     ).strip()
 
 with col_auth2:
@@ -153,63 +154,67 @@ with col_auth2:
         help="Codul PIN confidențial individual eliberat de către diriginte."
     ).strip()
 
-matched_student = None
+def safe_str(val):
+    if val is None:
+        return ""
+    return str(val).strip()
+
+def safe_float_str(val):
+    if val is None or val == "":
+        return "-"
+    try:
+        return f"{float(val):.2f}"
+    except Exception:
+        return str(val)
+
+student_found = None
+pin_correct = False
+
 if nr_matricol_input:
-    for student in ELEVI:
-        if (nr_matricol_input == str(student[2]) or 
-            nr_matricol_input == str(student[3]) or 
-            nr_matricol_input.lower() == str(student[3]).lower()):
-            matched_student = student
+    for e in ELEVI:
+        if nr_matricol_input == str(e[2]) or nr_matricol_input == str(e[3]) or nr_matricol_input.lower() == str(e[3]).lower():
+            student_found = e
+            if pin_input and pin_input == str(e[4]):
+                pin_correct = True
             break
 
-if not nr_matricol_input:
-    st.warning("👉 Vă rugăm să introduceți Numărul Matricol în caseta de mai sus pentru a afișa fișa elevului.")
-elif matched_student is None:
-    st.error("❌ Numărul Matricol introdus nu a fost găsit în baza de date a clasei a IX-a TH! Vă rugăm să verificați biletul de acces.")
-elif not pin_input:
-    st.info("🔑 Introduceți Codul PIN de 4 cifre transmis pe biletul individual de acces pentru a debloca fișa școlară.")
-elif pin_input != str(matched_student[4]):
-    st.error("❌ Codul PIN introdus este incorect! Vă rugăm să verificați codul PIN de 4 cifre de pe biletul de acces.")
+if not nr_matricol_input or not pin_input:
+    st.warning("👈 Vă rugăm să completați atât Numărul Matricol, cât și Codul PIN confidențial de mai sus.")
+elif not student_found:
+    st.error("❌ Nu s-a găsit niciun elev cu acest Număr Matricol. Verificați carnetul elevului și încercați din nou.")
+elif not pin_correct:
+    st.error("❌ Cod PIN incorect pentru acest elev! Vă rugăm să verificați biletul confidențial primit de la diriginte.")
 else:
-    # Autentificare completă cu succes
-    idx_elev = matched_student[0] - 1
-    st.success(f"✅ Autentificare securizată reușită pentru elevul: **{matched_student[1]}** (Matricol {matched_student[3]})")
-    
-    # Sincronizare fortata din GitHub la fiecare autentificare
-    sync_excel_from_github()
-    
-    # Logare acces in Google Sheets
-    log_parent_access(matched_student[1], matched_student[3])
-    
-    if os.path.exists(excel_path):
+    col_hdr1, col_hdr2 = st.columns([3, 1])
+    with col_hdr1:
+        st.success(f"✅ Autentificare securizată reușită pentru elevul: **{student_found[1]}** (Matricol {student_found[3]})")
+    with col_hdr2:
+        if st.button("🔄 Actualizează Datele", use_container_width=True, type="primary"):
+            sync_excel_from_github()
+            st.rerun()
+
+    st.divider()
+
+    if not os.path.exists(excel_path):
+        st.error(f"Fișierul catalog '{excel_path}' nu a fost găsit.")
+    else:
         try:
             wb = openpyxl.load_workbook(excel_path, data_only=True)
-            
-            disc_cg = [
-                ("Limba și literatura română", 8), ("Limba engleză (L1)", 61), ("Limba franceză (L2)", 114),
-                ("Matematică", 167), ("Fizică", 220), ("Chimie", 273), ("Biologie", 326), ("Istorie", 379),
-                ("Geografie", 432), ("Logică, argumentare și comunicare", 485), ("Informatică / TIC", 538),
-                ("Educație fizică", 591), ("Religie", 644), ("Arte vizuale și educație plastică", 697)
-            ]
-            mod_th = [
-                ("M1: Bazele contabilității", 8), ("M2: Etică și comunicare", 61), ("M3: Structuri de primire turistică", 114),
-                ("M4: Procese și calitate în HoReCa", 167), ("M5: CDEOȘ (IP) - Instruire Practică", 220), ("M6: Curriculum de aprofundare și inserție profesională", 273)
-            ]
+            s_idx = student_found[0] - 1
+            s_row = 9 + s_idx
 
-            # Calcul medii si absente in timp real
             ws_cg = wb["Cultură Generală"]
             ws_th = wb["Module Tehnologice"]
-            s_row = 9 + idx_elev
             
             cg_avgs = []
             abs_nem = 0
             abs_mot = 0
             
-            for s_name, start_col in disc_cg:
+            for s_name, start_col in DISCIPLINE_CG:
                 notes = []
                 for k in range(10):
                     n_val = ws_cg.cell(row=s_row, column=start_col + (k * 2)).value
-                    if n_val is not None and str(n_val).strip() != "" and not str(n_val).startswith("="):
+                    if n_val is not None and str(n_val).strip() != "":
                         try:
                             notes.append(float(n_val))
                         except Exception:
@@ -218,19 +223,19 @@ else:
                     cg_avgs.append(round(sum(notes)/len(notes), 2))
                 for k in range(30):
                     a_val = ws_cg.cell(row=s_row, column=start_col + 21 + k).value
-                    if a_val is not None and str(a_val).strip() != "" and not str(a_val).startswith("="):
+                    if a_val is not None and str(a_val).strip() != "":
                         s_a = str(a_val).strip()
-                        if s_a.endswith('m') or s_a.endswith('M'):
+                        if s_a.endswith('m'):
                             abs_mot += 1
                         else:
                             abs_nem += 1
                             
             th_avgs = []
-            for s_name, start_col in mod_th:
+            for s_name, start_col in MODULE_TH:
                 notes = []
                 for k in range(10):
                     n_val = ws_th.cell(row=s_row, column=start_col + (k * 2)).value
-                    if n_val is not None and str(n_val).strip() != "" and not str(n_val).startswith("="):
+                    if n_val is not None and str(n_val).strip() != "":
                         try:
                             notes.append(float(n_val))
                         except Exception:
@@ -239,9 +244,9 @@ else:
                     th_avgs.append(round(sum(notes)/len(notes), 2))
                 for k in range(30):
                     a_val = ws_th.cell(row=s_row, column=start_col + 21 + k).value
-                    if a_val is not None and str(a_val).strip() != "" and not str(a_val).startswith("="):
+                    if a_val is not None and str(a_val).strip() != "":
                         s_a = str(a_val).strip()
-                        if s_a.endswith('m') or s_a.endswith('M'):
+                        if s_a.endswith('m'):
                             abs_mot += 1
                         else:
                             abs_nem += 1
@@ -261,70 +266,54 @@ else:
             purtare = max(1, 10 - int(abs_nem / 20))
             abs_tot = abs_nem + abs_mot
 
-            def fmt_val(v):
-                if isinstance(v, (int, float)):
-                    return f"{float(v):.2f}"
-                return str(v) if v else "-"
+            col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
+            col_kpi1.metric("Media Cultură Gen.", safe_float_str(med_cg))
+            col_kpi2.metric("Media Module TH.", safe_float_str(med_th))
+            col_kpi3.metric("Media Generală", safe_float_str(med_gen))
+            col_kpi4.metric("Nota la Purtare", str(purtare))
+            col_kpi5.metric("Total Absențe", f"{abs_tot} ({abs_nem} nem. / {abs_mot} mot.)")
 
-            # Carduri cu indicatori principali
-            m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
-            m_col1.metric("Media Cultură Gen.", fmt_val(med_cg))
-            m_col2.metric("Media Module TH.", fmt_val(med_th))
-            m_col3.metric("Media Generală", fmt_val(med_gen))
-            m_col4.metric("Nota la Purtare", str(purtare))
-            m_col5.metric("Total Absențe", f"{abs_tot} ({abs_nem} nem. / {abs_mot} mot.)")
+            st.divider()
 
-            st.markdown("---")
+            for cat_title, ws, sub_list in [("📚 DISCIPLINE CULTURĂ GENERALĂ", ws_cg, DISCIPLINE_CG), ("⚙️ MODULE TEHNOLOGICE", ws_th, MODULE_TH)]:
+                st.markdown(f"#### {cat_title}")
 
-            # Situația detaliată pe discipline și module
-            tab_cg, tab_th = st.tabs(["📚 Cultură Generală", "🛠️ Module Tehnologice"])
+                rows_data = []
+                for s_name, start_col in sub_list:
+                    notes = []
+                    for k in range(10):
+                        n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
+                        d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
+                        if n_val is not None and str(n_val).strip() != "":
+                            d_str = f" ({d_val})" if d_val else ""
+                            notes.append(f"{n_val}{d_str}")
+                    absences = []
+                    for k in range(30):
+                        a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
+                        if a_val is not None and str(a_val).strip() != "":
+                            absences.append(str(a_val).strip())
+                            
+                    sub_notes_float = []
+                    for k in range(10):
+                        nv = ws.cell(row=s_row, column=start_col + (k * 2)).value
+                        if nv is not None and str(nv).strip() != "":
+                            try:
+                                sub_notes_float.append(float(nv))
+                            except Exception:
+                                pass
+                    media_str = f"{(sum(sub_notes_float)/len(sub_notes_float)):.2f}" if sub_notes_float else "-"
 
-            for tab_obj, cat_title, ws, sub_list in [
-                (tab_cg, "Cultură Generală", ws_cg, disc_cg),
-                (tab_th, "Module Tehnologice", ws_th, mod_th)
-            ]:
-                with tab_obj:
-                    rows_data = []
-
-                    for s_name, start_col in sub_list:
-                        notes = []
-                        for k in range(10):
-                            n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
-                            d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
-                            if n_val is not None and str(n_val).strip() != "" and not str(n_val).startswith("="):
-                                d_str = f" ({d_val})" if d_val else ""
-                                notes.append(f"{n_val}{d_str}")
-                                
-                        absences = []
-                        for k in range(30):
-                            a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
-                            if a_val is not None and str(a_val).strip() != "" and not str(a_val).startswith("="):
-                                absences.append(str(a_val).strip())
-                                        
-                        sub_notes_float = []
-                        for k in range(10):
-                            nv = ws.cell(row=s_row, column=start_col + (k * 2)).value
-                            if nv is not None and str(nv).strip() != "" and not str(nv).startswith("="):
-                                try:
-                                    sub_notes_float.append(float(nv))
-                                except Exception:
-                                    pass
-                        media_str = f"{(sum(sub_notes_float)/len(sub_notes_float)):.2f}" if sub_notes_float else "-"
-
-                        rows_data.append({
-                            "Disciplină / Modul": s_name,
-                            "Note & Date": ", ".join(notes) if notes else "Fără note",
-                            "Absențe": ", ".join(absences) if absences else "Fără absențe",
-                            "Medie": media_str
-                        })
-
-                    st.dataframe(rows_data, use_container_width=True, hide_index=True)
+                    rows_data.append({
+                        "Disciplină / Modul": s_name,
+                        "Note Obtinute": ", ".join(notes) if notes else "Fără note înregistrate",
+                        "Absențe Înregistrate": ", ".join(absences) if absences else "Fără absențe",
+                        "Medie Actuală": media_str
+                    })
+                st.dataframe(rows_data, use_container_width=True, hide_index=True)
 
             wb.close()
         except Exception as ex:
             st.error(f"Eroare la încărcarea fișei elevului: {ex}")
-    else:
-        st.warning("⚠️ Baza de date a catalogului este momentan indisponibilă. Vă rugăm să reîncercați mai târziu.")
 
 st.markdown("---")
 st.caption("© 2026 Prof. Ec. Gherman Octavian-Theodor. Toate drepturile de autor rezervate.")
