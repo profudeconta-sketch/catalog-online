@@ -190,7 +190,7 @@ elif not pin_correct:
 else:
     col_hdr1, col_hdr2 = st.columns([3, 1])
     with col_hdr1:
-           st.success(
+       st.success(
         f"✅ Autentificare securizată reușită pentru elevul:"
         f" **{student_found[1]}** (Matricol {student_found[3]})"
     )
@@ -214,10 +214,6 @@ else:
       ):
         sync_excel_from_github()
         st.rerun()
-    with col_hdr2:
-        if st.button("🔄 Actualizează Datele", use_container_width=True, type="primary"):
-            sync_excel_from_github()
-            st.rerun()
 
     st.divider()
 
