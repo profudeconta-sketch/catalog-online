@@ -190,7 +190,30 @@ elif not pin_correct:
 else:
     col_hdr1, col_hdr2 = st.columns([3, 1])
     with col_hdr1:
-        st.success(f"✅ Autentificare securizată reușită pentru elevul: **{student_found[1]}** (Matricol {student_found[3]})")
+           st.success(
+        f"✅ Autentificare securizată reușită pentru elevul:"
+        f" **{student_found[1]}** (Matricol {student_found[3]})"
+    )
+
+    # --- INREGISTRARE ACCES IN GOOGLE SHEETS ---
+    import urllib.parse, urllib.request
+
+    try:
+      url_log = f"{WEBAPP_URL}?elev={urllib.parse.quote(str(student_found[1]))}&matricol={urllib.parse.quote(str(student_found[3]))}"
+      urllib.request.urlopen(
+          urllib.request.Request(url_log, headers={"User-Agent": "Streamlit"}),
+          timeout=3,
+      )
+    except Exception:
+      pass
+    # -------------------------------------------
+
+    with col_hdr2:
+      if st.button(
+          "🔄 Actualizează Datele", use_container_width=True, type="primary"
+      ):
+        sync_excel_from_github()
+        st.rerun()
     with col_hdr2:
         if st.button("🔄 Actualizează Datele", use_container_width=True, type="primary"):
             sync_excel_from_github()
