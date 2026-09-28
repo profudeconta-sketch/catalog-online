@@ -195,20 +195,21 @@ else:
         f" **{student_found[1]}** (Matricol {student_found[3]})"
     )
 
-     # --- ÎNREGISTRARE CONECTARE ÎN GOOGLE SHEETS ---
-    import urllib.parse, urllib.request
+    # --- ÎNREGISTRARE CONECTARE ÎN GOOGLE SHEETS ---
+    import requests
 
     try:
-      nume_elev = urllib.parse.quote(str(student_found[1]))
-      matricol_elev = urllib.parse.quote(str(student_found[3]))
-      url_final = f"{WEBAPP_URL}?elev={nume_elev}&matricol={matricol_elev}"
-
-      req = urllib.request.Request(
-          url_final, headers={"User-Agent": "Mozilla/5.0"}
+      res = requests.get(
+          WEBAPP_URL,
+          params={"elev": student_found[1], "matricol": student_found[3]},
+          timeout=5,
       )
-      urllib.request.urlopen(req, timeout=5)
+      if "OK" in res.text:
+        st.toast("✅ Acces înregistrat cu succes în Google Sheet!", icon="📊")
+      else:
+        st.caption(f"ℹ️ Răspuns Google: {res.text[:100]}")
     except Exception as err:
-      st.warning(f"⚠️ Notificare Google Sheet: {err}")
+      st.warning(f"⚠️ Eroare conectare Google Sheet: {err}")
 
     with col_hdr2:
       if st.button(
