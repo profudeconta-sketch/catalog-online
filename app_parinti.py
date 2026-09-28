@@ -195,18 +195,17 @@ else:
         f" **{student_found[1]}** (Matricol {student_found[3]})"
     )
 
-    # --- INREGISTRARE ACCES IN GOOGLE SHEETS ---
+    # --- INREGISTRARE CONECTARE ÎN GOOGLE SHEETS ---
     import urllib.parse, urllib.request
 
     try:
-      url_log = f"{WEBAPP_URL}?elev={urllib.parse.quote(str(student_found[1]))}&matricol={urllib.parse.quote(str(student_found[3]))}"
+      nume_elev = urllib.parse.quote(str(student_found[1]))
+      matricol_elev = urllib.parse.quote(str(student_found[3]))
       urllib.request.urlopen(
-          urllib.request.Request(url_log, headers={"User-Agent": "Streamlit"}),
-          timeout=3,
+          f"{WEBAPP_URL}?elev={nume_elev}&matricol={matricol_elev}", timeout=5
       )
     except Exception:
       pass
-    # -------------------------------------------
 
     with col_hdr2:
       if st.button(
