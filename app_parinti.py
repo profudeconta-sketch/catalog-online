@@ -195,21 +195,32 @@ else:
         f" **{student_found[1]}** (Matricol {student_found[3]})"
     )
 
-    # --- ÎNREGISTRARE CONECTARE ÎN GOOGLE SHEETS ---
-    import requests
+    # --- ÎNREGISTRARE CONECTARE ÎN GOOGLE SHEETS (O SINGURĂ DATĂ PER SESIUNE) ---
+    if "logged_to_sheet" not in st.session_state:
+      st.session_state["logged_to_sheet"] = False
 
-    try:
-      res = requests.get(
-          WEBAPP_URL,
-          params={"elev": student_found[1], "matricol": student_found[3]},
-          timeout=5,
-      )
-      if "OK" in res.text:
-        st.toast("✅ Acces înregistrat cu succes în Google Sheet!", icon="📊")
-      else:
-        st.caption(f"ℹ️ Răspuns Google: {res.text[:100]}")
-    except Exception as err:
-      st.warning(f"⚠️ Eroare conectare Google Sheet: {err}")
+    if not st.session_state["logged_to_sheet"]:
+      import requests
+
+      try:
+        nume_e = requests.utils.quote(str(student_found[1]))
+        matr_e = requests.utils.quote(str(student_found[3]))
+        url_call = f"{WEBAPP_URL}?elev={nume_e}&matricol={matr_e}"
+
+        res = requests.get(url_call, timeout=8)
+
+        if "SUCCESS_LOGGED" in res.text:
+          st.session_state["logged_to_sheet"] = True
+          st.toast(
+              "✅ Autentificarea a fost înregistrată în Google Sheet!", icon="📊"
+          )
+        else:
+          st.warning(
+              "⚠️ Răspuns Google: "
+              + (res.text[:100] if res.text else "Niciun răspuns")
+          )
+      except Exception as err:
+        st.warning(f"⚠️ Eroare conectare Google Sheet: {err}")
 
     with col_hdr2:
       if st.button(
