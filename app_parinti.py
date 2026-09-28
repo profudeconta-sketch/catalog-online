@@ -14,8 +14,6 @@ st.set_page_config(
 )
 
 # --- FUNCTIE DE SINCRONIZARE SI DESCARCARE AUTOMATA EXCEL DIN GITHUB ---
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxf-chEeMc6pA02EU0-pwqMTVp8htzzku6TvX5Uhea_nqqCNEcT3D6RYrmke1n0tAwD/exec"
-
 def sync_excel_from_github():
     filename = "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
     ts = int(datetime.datetime.now().timestamp())
@@ -120,21 +118,6 @@ MODULE_TH = [
     ("M6: Curriculum de aprofundare și inserție profesională", 273)
 ]
 
-def log_parent_access(elev_nume, matricol):
-    if "logged_students" not in st.session_state:
-        st.session_state["logged_students"] = set()
-    
-    key = f"{elev_nume}_{matricol}"
-    if key not in st.session_state["logged_students"]:
-        st.session_state["logged_students"].add(key)
-        try:
-            params = urllib.parse.urlencode({"elev": elev_nume, "matricol": matricol})
-            full_url = f"{WEBAPP_URL}?{params}"
-            req = urllib.request.Request(full_url, headers={'User-Agent': 'Mozilla/5.0'})
-            urllib.request.urlopen(req, timeout=3)
-        except Exception:
-            pass
-
 def find_excel_file():
     candidates = [
         "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
@@ -202,8 +185,6 @@ elif not student_found:
 elif not pin_correct:
     st.error("❌ Cod PIN incorect pentru acest elev! Vă rugăm să verificați biletul confidențial primit de la diriginte.")
 else:
-    log_parent_access(student_found[1], student_found[3])
-    
     col_hdr1, col_hdr2 = st.columns([3, 1])
     with col_hdr1:
         st.success(f"✅ Autentificare securizată reușită pentru elevul: **{student_found[1]}** (Matricol {student_found[3]})")
@@ -225,115 +206,50 @@ else:
             ws_cg = wb["Cultură Generală"]
             ws_th = wb["Module Tehnologice"]
             
-            # 1. Calculare date clasa întreagă pentru clasamente
-            class_stats = []
-            for idx_c, e_c in enumerate(ELEVI):
-                r_c = 9 + idx_c
-                
-                cg_a = []
-                abs_n_c = 0
-                abs_m_c = 0
-                for _, col_c in DISCIPLINE_CG:
-                    nts = []
-                    for k in range(10):
-                        v_c = ws_cg.cell(row=r_c, column=col_c + (k * 2)).value
-                        if v_c is not None and str(v_c).strip() != "":
-                            try:
-                                nts.append(float(v_c))
-                            except Exception:
-                                pass
-                    if nts:
-                        cg_a.append(round(sum(nts)/len(nts), 2))
-                    for k in range(30):
-                        av_c = ws_cg.cell(row=r_c, column=col_c + 21 + k).value
-                        if av_c is not None and str(av_c).strip() != "":
-                            s_av = str(av_c).strip()
-                            if s_av.endswith('m'):
-                                abs_m_c += 1
-                            else:
-                                abs_n_c += 1
-                                
-                th_a = []
-                for _, col_c in MODULE_TH:
-                    nts = []
-                    for k in range(10):
-                        v_c = ws_th.cell(row=r_c, column=col_c + (k * 2)).value
-                        if v_c is not None and str(v_c).strip() != "":
-                            try:
-                                nts.append(float(v_c))
-                            except Exception:
-                                pass
-                    if nts:
-                        th_a.append(round(sum(nts)/len(nts), 2))
-                    for k in range(30):
-                        av_c = ws_th.cell(row=r_c, column=col_c + 21 + k).value
-                        if av_c is not None and str(av_c).strip() != "":
-                            s_av = str(av_c).strip()
-                            if s_av.endswith('m'):
-                                abs_m_c += 1
-                            else:
-                                abs_n_c += 1
-                                
-                mcg_c = round(sum(cg_a)/len(cg_a), 2) if cg_a else None
-                mth_c = round(sum(th_a)/len(th_a), 2) if th_a else None
-                
-                if mcg_c is not None and mth_c is not None:
-                    mg_c = round((mcg_c + mth_c)/2.0, 2)
-                elif mcg_c is not None:
-                    mg_c = mcg_c
-                elif mth_c is not None:
-                    mg_c = mth_c
-                else:
-                    mg_c = None
-                    
-                tot_a_c = abs_n_c + abs_m_c
-                class_stats.append({
-                    'idx': idx_c,
-                    'mg': mg_c,
-                    'tot_abs': tot_a_c,
-                    'abs_nem': abs_n_c,
-                    'abs_mot': abs_m_c
-                })
-
-            # Clasamente la nivel de clasă
-            valid_mgs = sorted([c['mg'] for c in class_stats if c['mg'] is not None], reverse=True)
-            sorted_abs = sorted([c['tot_abs'] for c in class_stats])
-
-            curr_stat = class_stats[s_idx]
-            
-            if curr_stat['mg'] is not None:
-                rank_mg_str = f"Locul {valid_mgs.index(curr_stat['mg']) + 1} din {len(ELEVI)} elevi"
-            else:
-                rank_mg_str = "Fără medie generală"
-                
-            rank_abs_str = f"Locul {sorted_abs.index(curr_stat['tot_abs']) + 1} din {len(ELEVI)} elevi"
-
-            # Calcul specific pentru elevul autentificat
             cg_avgs = []
-            for _, col_c in DISCIPLINE_CG:
-                nts = []
+            abs_nem = 0
+            abs_mot = 0
+            
+            for s_name, start_col in DISCIPLINE_CG:
+                notes = []
                 for k in range(10):
-                    v_c = ws_cg.cell(row=s_row, column=col_c + (k * 2)).value
-                    if v_c is not None and str(v_c).strip() != "":
+                    n_val = ws_cg.cell(row=s_row, column=start_col + (k * 2)).value
+                    if n_val is not None and str(n_val).strip() != "":
                         try:
-                            nts.append(float(v_c))
+                            notes.append(float(n_val))
                         except Exception:
                             pass
-                if nts:
-                    cg_avgs.append(round(sum(nts)/len(nts), 2))
-                    
+                if notes:
+                    cg_avgs.append(round(sum(notes)/len(notes), 2))
+                for k in range(30):
+                    a_val = ws_cg.cell(row=s_row, column=start_col + 21 + k).value
+                    if a_val is not None and str(a_val).strip() != "":
+                        s_a = str(a_val).strip()
+                        if s_a.endswith('m'):
+                            abs_mot += 1
+                        else:
+                            abs_nem += 1
+                            
             th_avgs = []
-            for _, col_c in MODULE_TH:
-                nts = []
+            for s_name, start_col in MODULE_TH:
+                notes = []
                 for k in range(10):
-                    v_c = ws_th.cell(row=s_row, column=col_c + (k * 2)).value
-                    if v_c is not None and str(v_c).strip() != "":
+                    n_val = ws_th.cell(row=s_row, column=start_col + (k * 2)).value
+                    if n_val is not None and str(n_val).strip() != "":
                         try:
-                            nts.append(float(v_c))
+                            notes.append(float(n_val))
                         except Exception:
                             pass
-                if nts:
-                    th_avgs.append(round(sum(nts)/len(nts), 2))
+                if notes:
+                    th_avgs.append(round(sum(notes)/len(notes), 2))
+                for k in range(30):
+                    a_val = ws_th.cell(row=s_row, column=start_col + 21 + k).value
+                    if a_val is not None and str(a_val).strip() != "":
+                        s_a = str(a_val).strip()
+                        if s_a.endswith('m'):
+                            abs_mot += 1
+                        else:
+                            abs_nem += 1
 
             med_cg = round(sum(cg_avgs)/len(cg_avgs), 2) if cg_avgs else None
             med_th = round(sum(th_avgs)/len(th_avgs), 2) if th_avgs else None
@@ -346,39 +262,19 @@ else:
                 med_gen = med_th
             else:
                 med_gen = None
-
-            abs_nem = curr_stat['abs_nem']
-            abs_mot = curr_stat['abs_mot']
+                
             purtare = max(1, 10 - int(abs_nem / 20))
             abs_tot = abs_nem + abs_mot
 
-            # Indicatori principali (Medii, Purtare, Absențe)
-            m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
-            m_col1.metric("Media Cultură Gen.", safe_float_str(med_cg))
-            m_col2.metric("Media Module TH.", safe_float_str(med_th))
-            m_col3.metric("Media Generală", safe_float_str(med_gen))
-            m_col4.metric("Nota la Purtare", str(purtare))
-            m_col5.metric("Total Absențe", f"{abs_tot} ({abs_nem} nem. / {abs_mot} mot.)")
-
-            # Card informativ dedicat: Pozitie & Clasament Elev
-            st.markdown(
-                f"""
-                <div style="background-color: #EDF2F7; border-left: 5px solid #2B6CB0; padding: 14px 18px; border-radius: 8px; margin-top: 15px; margin-bottom: 15px;">
-                    <div style="font-size: 1.05rem; font-weight: bold; color: #1A365D; margin-bottom: 8px;">
-                        📊 Poziție și Clasament Elev în Clasă
-                    </div>
-                    <div style="display: flex; gap: 30px; flex-wrap: wrap; font-size: 0.95rem; color: #2D3748;">
-                        <div>🏆 <b>Clasament Medii Generale:</b> <span style="color: #2B6CB0; font-weight: bold;">{rank_mg_str}</span></div>
-                        <div>📌 <b>Clasament Frecvență (Absențe):</b> <span style="color: #2B6CB0; font-weight: bold;">{rank_abs_str}</span> <span style="font-size: 0.8rem; color: #718096;">(Locul 1 = cele mai puține absențe)</span></div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
+            col_kpi1.metric("Media Cultură Gen.", safe_float_str(med_cg))
+            col_kpi2.metric("Media Module TH.", safe_float_str(med_th))
+            col_kpi3.metric("Media Generală", safe_float_str(med_gen))
+            col_kpi4.metric("Nota la Purtare", str(purtare))
+            col_kpi5.metric("Total Absențe", f"{abs_tot} ({abs_nem} nem. / {abs_mot} mot.)")
 
             st.divider()
 
-            # Tabel detaliat pe discipline
             for cat_title, ws, sub_list in [("📚 DISCIPLINE CULTURĂ GENERALĂ", ws_cg, DISCIPLINE_CG), ("⚙️ MODULE TEHNOLOGICE", ws_th, MODULE_TH)]:
                 st.markdown(f"#### {cat_title}")
 
@@ -391,25 +287,11 @@ else:
                         if n_val is not None and str(n_val).strip() != "":
                             d_str = f" ({d_val})" if d_val else ""
                             notes.append(f"{n_val}{d_str}")
-                            
-                    abs_dates = []
-                    abs_nem_sub = 0
-                    abs_mot_sub = 0
+                    absences = []
                     for k in range(30):
                         a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
                         if a_val is not None and str(a_val).strip() != "":
-                            s_a = str(a_val).strip()
-                            abs_dates.append(s_a)
-                            if s_a.endswith('m'):
-                                abs_mot_sub += 1
-                            else:
-                                abs_nem_sub += 1
-                                
-                    tot_sub = abs_nem_sub + abs_mot_sub
-                    if tot_sub > 0:
-                        abs_display = f"{tot_sub} total ({abs_nem_sub} nem. / {abs_mot_sub} mot.) — Date: {', '.join(abs_dates)}"
-                    else:
-                        abs_display = "Fără absențe"
+                            absences.append(str(a_val).strip())
                             
                     sub_notes_float = []
                     for k in range(10):
@@ -424,7 +306,7 @@ else:
                     rows_data.append({
                         "Disciplină / Modul": s_name,
                         "Note Obtinute": ", ".join(notes) if notes else "Fără note înregistrate",
-                        "Absențe Înregistrate": abs_display,
+                        "Absențe Înregistrate": ", ".join(absences) if absences else "Fără absențe",
                         "Medie Actuală": media_str
                     })
                 st.dataframe(rows_data, use_container_width=True, hide_index=True)
