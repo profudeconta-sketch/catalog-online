@@ -1,6 +1,8 @@
 import datetime
 import os
 import openpyxl
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 import streamlit as st
 import urllib.request
 import urllib.parse
@@ -15,6 +17,574 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import io
 
+
+GESTIUNE_FILE = "gestiune_elevi.json"
+
+def init_default_gestiune_data():
+    data = []
+    for e in DEFAULT_ELEVI:
+        e_id = e[0]
+        nume_full = e[1]
+        parts = nume_full.split(' ', 1)
+        nume = parts[0]
+        rest = parts[1] if len(parts) > 1 else ''
+        if '.' in rest:
+            init_parts = rest.split('.', 1)
+            initiala = init_parts[0] + '.'
+            prenume = init_parts[1].strip()
+        else:
+            initiala = ''
+            prenume = rest.strip()
+            
+        rm_pg = e[2]
+        matr = e[3]
+        pin = e[4] if len(e) > 4 else "1234"
+        
+        data.append({
+            "id": e_id,
+            "rand_excel": rm_pg,
+            "matricol": matr,
+            "pin": pin,
+            "nume": nume,
+            "initiala": initiala,
+            "prenume": prenume,
+            "nume_complet": nume_full,
+            "cnp": "",
+            "telefon": "",
+            "localitate": "Turda",
+            "judet": "Cluj",
+            "strada": "",
+            "numar_strada": "",
+            "bloc": "",
+            "apartament": "",
+            "nume_mama": "",
+            "telefon_mama": "",
+            "mama_plecata": False,
+            "tara_mama": "",
+            "nume_tata": "",
+            "telefon_tata": "",
+            "tata_plecat": False,
+            "tara_tata": "",
+            "nationalitate": "Română",
+            "etnie": "Română",
+            "ces": False,
+            "orfan": False,
+            "plasament": False,
+            "bursa_medicala": False,
+            "bursa_venit": False
+        })
+    return data
+
+def load_gestiune_data():
+    if os.path.exists(GESTIUNE_FILE):
+        try:
+            with open(GESTIUNE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list) and len(data) > 0:
+                    return data
+        except Exception:
+            pass
+    return init_default_gestiune_data()
+
+def save_gestiune_data(data):
+    try:
+        with open(GESTIUNE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        push_to_github(GESTIUNE_FILE)
+        return True
+    except Exception:
+        return False
+
+def get_current_elevi_and_pins():
+    g_data = load_gestiune_data()
+    elevi_list = []
+    pins_list = []
+    for d in g_data:
+        nume_full = d.get("nume_complet", f"{d.get('nume','')} {d.get('initiala','')} {d.get('prenume','')}".strip())
+        nume_full = " ".join(nume_full.split())
+        pin_str = str(d.get("pin", "1234"))
+        elevi_list.append((
+            d["id"],
+            nume_full,
+            d.get("rand_excel", 12 + d["id"]),
+            d["matricol"],
+            pin_str
+        ))
+        pins_list.append(pin_str)
+    return elevi_list, pins_list
+
+def parse_cnp(cnp_str):
+    cnp = str(cnp_str).strip()
+    if len(cnp) == 13 and cnp.isdigit():
+        s = int(cnp[0])
+        yy = int(cnp[1:3])
+        mm = int(cnp[3:5])
+        dd = int(cnp[5:7])
+        
+        sex = "Băiat" if s in [1, 3, 5, 7] else "Fată" if s in [2, 4, 6, 8] else "N/A"
+        
+        year_prefix = 1900
+        if s in [3, 4]: year_prefix = 1800
+        elif s in [5, 6]: year_prefix = 2000
+        
+        birth_year = year_prefix + yy
+        curr_year = datetime.datetime.now().year
+        age = curr_year - birth_year
+        
+        return {
+            "sex": sex,
+            "age": age,
+            "birth_date": f"{dd:02d}.{mm:02d}.{birth_year}"
+        }
+    return None
+
+def get_student_sex(st_dict):
+    info = parse_cnp(st_dict.get("cnp", ""))
+    if info and info["sex"] != "N/A":
+        return info["sex"]
+    p = st_dict.get("prenume", "").upper()
+    if p:
+        p_first = p.split()[0]
+        if p_first.endswith("A") and p_first not in ["LUCA", "HOREA", "HOMA", "MIRCEA", "COSTICA", "NICOLAE", "TOMA"]:
+            return "Fată"
+        return "Băiat"
+    return "Băiat"
+
+def get_student_age(st_dict):
+    info = parse_cnp(st_dict.get("cnp", ""))
+    if info:
+        return info["age"]
+    return 15
+
+def generate_excel_bytes(rows_data, sheet_name="Raport"):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = sheet_name
+    
+    if not rows_data:
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        return buffer.getvalue()
+        
+    headers = list(rows_data[0].keys())
+    ws.append(headers)
+    
+    header_fill = PatternFill(start_color="1A365D", end_color="1A365D", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    
+    for col_num in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E0'),
+        right=Side(style='thin', color='CBD5E0'),
+        top=Side(style='thin', color='CBD5E0'),
+        bottom=Side(style='thin', color='CBD5E0')
+    )
+    
+    for row_idx, r_dict in enumerate(rows_data, start=2):
+        row_vals = [r_dict.get(h, "") for h in headers]
+        ws.append(row_vals)
+        for col_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            cell.border = thin_border
+            if isinstance(cell.value, (int, float)):
+                cell.alignment = Alignment(horizontal="right", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+                
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            val_str = str(cell.value or "")
+            if len(val_str) > max_len:
+                max_len = len(val_str)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+        
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+def parse_absence_month(abs_str):
+    s = str(abs_str).strip()
+    if not s:
+        return None, False
+    is_mot = False
+    if s.endswith('m') or s.endswith('M'):
+        is_mot = True
+        s = s[:-1].strip()
+        
+    parts = s.replace('-', '.').replace('/', '.').split('.')
+    if len(parts) >= 2:
+        try:
+            day = int(parts[0])
+            m_val = int(parts[1])
+            if 1 <= m_val <= 12:
+                return m_val, is_mot
+        except Exception:
+            pass
+    return None, is_mot
+
+MONTH_DEFS = [
+    (9, "Septembrie 2026"),
+    (10, "Octombrie 2026"),
+    (11, "Noiembrie 2026"),
+    (12, "Decembrie 2026"),
+    (1, "Ianuarie 2027"),
+    (2, "Februarie 2027"),
+    (3, "Martie 2027"),
+    (4, "Aprilie 2027"),
+    (5, "Mai 2027"),
+    (6, "Iunie 2027")
+]
+
+def calculate_lunar_student_absences(file_path):
+    student_rows = []
+    if not os.path.exists(file_path):
+        return student_rows
+    try:
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+        ws_cg = wb["Cultură Generală"]
+        ws_th = wb["Module Tehnologice"]
+        
+        for idx, e in enumerate(ELEVI):
+            s_row = 9 + idx
+            lunar_counts = {m_code: {'nem': 0, 'mot': 0, 'tot': 0} for m_code, _ in MONTH_DEFS}
+            
+            for _, col in DISCIPLINE_CG:
+                for k in range(30):
+                    av = ws_cg.cell(row=s_row, column=col + 21 + k).value
+                    if av is not None and str(av).strip() != "":
+                        m_code, is_m = parse_absence_month(av)
+                        if m_code in lunar_counts:
+                            if is_m: lunar_counts[m_code]['mot'] += 1
+                            else: lunar_counts[m_code]['nem'] += 1
+                            lunar_counts[m_code]['tot'] += 1
+                            
+            for _, col in MODULE_TH:
+                for k in range(30):
+                    av = ws_th.cell(row=s_row, column=col + 21 + k).value
+                    if av is not None and str(av).strip() != "":
+                        m_code, is_m = parse_absence_month(av)
+                        if m_code in lunar_counts:
+                            if is_m: lunar_counts[m_code]['mot'] += 1
+                            else: lunar_counts[m_code]['nem'] += 1
+                            lunar_counts[m_code]['tot'] += 1
+                            
+            row_dict = {
+                "Nr.": idx + 1,
+                "Nume și Prenume Elev": e[1],
+                "Matricol": e[3]
+            }
+            tot_year_nem = 0
+            tot_year_mot = 0
+            for m_code, m_name in MONTH_DEFS:
+                c = lunar_counts[m_code]
+                row_dict[f"{m_name} - Nemotivate"] = c['nem']
+                row_dict[f"{m_name} - Motivate"] = c['mot']
+                row_dict[f"{m_name} - Total"] = c['tot']
+                tot_year_nem += c['nem']
+                tot_year_mot += c['mot']
+                
+            row_dict["TOTAL ANUAL - Nemotivate"] = tot_year_nem
+            row_dict["TOTAL ANUAL - Motivate"] = tot_year_mot
+            row_dict["TOTAL ANUAL GENERAL"] = tot_year_nem + tot_year_mot
+            student_rows.append(row_dict)
+            
+        class_tot = {"Nr.": "", "Nume și Prenume Elev": "TOTAL GENERAL CLASĂ", "Matricol": "CLASĂ"}
+        for k in student_rows[0].keys():
+            if k not in ["Nr.", "Nume și Prenume Elev", "Matricol"]:
+                class_tot[k] = sum(r[k] for r in student_rows)
+        student_rows.append(class_tot)
+        wb.close()
+    except Exception:
+        pass
+    return student_rows
+
+def calculate_lunar_subject_absences(file_path):
+    sub_rows = []
+    if not os.path.exists(file_path):
+        return sub_rows
+    try:
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+        ws_cg = wb["Cultură Generală"]
+        ws_th = wb["Module Tehnologice"]
+        
+        for cat_name, ws, sub_list in [("Cultură Generală", ws_cg, DISCIPLINE_CG), ("Module Tehnologice", ws_th, MODULE_TH)]:
+            for s_name, col in sub_list:
+                lunar_counts = {m_code: {'nem': 0, 'mot': 0, 'tot': 0} for m_code, _ in MONTH_DEFS}
+                for idx in range(len(ELEVI)):
+                    s_row = 9 + idx
+                    for k in range(30):
+                        av = ws.cell(row=s_row, column=col + 21 + k).value
+                        if av is not None and str(av).strip() != "":
+                            m_code, is_m = parse_absence_month(av)
+                            if m_code in lunar_counts:
+                                if is_m: lunar_counts[m_code]['mot'] += 1
+                                else: lunar_counts[m_code]['nem'] += 1
+                                lunar_counts[m_code]['tot'] += 1
+                                
+                row_dict = {
+                    "Categorie": cat_name,
+                    "Disciplină / Modul": s_name
+                }
+                tot_year_nem = 0
+                tot_year_mot = 0
+                for m_code, m_name in MONTH_DEFS:
+                    c = lunar_counts[m_code]
+                    row_dict[f"{m_name} - Nemotivate Clasă"] = c['nem']
+                    row_dict[f"{m_name} - Motivate Clasă"] = c['mot']
+                    row_dict[f"{m_name} - Total Clasă"] = c['tot']
+                    tot_year_nem += c['nem']
+                    tot_year_mot += c['mot']
+                    
+                row_dict["TOTAL ANUAL - Nemotivate Clasă"] = tot_year_nem
+                row_dict["TOTAL ANUAL - Motivate Clasă"] = tot_year_mot
+                row_dict["TOTAL ANUAL GENERAL CLASĂ"] = tot_year_nem + tot_year_mot
+                sub_rows.append(row_dict)
+                
+        class_tot = {"Categorie": "TOTAL CLASĂ", "Disciplină / Modul": "TOTAL GENERAL CLASĂ"}
+        for k in sub_rows[0].keys():
+            if k not in ["Categorie", "Disciplină / Modul"]:
+                class_tot[k] = sum(r[k] for r in sub_rows)
+        sub_rows.append(class_tot)
+        wb.close()
+    except Exception:
+        pass
+    return sub_rows
+
+def generate_excel_registru_elevi(gest_data):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Registru Date Elevi"
+    
+    headers = [
+        "Nr.", "Nume Completi Elev", "Nume", "Inițiala Tatălui", "Prenume", "Matricol", "CNP",
+        "Telefon Elev", "Localitate", "Județ", "Stradă", "Nr. Stradă", "Bloc", "Apt.",
+        "Nume Mamă", "Telefon Mamă", "Mamă Plecată", "Țară Mamă",
+        "Nume Tată", "Telefon Tată", "Tată Plecat", "Țară Tată",
+        "Naționalitate", "Etnie", "CES", "Orfan", "Plasament", "Bursă Medicală", "Bursă Venit"
+    ]
+    ws.append(headers)
+    
+    header_fill = PatternFill(start_color="1A365D", end_color="1A365D", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    
+    for col_num in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E0'),
+        right=Side(style='thin', color='CBD5E0'),
+        top=Side(style='thin', color='CBD5E0'),
+        bottom=Side(style='thin', color='CBD5E0')
+    )
+    
+    for idx, d in enumerate(gest_data, start=1):
+        nume_full = d.get("nume_complet", f"{d.get('nume','')} {d.get('initiala','')} {d.get('prenume','')}".strip())
+        row_vals = [
+            idx,
+            nume_full,
+            d.get("nume", ""),
+            d.get("initiala", ""),
+            d.get("prenume", ""),
+            d.get("matricol", ""),
+            f"'{d.get('cnp','')}" if d.get('cnp') else "",
+            d.get("telefon", ""),
+            d.get("localitate", ""),
+            d.get("judet", ""),
+            d.get("strada", ""),
+            d.get("numar_strada", ""),
+            d.get("bloc", ""),
+            d.get("apartament", ""),
+            d.get("nume_mama", ""),
+            d.get("telefon_mama", ""),
+            "DA" if d.get("mama_plecata") else "NU",
+            d.get("tara_mama", ""),
+            d.get("nume_tata", ""),
+            d.get("telefon_tata", ""),
+            "DA" if d.get("tata_plecat") else "NU",
+            d.get("tara_tata", ""),
+            d.get("nationalitate", ""),
+            d.get("etnie", ""),
+            "DA" if d.get("ces") else "NU",
+            "DA" if d.get("orfan") else "NU",
+            "DA" if d.get("plasament") else "NU",
+            "DA" if d.get("bursa_medicala") else "NU",
+            "DA" if d.get("bursa_venit") else "NU"
+        ]
+        ws.append(row_vals)
+        for col_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=idx + 1, column=col_idx)
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="left", vertical="center")
+            
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            val_str = str(cell.value or "")
+            if len(val_str) > max_len: max_len = len(val_str)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 10)
+        
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+def generate_excel_statistica_clasa(gest_data):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Statistica Clasa IX TH"
+    
+    header_fill = PatternFill(start_color="1A365D", end_color="1A365D", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    section_fill = PatternFill(start_color="2B6CB0", end_color="2B6CB0", fill_type="solid")
+    section_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E0'),
+        right=Side(style='thin', color='CBD5E0'),
+        top=Side(style='thin', color='CBD5E0'),
+        bottom=Side(style='thin', color='CBD5E0')
+    )
+    
+    tot_el = len(gest_data)
+    boys = sum(1 for d in gest_data if get_student_sex(d) == "Băiat")
+    girls = sum(1 for d in gest_data if get_student_sex(d) == "Fată")
+    
+    def write_section_header(title, cols_count):
+        ws.append([title])
+        r = ws.max_row
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=cols_count)
+        cell = ws.cell(row=r, column=1)
+        cell.fill = section_fill
+        cell.font = section_font
+        cell.alignment = Alignment(horizontal="left", vertical="center")
+        
+    def write_table_header(headers):
+        ws.append(headers)
+        r = ws.max_row
+        for c_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=r, column=c_idx)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            
+    def style_data_row(row_vals):
+        ws.append(row_vals)
+        r = ws.max_row
+        for c_idx in range(1, len(row_vals) + 1):
+            cell = ws.cell(row=r, column=c_idx)
+            cell.border = thin_border
+            if isinstance(cell.value, (int, float)):
+                cell.alignment = Alignment(horizontal="right", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+
+    write_section_header("1. REPARTIZAREA ELEVILOR PE SEX", 4)
+    write_table_header(["Indicator", "Băieți", "Fete", "Total Clasă"])
+    style_data_row(["Număr Elevi", boys, girls, tot_el])
+    style_data_row(["Pondere (%)", f"{(boys/tot_el*100):.1f}%" if tot_el else "0%", f"{(girls/tot_el*100):.1f}%" if tot_el else "0%", "100%"])
+    ws.append([])
+
+    write_section_header("2. GRUPAREA ELEVILOR PE VÂRSTĂ ȘI SEX", 4)
+    write_table_header(["Categorie Vârstă", "Băieți", "Fete", "Total Elevi"])
+    
+    age_groups = {"14 ani": [0,0], "15 ani": [0,0], "16 ani": [0,0], "17+ ani": [0,0]}
+    for d in gest_data:
+        a = get_student_age(d)
+        sex = get_student_sex(d)
+        key = "14 ani" if a <= 14 else "15 ani" if a == 15 else "16 ani" if a == 16 else "17+ ani"
+        if sex == "Băiat": age_groups[key][0] += 1
+        else: age_groups[key][1] += 1
+        
+    for a_label, (b_cnt, g_tot) in age_groups.items():
+        style_data_row([a_label, b_cnt, g_tot, b_cnt + g_tot])
+    ws.append([])
+
+    write_section_header("3. ELEVI DE ALTA ETNIE / NAȚIONALITATE", 4)
+    write_table_header(["Etnie / Naționalitate", "Băieți", "Fete", "Total Elevi"])
+    etn_groups = {}
+    for d in gest_data:
+        etn = d.get("etnie", "Română").strip() or "Română"
+        sex = get_student_sex(d)
+        if etn not in etn_groups: etn_groups[etn] = [0, 0]
+        if sex == "Băiat": etn_groups[etn][0] += 1
+        else: etn_groups[etn][1] += 1
+        
+    for etn_label, (b_cnt, g_tot) in etn_groups.items():
+        style_data_row([etn_label, b_cnt, g_tot, b_cnt + g_tot])
+    ws.append([])
+
+    write_section_header("4. BURSE SOCIALE ȘI CERINȚE EDUCAȚIONALE SPECIALE (CES)", 4)
+    write_table_header(["Tip Bursă / Situație Școlară", "Băieți", "Fete", "Total Elevi"])
+    
+    b_med = [sum(1 for d in gest_data if d.get("bursa_medicala") and get_student_sex(d) == "Băiat"), sum(1 for d in gest_data if d.get("bursa_medicala") and get_student_sex(d) == "Fată")]
+    b_ven = [sum(1 for d in gest_data if d.get("bursa_venit") and get_student_sex(d) == "Băiat"), sum(1 for d in gest_data if d.get("bursa_venit") and get_student_sex(d) == "Fată")]
+    b_ces = [sum(1 for d in gest_data if d.get("ces") and get_student_sex(d) == "Băiat"), sum(1 for d in gest_data if d.get("ces") and get_student_sex(d) == "Fată")]
+    
+    style_data_row(["Bursă Socială Medicală", b_med[0], b_med[1], sum(b_med)])
+    style_data_row(["Bursă Socială pe bază de Venit", b_ven[0], b_ven[1], sum(b_ven)])
+    style_data_row(["Elevi cu CES", b_ces[0], b_ces[1], sum(b_ces)])
+    ws.append([])
+
+    write_section_header("5. ELEVI ORFANI ȘI ELEVI AFLAȚI ÎN PLASAMENT", 4)
+    write_table_header(["Categorie Socială", "Băieți", "Fete", "Total Elevi"])
+    orf = [sum(1 for d in gest_data if d.get("orfan") and get_student_sex(d) == "Băiat"), sum(1 for d in gest_data if d.get("orfan") and get_student_sex(d) == "Fată")]
+    plas = [sum(1 for d in gest_data if d.get("plasament") and get_student_sex(d) == "Băiat"), sum(1 for d in gest_data if d.get("plasament") and get_student_sex(d) == "Fată")]
+    style_data_row(["Elevi Orfani", orf[0], orf[1], sum(orf)])
+    style_data_row(["Elevi în Plasament", plas[0], plas[1], sum(plas)])
+    ws.append([])
+
+    write_section_header("6. ELEVI CU PĂRINȚI PLECAȚI ÎN STRĂINĂTATE (PE ȚĂRI)", 4)
+    write_table_header(["Țară Destinație / Părinte Plecat", "Băieți", "Fete", "Total Elevi"])
+    
+    tari = {}
+    for d in gest_data:
+        sex = get_student_sex(d)
+        if d.get("mama_plecata") and d.get("tara_mama"):
+            tm = d.get("tara_mama").strip()
+            key = f"{tm} (Mamă)"
+            if key not in tari: tari[key] = [0, 0]
+            if sex == "Băiat": tari[key][0] += 1
+            else: tari[key][1] += 1
+            
+        if d.get("tata_plecat") and d.get("tara_tata"):
+            tt = d.get("tara_tata").strip()
+            key = f"{tt} (Tată)"
+            if key not in tari: tari[key] = [0, 0]
+            if sex == "Băiat": tari[key][0] += 1
+            else: tari[key][1] += 1
+            
+    if tari:
+        for t_label, (b_cnt, g_tot) in tari.items():
+            style_data_row([t_label, b_cnt, g_tot, b_cnt + g_tot])
+    else:
+        style_data_row(["Niciun părinte înregistrat ca plecat", 0, 0, 0])
+
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            val_str = str(cell.value or "")
+            if len(val_str) > max_len: max_len = len(val_str)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 st.set_page_config(
     page_title="Catalog Școlar Online IX TH",
     page_icon="🏫",
@@ -23,7 +593,12 @@ st.set_page_config(
 
 # --- SINCRONIZARE AUTOMATĂ PE GITHUB VIA API ---
 def push_to_github(file_path):
-    token = os.environ.get("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
+    token = os.environ.get("GITHUB_TOKEN") or ""
+    try:
+        if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+            token = token or st.secrets["GITHUB_TOKEN"]
+    except Exception:
+        pass
     if not token:
         return
     try:
@@ -190,750 +765,40 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # Lista celor 32 de elevi (ID, Nume, RM/PG, Nr. Matr., PIN)
-
-# --- HELPER PENTRU EXPORT EXCEL GENERAL ---
-def generate_excel_bytes(rows, sheet_name="Raport"):
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = sheet_name
-    
-    if not rows:
-        buffer = io.BytesIO()
-        wb.save(buffer)
-        buffer.seek(0)
-        return buffer.getvalue()
-        
-    headers = list(rows[0].keys())
-    
-    header_fill = PatternFill(start_color="1A365D", end_color="1A365D", fill_type="solid")
-    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    thin_border = Border(
-        left=Side(style='thin', color='CBD5E0'), right=Side(style='thin', color='CBD5E0'),
-        top=Side(style='thin', color='CBD5E0'), bottom=Side(style='thin', color='CBD5E0')
-    )
-    
-    for col_idx, h in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col_idx, value=h)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        cell.border = thin_border
-        
-    for r_idx, r_data in enumerate(rows, 2):
-        is_total_row = "TOTAL" in str(r_data.get(headers[0], "")).upper() or "TOTAL" in str(r_data.get(headers[1] if len(headers)>1 else headers[0], "")).upper()
-        for col_idx, h in enumerate(headers, 1):
-            val = r_data.get(h, "")
-            cell = ws.cell(row=r_idx, column=col_idx, value=val)
-            cell.font = Font(name="Calibri", size=10, bold=is_total_row)
-            if is_total_row:
-                cell.fill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
-            cell.border = thin_border
-            if isinstance(val, (int, float)):
-                cell.alignment = Alignment(horizontal="right", vertical="center")
-            else:
-                cell.alignment = Alignment(horizontal="left", vertical="center")
-                
-    for col in ws.columns:
-        max_len = max(len(str(cell.value or '')) for cell in col)
-        col_letter = get_column_letter(col[0].column)
-        ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
-        
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    return buffer.getvalue()
-
-MONTH_DEFS = [
-    ("Septembrie 2026", 9),
-    ("Octombrie 2026", 10),
-    ("Noiembrie 2026", 11),
-    ("Decembrie 2026", 12),
-    ("Ianuarie 2027", 1),
-    ("Februarie 2027", 2),
-    ("Martie 2027", 3),
-    ("Aprilie 2027", 4),
-    ("Mai 2027", 5),
-    ("Iunie 2027", 6)
+DEFAULT_ELEVI = [
+    (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76", "2951"),
+    (2, "BARA D. ADRIAN DANIEL", 14, "126/77", "6234"),
+    (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78", "9233"),
+    (4, "BUDULĂU I.M. VLAD IOAN", 16, "126/79", "9385"),
+    (5, "CHESZOVAN D.E. IRINA JULIETA", 17, "126/80", "2681"),
+    (6, "CIURCUI V. DIANA", 18, "126/81", "4658"),
+    (7, "CORDIȘ M.C. EDUARD IONUȚ", 19, "126/82", "7891"),
+    (8, "DEMETER D.C. DENIS RĂZVAN", 20, "126/83", "9975"),
+    (9, "FERENCZI E.C. MEDEA MARICARMEN", 21, "126/84", "9042"),
+    (10, "FLOREA V. FLAVIU CRISTIAN", 22, "126/85", "8226"),
+    (11, "GHERMAN M.I. DAVID MARIUS", 23, "126/86", "4931"),
+    (12, "LOBONȚ M. MIHNEA", 24, "126/87", "1041"),
+    (13, "LUKACS A.L. LORENA DENISA", 25, "126/88", "2322"),
+    (14, "MAGYARI A.M. ANDREI", 26, "126/89", "2814"),
+    (15, "MARCOVICI L.S. IOANA DENISA", 27, "126/90", "5706"),
+    (16, "MARIAN M.I. MIHAELA DARIA", 28, "126/91", "2606"),
+    (17, "MATEI V.C. ROXANA MIHAELA", 29, "126/92", "8367"),
+    (18, "MENCU R.R. DIANA OLIVIA", 30, "126/93", "1188"),
+    (19, "MUNTEANU V.N. ELENA", 31, "126/94", "9032"),
+    (20, "NAP A.C. ALEXANDRA MARIA", 32, "126/95", "6148"),
+    (21, "PETELEU C.A. CLAUDIA MARIA", 33, "126/96", "4444"),
+    (22, "POP D. ANDRA MARIA", 34, "126/97", "7508"),
+    (23, "POP M.V. LARISA ANDREEA", 35, "126/98", "5120"),
+    (24, "POP I.C. ROBERT EUGEN", 36, "126/99", "6696"),
+    (25, "POPA C.F. ILINCA", 37, "126/100", "6843"),
+    (26, "PUICA G. GEORGE ROBERT", 38, "126/101", "7166"),
+    (27, "RĂDUȚ I.M. ADELINA IOANA", 39, "128/1", "9414"),
+    (28, "ȘIPOȘ T.R. DAVID ADRIAN", 40, "128/2", "2250"),
+    (29, "TRIF S.D. TUȘA DANIEL", 41, "128/3", "6577"),
+    (30, "TUȘINEAN S.V. IRINA", 42, "128/4", "2469"),
+    (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5", "9815"),
+    (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6", "5786")
 ]
-
-def parse_absence_month(a_str):
-    if not a_str:
-        return None, False
-    s = str(a_str).strip()
-    is_mot = s.endswith('m') or s.endswith('M')
-    clean = s.rstrip('mM').strip()
-    
-    parts = re.split(r'[./-]', clean)
-    if len(parts) >= 2:
-        try:
-            m = int(parts[1])
-            if 1 <= m <= 12:
-                return m, is_mot
-        except Exception:
-            pass
-    return None, is_mot
-
-def calculate_lunar_student_absences(file_path):
-    rows = []
-    if not os.path.exists(file_path):
-        return rows
-        
-    try:
-        wb = openpyxl.load_workbook(file_path, data_only=True)
-        ws_cg = wb["Cultură Generală"]
-        ws_th = wb["Module Tehnologice"]
-        
-        class_monthly_totals = {m_val: {'nem': 0, 'mot': 0, 'tot': 0} for _, m_val in MONTH_DEFS}
-        
-        for idx, e in enumerate(ELEVI):
-            s_row = 9 + idx
-            student_monthly = {m_val: {'nem': 0, 'mot': 0, 'tot': 0} for _, m_val in MONTH_DEFS}
-            
-            for _, start_col in DISCIPLINE_CG:
-                for k in range(30):
-                    val = ws_cg.cell(row=s_row, column=start_col + 21 + k).value
-                    if val is not None and str(val).strip() != "":
-                        m_idx, is_mot = parse_absence_month(val)
-                        if m_idx in student_monthly:
-                            if is_mot:
-                                student_monthly[m_idx]['mot'] += 1
-                                class_monthly_totals[m_idx]['mot'] += 1
-                            else:
-                                student_monthly[m_idx]['nem'] += 1
-                                class_monthly_totals[m_idx]['nem'] += 1
-                            student_monthly[m_idx]['tot'] += 1
-                            class_monthly_totals[m_idx]['tot'] += 1
-
-            for _, start_col in MODULE_TH:
-                for k in range(30):
-                    val = ws_th.cell(row=s_row, column=start_col + 21 + k).value
-                    if val is not None and str(val).strip() != "":
-                        m_idx, is_mot = parse_absence_month(val)
-                        if m_idx in student_monthly:
-                            if is_mot:
-                                student_monthly[m_idx]['mot'] += 1
-                                class_monthly_totals[m_idx]['mot'] += 1
-                            else:
-                                student_monthly[m_idx]['nem'] += 1
-                                class_monthly_totals[m_idx]['nem'] += 1
-                            student_monthly[m_idx]['tot'] += 1
-                            class_monthly_totals[m_idx]['tot'] += 1
-                            
-            row_dict = {
-                "Nr.": idx + 1,
-                "Nume și Prenume Elev": e[1],
-                "Matricol": e[3]
-            }
-            
-            tot_an_nem = 0
-            tot_an_mot = 0
-            for m_label, m_val in MONTH_DEFS:
-                nem = student_monthly[m_val]['nem']
-                mot = student_monthly[m_val]['mot']
-                tot = student_monthly[m_val]['tot']
-                tot_an_nem += nem
-                tot_an_mot += mot
-                row_dict[f"{m_label} - Nemotivate"] = nem
-                row_dict[f"{m_label} - Motivate"] = mot
-                row_dict[f"{m_label} - Total"] = tot
-                
-            row_dict["TOTAL AN - Nemotivate"] = tot_an_nem
-            row_dict["TOTAL AN - Motivate"] = tot_an_mot
-            row_dict["TOTAL AN - General Absențe"] = tot_an_nem + tot_an_mot
-            rows.append(row_dict)
-            
-        wb.close()
-        
-        total_row = {
-            "Nr.": "-",
-            "Nume și Prenume Elev": "TOTAL CLASĂ",
-            "Matricol": "TOTAL GENERAL"
-        }
-        tot_class_an_nem = 0
-        tot_class_an_mot = 0
-        for m_label, m_val in MONTH_DEFS:
-            nem = class_monthly_totals[m_val]['nem']
-            mot = class_monthly_totals[m_val]['mot']
-            tot = class_monthly_totals[m_val]['tot']
-            tot_class_an_nem += nem
-            tot_class_an_mot += mot
-            total_row[f"{m_label} - Nemotivate"] = nem
-            total_row[f"{m_label} - Motivate"] = mot
-            total_row[f"{m_label} - Total"] = tot
-            
-        total_row["TOTAL AN - Nemotivate"] = tot_class_an_nem
-        total_row["TOTAL AN - Motivate"] = tot_class_an_mot
-        total_row["TOTAL AN - General Absențe"] = tot_class_an_nem + tot_class_an_mot
-        rows.append(total_row)
-        
-    except Exception:
-        pass
-        
-    return rows
-
-def calculate_lunar_subject_absences(file_path):
-    rows = []
-    if not os.path.exists(file_path):
-        return rows
-        
-    try:
-        wb = openpyxl.load_workbook(file_path, data_only=True)
-        ws_cg = wb["Cultură Generală"]
-        ws_th = wb["Module Tehnologice"]
-        
-        class_monthly_totals = {m_val: {'nem': 0, 'mot': 0, 'tot': 0} for _, m_val in MONTH_DEFS}
-        
-        for cat_name, ws, sub_list in [("Cultură Generală", ws_cg, DISCIPLINE_CG), ("Module Tehnologice", ws_th, MODULE_TH)]:
-            for s_name, start_col in sub_list:
-                sub_monthly = {m_val: {'nem': 0, 'mot': 0, 'tot': 0} for _, m_val in MONTH_DEFS}
-                
-                for idx in range(len(ELEVI)):
-                    s_row = 9 + idx
-                    for k in range(30):
-                        val = ws.cell(row=s_row, column=start_col + 21 + k).value
-                        if val is not None and str(val).strip() != "":
-                            m_idx, is_mot = parse_absence_month(val)
-                            if m_idx in sub_monthly:
-                                if is_mot:
-                                    sub_monthly[m_idx]['mot'] += 1
-                                    class_monthly_totals[m_idx]['mot'] += 1
-                                else:
-                                    sub_monthly[m_idx]['nem'] += 1
-                                    class_monthly_totals[m_idx]['nem'] += 1
-                                sub_monthly[m_idx]['tot'] += 1
-                                class_monthly_totals[m_idx]['tot'] += 1
-                                
-                row_dict = {
-                    "Categorie": cat_name,
-                    "Disciplină / Modul": s_name
-                }
-                
-                sub_an_nem = 0
-                sub_an_mot = 0
-                for m_label, m_val in MONTH_DEFS:
-                    nem = sub_monthly[m_val]['nem']
-                    mot = sub_monthly[m_val]['mot']
-                    tot = sub_monthly[m_val]['tot']
-                    sub_an_nem += nem
-                    sub_an_mot += mot
-                    row_dict[f"{m_label} - Nemotivate Clasă"] = nem
-                    row_dict[f"{m_label} - Motivate Clasă"] = mot
-                    row_dict[f"{m_label} - Total Clasă"] = tot
-                    
-                row_dict["TOTAL AN - Nemotivate Clasă"] = sub_an_nem
-                row_dict["TOTAL AN - Motivate Clasă"] = sub_an_mot
-                row_dict["TOTAL AN - General Absențe Clasă"] = sub_an_nem + sub_an_mot
-                rows.append(row_dict)
-                
-        wb.close()
-        
-        total_row = {
-            "Categorie": "TOTAL CLASĂ",
-            "Disciplină / Modul": "TOTAL GENERAL CLASĂ"
-        }
-        tot_class_an_nem = 0
-        tot_class_an_mot = 0
-        for m_label, m_val in MONTH_DEFS:
-            nem = class_monthly_totals[m_val]['nem']
-            mot = class_monthly_totals[m_val]['mot']
-            tot = class_monthly_totals[m_val]['tot']
-            tot_class_an_nem += nem
-            tot_class_an_mot += mot
-            total_row[f"{m_label} - Nemotivate Clasă"] = nem
-            total_row[f"{m_label} - Motivate Clasă"] = mot
-            total_row[f"{m_label} - Total Clasă"] = tot
-            
-        total_row["TOTAL AN - Nemotivate Clasă"] = tot_class_an_nem
-        total_row["TOTAL AN - Motivate Clasă"] = tot_class_an_mot
-        total_row["TOTAL AN - General Absențe Clasă"] = tot_class_an_nem + tot_class_an_mot
-        rows.append(total_row)
-        
-    except Exception:
-        pass
-        
-    return rows
-
-# --- GESTIUNE ELEVI DATA & PERSISTENCE ---
-GESTIUNE_FILE = "gestiune_elevi.json"
-
-DEFAULT_ELEVI_INIT = [
-    (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76"),
-    (2, "BARA D. ADRIAN DANIEL", 14, "126/77"),
-    (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78"),
-    (4, "BUDULĂU I.M. VLAD IOAN", 16, "126/79"),
-    (5, "CHESZOVAN D.E. IRINA JULIETA", 17, "126/80"),
-    (6, "CIURCUI V. DIANA", 18, "126/81"),
-    (7, "CORDIȘ M.C. EDUARD IONUȚ", 19, "126/82"),
-    (8, "DEMETER D.C. DENIS RĂZVAN", 20, "126/83"),
-    (9, "FERENCZI E.C. MEDEA MARICARMEN", 21, "126/84"),
-    (10, "FLOREA V. FLAVIU CRISTIAN", 22, "126/85"),
-    (11, "GHERMAN M.I. DAVID MARIUS", 23, "126/86"),
-    (12, "LOBONȚ M. MIHNEA", 24, "126/87"),
-    (13, "LUKACS A.L. LORENA DENISA", 25, "126/88"),
-    (14, "MAGYARI A.M. ANDREI", 26, "126/89"),
-    (15, "MARCOVICI L.S. IOANA DENISA", 27, "126/90"),
-    (16, "MARIAN M.I. MIHAELA DARIA", 28, "126/91"),
-    (17, "MATEI V.C. ROXANA MIHAELA", 29, "126/92"),
-    (18, "MENCU R.R. DIANA OLIVIA", 30, "126/93"),
-    (19, "MUNTEANU V.N. ELENA", 31, "126/94"),
-    (20, "NAP A.C. ALEXANDRA MARIA", 32, "126/95"),
-    (21, "PETELEU C.A. CLAUDIA MARIA", 33, "126/96"),
-    (22, "POP D. ANDRA MARIA", 34, "126/97"),
-    (23, "POP M.V. LARISA ANDREEA", 35, "126/98"),
-    (24, "POP I.C. ROBERT EUGEN", 36, "126/99"),
-    (25, "POPA C.F. ILINCA", 37, "126/100"),
-    (26, "PUICA G. GEORGE ROBERT", 38, "126/101"),
-    (27, "RĂDUȚ I.M. ADELINA IOANA", 39, "128/1"),
-    (28, "ȘIPOȘ T.R. DAVID ADRIAN", 40, "128/2"),
-    (29, "TRIF S.D. TUȘA DANIEL", 41, "128/3"),
-    (30, "TUȘINEAN S.V. IRINA", 42, "128/4"),
-    (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5"),
-    (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6")
-]
-
-DEFAULT_PINS_INIT = ['2951', '6234', '9233', '9385', '2681', '4658', '7891', '9975', '9042', '8226', '4931', '1041', '2322', '2814', '5706', '2606', '8367', '1188', '9032', '6148', '4444', '7508', '5120', '6696', '6843', '7166', '9414', '2250', '6577', '2469', '9815', '5786']
-
-def split_full_name(full_name):
-    parts = full_name.strip().split()
-    if not parts:
-        return "", "", ""
-    if len(parts) == 1:
-        return parts[0], "", ""
-    
-    nume = parts[0]
-    init = ""
-    prenume_parts = []
-    
-    for p in parts[1:]:
-        if (p.endswith('.') and len(p) <= 4) or (len(p) <= 3 and p.isupper() and not any(c in p for c in ['A','E','I','O','U','Ă','Î','Â'])):
-            if init:
-                init += " " + p
-            else:
-                init = p
-        else:
-            prenume_parts.append(p)
-            
-    if not prenume_parts and init:
-        prenume_parts = [init]
-        init = ""
-        
-    return nume, init, " ".join(prenume_parts)
-
-def init_gestiune_data():
-    data = []
-    for idx, e in enumerate(DEFAULT_ELEVI_INIT):
-        nume, init, prenume = split_full_name(e[1])
-        pin = DEFAULT_PINS_INIT[idx] if idx < len(DEFAULT_PINS_INIT) else "1234"
-        rec = {
-            "id": e[0],
-            "rand_excel": e[2],
-            "matricol": e[3],
-            "pin": pin,
-            "nume": nume,
-            "initiala": init,
-            "prenume": prenume,
-            "nume_complet": e[1],
-            "cnp": "",
-            "telefon": "",
-            "localitate": "Turda",
-            "judet": "Cluj",
-            "strada": "",
-            "numar_strada": "",
-            "bloc": "",
-            "apartament": "",
-            "nume_mama": "",
-            "telefon_mama": "",
-            "mama_plecata": False,
-            "tara_mama": "",
-            "nume_tata": "",
-            "telefon_tata": "",
-            "tata_plecat": False,
-            "tara_tata": "",
-            "nationalitate": "Română",
-            "etnie": "Română",
-            "ces": False,
-            "orfan": False,
-            "plasament": False,
-            "bursa_medicala": False,
-            "bursa_venit": False
-        }
-        data.append(rec)
-    return data
-
-def load_gestiune_data():
-    if os.path.exists(GESTIUNE_FILE):
-        try:
-            with open(GESTIUNE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if data and isinstance(data, list):
-                    return data
-        except Exception:
-            pass
-    data = init_gestiune_data()
-    save_gestiune_data(data)
-    return data
-
-def save_gestiune_data(data):
-    try:
-        with open(GESTIUNE_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        push_to_github(GESTIUNE_FILE)
-    except Exception:
-        pass
-
-def get_current_elevi_and_pins():
-    data = load_gestiune_data()
-    elevi_list = []
-    pins_list = []
-    for idx, d in enumerate(data):
-        nume_full = d.get("nume_complet", f"{d.get('nume','')} {d.get('initiala','')} {d.get('prenume','')}".strip())
-        nume_full = " ".join(nume_full.split())
-        r_excel = d.get("rand_excel", 13 + idx)
-        matr = d.get("matricol", f"126/{idx+1}")
-        pin = str(d.get("pin", DEFAULT_PINS_INIT[idx] if idx < len(DEFAULT_PINS_INIT) else "1234"))
-        
-        elevi_list.append((d.get("id", idx+1), nume_full, r_excel, matr))
-        pins_list.append(pin)
-    return elevi_list, pins_list
-
-def parse_cnp(cnp):
-    cnp_s = str(cnp).strip()
-    if len(cnp_s) != 13 or not cnp_s.isdigit():
-        return None
-    s = int(cnp_s[0])
-    aa = int(cnp_s[1:3])
-    mm = int(cnp_s[3:5])
-    ll = int(cnp_s[5:7])
-    
-    if s in [1, 2]:
-        year = 1900 + aa
-    elif s in [3, 4]:
-        year = 1800 + aa
-    elif s in [5, 6]:
-        year = 2000 + aa
-    else:
-        return None
-        
-    sex = "Băiat" if s in [1, 3, 5] else "Fată"
-    birth_date = f"{ll:02d}.{mm:02d}.{year}"
-    age = 2026 - year
-    return {
-        "sex": sex,
-        "age": age,
-        "birth_date": birth_date
-    }
-
-def get_student_sex(student):
-    cnp_info = parse_cnp(student.get("cnp", ""))
-    if cnp_info:
-        return cnp_info["sex"]
-    prenume = student.get("prenume", "").upper()
-    female_names = ["MARIA", "DIANA", "ELENA", "IRINA", "DENISA", "ANDRA", "LARISA", "ILINCA", "ADELINA", "DELIA", "CLAUDIA", "MADALINA", "JULIETA", "MARICARMEN", "MIHAELA", "ROXANA", "OLIVIA", "ALEXANDRA"]
-    for fn in female_names:
-        if fn in prenume:
-            return "Fată"
-    return "Băiat"
-
-def generate_excel_registru_elevi(data):
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Registru Date Elevi"
-    
-    headers = [
-        "Nr. Crt.", "ID Elev", "Nume de Familie", "Inițiala Tatălui", "Prenume Elev", "Nume Complet",
-        "Număr Matricol", "Cod PIN Părinți", "CNP", "Vârstă (Ani)", "Sex", "Telefon Elev",
-        "Județ", "Localitate", "Stradă", "Nr. Stradă", "Bloc", "Apartament",
-        "Nume Mamă", "Telefon Mamă", "Mamă Plecată Străinătate", "Țară Mamă",
-        "Nume Tată", "Telefon Tată", "Tată Plecat Străinătate", "Țară Tată",
-        "Naționalitate", "Etnie",
-        "CES", "Orfan", "Plasament", "Bursă Socială Medicală", "Bursă Socială Venit"
-    ]
-    
-    header_fill = PatternFill(start_color="1A365D", end_color="1A365D", fill_type="solid")
-    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    data_font = Font(name="Calibri", size=10)
-    thin_border = Border(
-        left=Side(style='thin', color='CBD5E0'), right=Side(style='thin', color='CBD5E0'),
-        top=Side(style='thin', color='CBD5E0'), bottom=Side(style='thin', color='CBD5E0')
-    )
-    
-    for col_idx, h in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col_idx, value=h)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        cell.border = thin_border
-        
-    for idx, d in enumerate(data, 1):
-        cnp_info = parse_cnp(d.get("cnp", ""))
-        sex = get_student_sex(d)
-        varsta = cnp_info["age"] if cnp_info else "N/A"
-        
-        row_vals = [
-            idx, d.get("id", idx), d.get("nume", ""), d.get("initiala", ""), d.get("prenume", ""), d.get("nume_complet", ""),
-            d.get("matricol", ""), str(d.get("pin", "")), f"'{d.get('cnp','')}" if d.get('cnp') else "", varsta, sex, d.get("telefon", ""),
-            d.get("judet", "Cluj"), d.get("localitate", "Turda"), d.get("strada", ""), d.get("numar_strada", ""), d.get("bloc", ""), d.get("apartament", ""),
-            d.get("nume_mama", ""), d.get("telefon_mama", ""), "DA" if d.get("mama_plecata") else "NU", d.get("tara_mama", ""),
-            d.get("nume_tata", ""), d.get("telefon_tata", ""), "DA" if d.get("tata_plecat") else "NU", d.get("tara_tata", ""),
-            d.get("nationalitate", "Română"), d.get("etnie", "Română"),
-            "DA" if d.get("ces") else "NU", "DA" if d.get("orfan") else "NU", "DA" if d.get("plasament") else "NU",
-            "DA" if d.get("bursa_medicala") else "NU", "DA" if d.get("bursa_venit") else "NU"
-        ]
-        
-        for col_idx, val in enumerate(row_vals, 1):
-            cell = ws.cell(row=idx+1, column=col_idx, value=val)
-            cell.font = data_font
-            cell.border = thin_border
-            cell.alignment = Alignment(horizontal="left", vertical="center")
-            
-    for col in ws.columns:
-        max_len = max(len(str(cell.value or '')) for cell in col)
-        col_letter = get_column_letter(col[0].column)
-        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
-        
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    return buffer.getvalue()
-
-def generate_excel_statistica_clasa(data):
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Sintetizat"
-    
-    header_fill = PatternFill(start_color="1A365D", end_color="1A365D", fill_type="solid")
-    total_fill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
-    
-    font_title = Font(name="Calibri", size=14, bold=True, color="1A365D")
-    font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    font_bold = Font(name="Calibri", size=10, bold=True)
-    font_normal = Font(name="Calibri", size=10)
-    
-    thin_border = Border(
-        left=Side(style='thin', color='CBD5E0'), right=Side(style='thin', color='CBD5E0'),
-        top=Side(style='thin', color='CBD5E0'), bottom=Side(style='thin', color='CBD5E0')
-    )
-    
-    curr_row = 1
-    
-    ws.cell(row=curr_row, column=1, value="RAPORT STATISTIC SINTETIC CLASĂ — IX TH TURISM").font = font_title
-    curr_row += 2
-    
-    tot_elevi = len(data)
-    baieti = sum(1 for d in data if get_student_sex(d) == "Băiat")
-    fete = sum(1 for d in data if get_student_sex(d) == "Fată")
-    
-    ws.cell(row=curr_row, column=1, value="1. REPARTIZAREA ELEVILOR PE SEXE").font = Font(name="Calibri", size=11, bold=True, color="2B6CB0")
-    curr_row += 1
-    
-    headers1 = ["Categorie", "Număr Elevi", "Pondere (%)"]
-    for c_i, h in enumerate(headers1, 1):
-        cell = ws.cell(row=curr_row, column=c_i, value=h)
-        cell.fill = header_fill
-        cell.font = font_header
-        cell.border = thin_border
-    curr_row += 1
-    
-    r1 = [("Băieți", baieti, f"{(baieti/tot_elevi*100):.1f}%" if tot_elevi else "0%"),
-          ("Fete", fete, f"{(fete/tot_elevi*100):.1f}%" if tot_elevi else "0%"),
-          ("TOTAL CLASĂ", tot_elevi, "100.0%")]
-          
-    for label, count, pct in r1:
-        is_tot = label == "TOTAL CLASĂ"
-        ws.cell(row=curr_row, column=1, value=label).font = font_bold if is_tot else font_normal
-        ws.cell(row=curr_row, column=2, value=count).font = font_bold if is_tot else font_normal
-        ws.cell(row=curr_row, column=3, value=pct).font = font_bold if is_tot else font_normal
-        for c in range(1, 4):
-            cell = ws.cell(row=curr_row, column=c)
-            cell.border = thin_border
-            if is_tot: cell.fill = total_fill
-        curr_row += 1
-        
-    curr_row += 2
-    
-    ws.cell(row=curr_row, column=1, value="2. GROUPAREA ELEVILOR PE VÂRSTĂ ȘI SEXE").font = Font(name="Calibri", size=11, bold=True, color="2B6CB0")
-    curr_row += 1
-    
-    headers2 = ["Categorie Vârstă", "Total Elevi", "Din care Fete", "Din care Băieți"]
-    for c_i, h in enumerate(headers2, 1):
-        cell = ws.cell(row=curr_row, column=c_i, value=h)
-        cell.fill = header_fill
-        cell.font = font_header
-        cell.border = thin_border
-    curr_row += 1
-    
-    age_groups = {"14 Ani": [], "15 Ani": [], "16 Ani": [], "17+ Ani": []}
-    for d in data:
-        cnp_i = parse_cnp(d.get("cnp", ""))
-        a = cnp_i["age"] if cnp_i else 15
-        if a <= 14: age_groups["14 Ani"].append(d)
-        elif a == 15: age_groups["15 Ani"].append(d)
-        elif a == 16: age_groups["16 Ani"].append(d)
-        else: age_groups["17+ Ani"].append(d)
-        
-    for ag_label, s_list in age_groups.items():
-        ag_tot = len(s_list)
-        ag_fete = sum(1 for s in s_list if get_student_sex(s) == "Fată")
-        ag_baieti = sum(1 for s in s_list if get_student_sex(s) == "Băiat")
-        
-        ws.cell(row=curr_row, column=1, value=ag_label).font = font_normal
-        ws.cell(row=curr_row, column=2, value=ag_tot).font = font_normal
-        ws.cell(row=curr_row, column=3, value=ag_fete).font = font_normal
-        ws.cell(row=curr_row, column=4, value=ag_baieti).font = font_normal
-        for c in range(1, 5): ws.cell(row=curr_row, column=c).border = thin_border
-        curr_row += 1
-        
-    ws.cell(row=curr_row, column=1, value="TOTAL GENERAL").font = font_bold
-    ws.cell(row=curr_row, column=2, value=tot_elevi).font = font_bold
-    ws.cell(row=curr_row, column=3, value=fete).font = font_bold
-    ws.cell(row=curr_row, column=4, value=baieti).font = font_bold
-    for c in range(1, 5):
-        cell = ws.cell(row=curr_row, column=c)
-        cell.border = thin_border
-        cell.fill = total_fill
-    curr_row += 3
-    
-    ws.cell(row=curr_row, column=1, value="3. STRUCTURA PE ETNII ȘI NAȚIONALITĂȚI").font = Font(name="Calibri", size=11, bold=True, color="2B6CB0")
-    curr_row += 1
-    
-    headers3 = ["Etnie / Naționalitate", "Total Elevi", "Din care Fete", "Din care Băieți"]
-    for c_i, h in enumerate(headers3, 1):
-        cell = ws.cell(row=curr_row, column=c_i, value=h)
-        cell.fill = header_fill
-        cell.font = font_header
-        cell.border = thin_border
-    curr_row += 1
-    
-    etnii_map = {}
-    for d in data:
-        et = d.get("etnie", "Română").strip() or "Română"
-        if et not in etnii_map: etnii_map[et] = []
-        etnii_map[et].append(d)
-        
-    for et_label, s_list in etnii_map.items():
-        e_tot = len(s_list)
-        e_fete = sum(1 for s in s_list if get_student_sex(s) == "Fată")
-        e_baieti = sum(1 for s in s_list if get_student_sex(s) == "Băiat")
-        
-        ws.cell(row=curr_row, column=1, value=et_label).font = font_normal
-        ws.cell(row=curr_row, column=2, value=e_tot).font = font_normal
-        ws.cell(row=curr_row, column=3, value=e_fete).font = font_normal
-        ws.cell(row=curr_row, column=4, value=e_baieti).font = font_normal
-        for c in range(1, 5): ws.cell(row=curr_row, column=c).border = thin_border
-        curr_row += 1
-        
-    curr_row += 2
-    
-    ws.cell(row=curr_row, column=1, value="4. BURSE SOCIALE ȘI CERINȚE EDUCAȚIONALE SPECIALE (CES)").font = Font(name="Calibri", size=11, bold=True, color="2B6CB0")
-    curr_row += 1
-    
-    headers4 = ["Tip Bursă / Sprijin", "Total Elevi", "Din care Fete", "Din care Băieți"]
-    for c_i, h in enumerate(headers4, 1):
-        cell = ws.cell(row=curr_row, column=c_i, value=h)
-        cell.fill = header_fill
-        cell.font = font_header
-        cell.border = thin_border
-    curr_row += 1
-    
-    b_med = [d for d in data if d.get("bursa_medicala")]
-    b_ven = [d for d in data if d.get("bursa_venit")]
-    ces_l = [d for d in data if d.get("ces")]
-    
-    specs = [("Bursă Socială Medicală", b_med), ("Bursă Socială Venit", b_ven), ("Elevi cu CES", ces_l)]
-    for label, s_list in specs:
-        s_tot = len(s_list)
-        s_fete = sum(1 for s in s_list if get_student_sex(s) == "Fată")
-        s_baieti = sum(1 for s in s_list if get_student_sex(s) == "Băiat")
-        
-        ws.cell(row=curr_row, column=1, value=label).font = font_normal
-        ws.cell(row=curr_row, column=2, value=s_tot).font = font_normal
-        ws.cell(row=curr_row, column=3, value=s_fete).font = font_normal
-        ws.cell(row=curr_row, column=4, value=s_baieti).font = font_normal
-        for c in range(1, 5): ws.cell(row=curr_row, column=c).border = thin_border
-        curr_row += 1
-        
-    curr_row += 2
-    
-    ws.cell(row=curr_row, column=1, value="5. SITUAȚII SOCIALE SPECIALE (ORFANI ȘI PLASAMENT)").font = Font(name="Calibri", size=11, bold=True, color="2B6CB0")
-    curr_row += 1
-    
-    headers5 = ["Situație Specială", "Total Elevi", "Din care Fete", "Din care Băieți"]
-    for c_i, h in enumerate(headers5, 1):
-        cell = ws.cell(row=curr_row, column=c_i, value=h)
-        cell.fill = header_fill
-        cell.font = font_header
-        cell.border = thin_border
-    curr_row += 1
-    
-    orf_l = [d for d in data if d.get("orfan")]
-    plas_l = [d for d in data if d.get("plasament")]
-    
-    specs2 = [("Elevi Orfani", orf_l), ("Elevi în Plasament", plas_l)]
-    for label, s_list in specs2:
-        s_tot = len(s_list)
-        s_fete = sum(1 for s in s_list if get_student_sex(s) == "Fată")
-        s_baieti = sum(1 for s in s_list if get_student_sex(s) == "Băiat")
-        
-        ws.cell(row=curr_row, column=1, value=label).font = font_normal
-        ws.cell(row=curr_row, column=2, value=s_tot).font = font_normal
-        ws.cell(row=curr_row, column=3, value=s_fete).font = font_normal
-        ws.cell(row=curr_row, column=4, value=s_baieti).font = font_normal
-        for c in range(1, 5): ws.cell(row=curr_row, column=c).border = thin_border
-        curr_row += 1
-        
-    curr_row += 2
-    
-    ws.cell(row=curr_row, column=1, value="6. ELEVI CU PĂRINȚI PLECAȚI ÎN STRĂINĂTATE (PE ȚĂRI)").font = Font(name="Calibri", size=11, bold=True, color="2B6CB0")
-    curr_row += 1
-    
-    headers6 = ["Țară Destinație / Părinte Plecat", "Total Elevi", "Din care Fete", "Din care Băieți"]
-    for c_i, h in enumerate(headers6, 1):
-        cell = ws.cell(row=curr_row, column=c_i, value=h)
-        cell.fill = header_fill
-        cell.font = font_header
-        cell.border = thin_border
-    curr_row += 1
-    
-    tari_map = {}
-    for d in data:
-        if d.get("mama_plecata") and d.get("tara_mama"):
-            t = d.get("tara_mama").strip().title()
-            if t not in tari_map: tari_map[t] = []
-            if d not in tari_map[t]: tari_map[t].append(d)
-        if d.get("tata_plecat") and d.get("tara_tata"):
-            t = d.get("tara_tata").strip().title()
-            if t not in tari_map: tari_map[t] = []
-            if d not in tari_map[t]: tari_map[t].append(d)
-            
-    if tari_map:
-        for t_label, s_list in tari_map.items():
-            t_tot = len(s_list)
-            t_fete = sum(1 for s in s_list if get_student_sex(s) == "Fată")
-            t_baieti = sum(1 for s in s_list if get_student_sex(s) == "Băiat")
-            
-            ws.cell(row=curr_row, column=1, value=t_label).font = font_normal
-            ws.cell(row=curr_row, column=2, value=t_tot).font = font_normal
-            ws.cell(row=curr_row, column=3, value=t_fete).font = font_normal
-            ws.cell(row=curr_row, column=4, value=t_baieti).font = font_normal
-            for c in range(1, 5): ws.cell(row=curr_row, column=c).border = thin_border
-            curr_row += 1
-    else:
-        ws.cell(row=curr_row, column=1, value="Niciun părinte înregistrat ca fiind plecat în străinătate").font = font_normal
-        ws.cell(row=curr_row, column=2, value=0).font = font_normal
-        ws.cell(row=curr_row, column=3, value=0).font = font_normal
-        ws.cell(row=curr_row, column=4, value=0).font = font_normal
-        for c in range(1, 5): ws.cell(row=curr_row, column=c).border = thin_border
-        curr_row += 1
-        
-    for col in ws.columns:
-        max_len = max(len(str(cell.value or '')) for cell in col)
-        col_letter = get_column_letter(col[0].column)
-        ws.column_dimensions[col_letter].width = max(max_len + 4, 15)
-        
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    return buffer.getvalue()
 
 ELEVI, PINS = get_current_elevi_and_pins()
 
@@ -1560,7 +1425,7 @@ def generate_pdf_pins(file_path):
             Paragraph(clean_pdf_text(str(e[0])), cell_style),
             Paragraph(clean_pdf_text(e[1]), cell_style),
             Paragraph(clean_pdf_text(e[3]), cell_style),
-            Paragraph(clean_pdf_text(f"<b>{e[4]}</b>"), cell_bold)
+            Paragraph(clean_pdf_text(f"<b>{e[4] if len(e)>4 else '1234'}</b>"), cell_bold)
         ])
         
     t_pin = Table(pin_table_data, colWidths=[30, 240, 100, 150])
@@ -1818,7 +1683,7 @@ with tab4:
         try:
             wb = openpyxl.load_workbook(selected_file, data_only=True)
             e_info = ELEVI[elev_idx_v]
-            st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[3]}) | Cod PIN Părinți: `{e_info[4]}`")
+            st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[3]}) | Cod PIN Părinți: `{e_info[4] if len(e_info)>4 else '1234'}`")
             
             for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
                 st.markdown(f"#### {cat_title}")
@@ -1895,6 +1760,25 @@ with tab5:
             st.dataframe(c_data, use_container_width=True, hide_index=True)
             
             st.divider()
+            col_lun1, col_lun2 = st.columns(2)
+            with col_lun1:
+                try:
+                    lunar_st_rows = calculate_lunar_student_absences(selected_file)
+                    if lunar_st_rows:
+                        excel_lun_st_bytes = generate_excel_bytes(lunar_st_rows, sheet_name="Absente Lunare Elevi")
+                        st.download_button("📊 Descarcă Absențe Lunare pe Elevi (.xlsx)", data=excel_lun_st_bytes, file_name="Absente_Lunare_Elevi_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                except Exception as ex:
+                    st.error(f"Eroare Excel Absențe Lunare Elevi: {ex}")
+
+            with col_lun2:
+                try:
+                    lunar_sub_rows = calculate_lunar_subject_absences(selected_file)
+                    if lunar_sub_rows:
+                        excel_lun_sub_bytes = generate_excel_bytes(lunar_sub_rows, sheet_name="Absente Lunare Discipline")
+                        st.download_button("📊 Descarcă Absențe Lunare pe Discipline (.xlsx)", data=excel_lun_sub_bytes, file_name="Absente_Lunare_Discipline_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                except Exception as ex:
+                    st.error(f"Eroare Excel Absențe Lunare Discipline: {ex}")
+
             st.subheader("📊 Centralizator Absențe pe Discipline și Module")
             st.caption("Generează raportul sintetic al absențelor defalcat pe fiecare disciplină în parte cu totalurile la nivel de clasă.")
             
@@ -1928,23 +1812,6 @@ with tab5:
                 })
                 
                 st.dataframe(abs_by_sub_rows, use_container_width=True, hide_index=True)
-                
-                col_lun1, col_lun2 = st.columns(2)
-                with col_lun1:
-                    try:
-                        lunar_stud_rows = calculate_lunar_student_absences(selected_file)
-                        excel_lunar_stud_bytes = generate_excel_bytes(lunar_stud_rows, sheet_name="Absente Lunare Elevi")
-                        st.download_button("📊 Descarcă Absențe Lunare pe Elevi (.xlsx)", data=excel_lunar_stud_bytes, file_name="Absente_Lunare_Elevi_Sept2026_Iunie2027.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-                    except Exception as ex:
-                        st.error(f"Eroare Excel Absențe Lunare Elevi: {ex}")
-                        
-                with col_lun2:
-                    try:
-                        lunar_sub_rows = calculate_lunar_subject_absences(selected_file)
-                        excel_lunar_sub_bytes = generate_excel_bytes(lunar_sub_rows, sheet_name="Absente Lunare Discipline")
-                        st.download_button("📊 Descarcă Absențe Lunare pe Discipline (.xlsx)", data=excel_lunar_sub_bytes, file_name="Absente_Lunare_Discipline_Sept2026_Iunie2027.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-                    except Exception as ex:
-                        st.error(f"Eroare Excel Absențe Lunare Discipline: {ex}")
             
             st.divider()
             st.subheader("🔐 Coduri PIN Confidențiale Părinți")
@@ -1964,7 +1831,7 @@ with tab5:
                     "Nr.": str(e[0]),
                     "Nume și Prenume Elev": e[1],
                     "Număr Matricol": e[3],
-                    "COD PIN ACCES PĂRINTE": e[4]
+                    "COD PIN ACCES PĂRINTE": e[4] if len(e)>4 else "1234"
                 })
             st.dataframe(pin_display_data, use_container_width=True, hide_index=True)
         except Exception as ex:
@@ -2152,7 +2019,6 @@ with tab6:
         except Exception as ex:
             st.error(f"Eroare la citire raport: {ex}")
 
-
 # --- TAB 8: GESTIUNE ELEVI ---
 with tab7:
     st.subheader("👥 GESTIUNE ELEVI — Date Personale, Părinți & Situații Speciale")
@@ -2170,171 +2036,132 @@ with tab7:
     st.divider()
     
     if op_gest == "✏️ Modificare Date Elev Existent":
-        if not gest_data:
-            st.warning("⚠️ Nu există elevi înregistrați în baza de date.")
-        else:
-            options_edit = [f"{idx+1}. {d.get('nume_complet', '')} (Matricol {d.get('matricol', '')})" for idx, d in enumerate(gest_data)]
-            sel_idx = st.selectbox("Selectează elevul pentru modificare:", range(len(gest_data)), format_func=lambda i: options_edit[i], key="sel_edit_gest")
+        if gest_data:
+            sel_st_idx = st.selectbox(
+                "Selectează Elevul de Modificat:",
+                range(len(gest_data)),
+                format_func=lambda i: f"{i+1}. {gest_data[i].get('nume_complet', '')} (Matr. {gest_data[i].get('matricol', '')})",
+                key="sel_st_mod"
+            )
+            st_curr = gest_data[sel_st_idx]
             
-            s_edit = gest_data[sel_idx]
-            
-            st.markdown(f"#### 📝 Editare Date: **{s_edit.get('nume_complet', '')}**")
-            
-            with st.form("form_edit_student"):
-                st.markdown("##### 1. 🆔 Identificare & Școlar")
-                c_id1, c_id2, c_id3, c_id4 = st.columns(4)
-                with c_id1:
-                    edit_matr = st.text_input("Număr Matricol:", value=str(s_edit.get("matricol", "")))
-                with c_id2:
-                    edit_cnp = st.text_input("CNP (13 cifre):", value=str(s_edit.get("cnp", "")))
-                with c_id3:
-                    edit_nume = st.text_input("Nume de Familie:", value=str(s_edit.get("nume", "")))
-                with c_id4:
-                    edit_init = st.text_input("Inițiala Tatălui:", value=str(s_edit.get("initiala", "")))
-                    
-                c_id5, c_id6, c_id7, c_id8 = st.columns(4)
-                with c_id5:
-                    edit_prenume = st.text_input("Prenume Elev:", value=str(s_edit.get("prenume", "")))
-                with c_id6:
-                    edit_tel = st.text_input("Telefon Elev:", value=str(s_edit.get("telefon", "")))
-                with c_id7:
-                    edit_nat = st.text_input("Naționalitate:", value=str(s_edit.get("nationalitate", "Română")))
-                with c_id8:
-                    edit_etnie = st.text_input("Etnie:", value=str(s_edit.get("etnie", "Română")))
-                    
-                st.markdown("##### 2. 🏠 Adresă Domiciliu")
-                c_ad1, c_ad2, c_ad3, c_ad4, c_ad5 = st.columns(5)
-                with c_ad1:
-                    edit_loc = st.text_input("Localitate:", value=str(s_edit.get("localitate", "Turda")))
-                with c_ad2:
-                    edit_jud = st.text_input("Județ:", value=str(s_edit.get("judet", "Cluj")))
-                with c_ad3:
-                    edit_str = st.text_input("Stradă:", value=str(s_edit.get("strada", "")))
-                with c_ad4:
-                    edit_nr_str = st.text_input("Nr. Stradă:", value=str(s_edit.get("numar_strada", "")))
-                with c_ad5:
-                    edit_bloc_ap = st.text_input("Bloc / Ap.:", value=f"{s_edit.get('bloc','')}/{s_edit.get('apartament','')}".strip('/'))
-                    
-                st.markdown("##### 3. 👨‍👩‍👧 Informații Părinți & Plecări Străinătate")
-                c_p1, c_p2, c_p3, c_p4 = st.columns(4)
-                with c_p1:
-                    edit_nmama = st.text_input("Nume & Prenume Mamă:", value=str(s_edit.get("nume_mama", "")))
-                with c_p2:
-                    edit_tmama = st.text_input("Telefon Mamă:", value=str(s_edit.get("telefon_mama", "")))
-                with c_p3:
-                    edit_m_plec = st.checkbox("Mamă plecată în străinătate", value=bool(s_edit.get("mama_plecata", False)))
-                with c_p4:
-                    edit_tara_m = st.text_input("Țară Mamă (dacă e plecată):", value=str(s_edit.get("tara_mama", "")))
-                    
-                c_p5, c_p6, c_p7, c_p8 = st.columns(4)
-                with c_p5:
-                    edit_ntata = st.text_input("Nume & Prenume Tată:", value=str(s_edit.get("nume_tata", "")))
-                with c_p6:
-                    edit_ttata = st.text_input("Telefon Tată:", value=str(s_edit.get("telefon_tata", "")))
-                with c_p7:
-                    edit_t_plec = st.checkbox("Tată plecat în străinătate", value=bool(s_edit.get("tata_plecat", False)))
-                with c_p8:
-                    edit_tara_t = st.text_input("Țară Tată (dacă e plecat):", value=str(s_edit.get("tara_tata", "")))
-                    
-                st.markdown("##### 4. 🩺 Situații Speciale, Burse & CES (Bife)")
-                c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
-                with c_b1:
-                    edit_ces = st.checkbox("Elev cu CES", value=bool(s_edit.get("ces", False)))
-                with c_b2:
-                    edit_orfan = st.checkbox("Elev Orfan", value=bool(s_edit.get("orfan", False)))
-                with c_b3:
-                    edit_plas = st.checkbox("Elev în Plasament", value=bool(s_edit.get("plasament", False)))
-                with c_b4:
-                    edit_b_med = st.checkbox("Bursă Soc. Medicală", value=bool(s_edit.get("bursa_medicala", False)))
-                with c_b5:
-                    edit_b_ven = st.checkbox("Bursă Soc. Venit", value=bool(s_edit.get("bursa_venit", False)))
-                    
-                sub_edit_btn = st.form_submit_button("💾 Salvează Date Elev", type="primary", use_container_width=True)
-                
-                if sub_edit_btn:
-                    n_full = f"{edit_nume.strip()} {edit_init.strip()} {edit_prenume.strip()}".strip()
-                    n_full = " ".join(n_full.split())
-                    
-                    b_ap = edit_bloc_ap.split('/')
-                    bl_val = b_ap[0].strip() if len(b_ap) > 0 else ""
-                    ap_val = b_ap[1].strip() if len(b_ap) > 1 else ""
-                    
-                    gest_data[sel_idx]["matricol"] = edit_matr.strip()
-                    gest_data[sel_idx]["cnp"] = edit_cnp.strip()
-                    gest_data[sel_idx]["nume"] = edit_nume.strip()
-                    gest_data[sel_idx]["initiala"] = edit_init.strip()
-                    gest_data[sel_idx]["prenume"] = edit_prenume.strip()
-                    gest_data[sel_idx]["nume_complet"] = n_full
-                    gest_data[sel_idx]["telefon"] = edit_tel.strip()
-                    gest_data[sel_idx]["nationalitate"] = edit_nat.strip()
-                    gest_data[sel_idx]["etnie"] = edit_etnie.strip()
-                    
-                    gest_data[sel_idx]["localitate"] = edit_loc.strip()
-                    gest_data[sel_idx]["judet"] = edit_jud.strip()
-                    gest_data[sel_idx]["strada"] = edit_str.strip()
-                    gest_data[sel_idx]["numar_strada"] = edit_nr_str.strip()
-                    gest_data[sel_idx]["bloc"] = bl_val
-                    gest_data[sel_idx]["apartament"] = ap_val
-                    
-                    gest_data[sel_idx]["nume_mama"] = edit_nmama.strip()
-                    gest_data[sel_idx]["telefon_mama"] = edit_tmama.strip()
-                    gest_data[sel_idx]["mama_plecata"] = edit_m_plec
-                    gest_data[sel_idx]["tara_mama"] = edit_tara_m.strip() if edit_m_plec else ""
-                    
-                    gest_data[sel_idx]["nume_tata"] = edit_ntata.strip()
-                    gest_data[sel_idx]["telefon_tata"] = edit_ttata.strip()
-                    gest_data[sel_idx]["tata_plecat"] = edit_t_plec
-                    gest_data[sel_idx]["tara_tata"] = edit_tara_t.strip() if edit_t_plec else ""
-                    
-                    gest_data[sel_idx]["ces"] = edit_ces
-                    gest_data[sel_idx]["orfan"] = edit_orfan
-                    gest_data[sel_idx]["plasament"] = edit_plas
-                    gest_data[sel_idx]["bursa_medicala"] = edit_b_med
-                    gest_data[sel_idx]["bursa_venit"] = edit_b_ven
-                    
+            with st.form("form_edit_elev"):
+                st.markdown("#### 1. 🆔 Identificare & Școlar")
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    e_nume = st.text_input("Nume de Familie:", value=st_curr.get("nume", ""))
+                    e_initiala = st.text_input("Inițiala Tatălui:", value=st_curr.get("initiala", ""))
+                    e_prenume = st.text_input("Prenume:", value=st_curr.get("prenume", ""))
+                with c2:
+                    e_matr = st.text_input("Număr Matricol:", value=st_curr.get("matricol", ""))
+                    e_cnp = st.text_input("Cod Numeric Personal (CNP):", value=st_curr.get("cnp", ""))
+                    e_tel = st.text_input("Telefon Elev:", value=st_curr.get("telefon", ""))
+                with c3:
+                    e_nat = st.text_input("Naționalitate:", value=st_curr.get("nationalitate", "Română"))
+                    e_etn = st.text_input("Etnie:", value=st_curr.get("etnie", "Română"))
+                    e_pin = st.text_input("PIN Acces Părinte:", value=st_curr.get("pin", "1234"))
+
+                st.markdown("#### 2. 🏠 Adresă Domiciliu")
+                a1, a2, a3 = st.columns(3)
+                with a1:
+                    e_loc = st.text_input("Localitate:", value=st_curr.get("localitate", "Turda"))
+                    e_jud = st.text_input("Județ:", value=st_curr.get("judet", "Cluj"))
+                with a2:
+                    e_str = st.text_input("Stradă:", value=st_curr.get("strada", ""))
+                    e_nr = st.text_input("Număr Stradă:", value=st_curr.get("numar_strada", ""))
+                with a3:
+                    e_bl = st.text_input("Bloc:", value=st_curr.get("bloc", ""))
+                    e_apt = st.text_input("Apartament:", value=st_curr.get("apartament", ""))
+
+                st.markdown("#### 3. 👨‍👩‍👧 Informații Părinți & Plecări Străinătate")
+                m1, m2 = st.columns(2)
+                with m1:
+                    e_nume_m = st.text_input("Nume și Prenume Mamă:", value=st_curr.get("nume_mama", ""))
+                    e_tel_m = st.text_input("Telefon Mamă:", value=st_curr.get("telefon_mama", ""))
+                    e_m_plec = st.checkbox("Mamă plecată în străinătate", value=st_curr.get("mama_plecata", False))
+                    e_tara_m = st.text_input("Țara unde este plecată mama:", value=st_curr.get("tara_mama", ""))
+                with m2:
+                    e_nume_t = st.text_input("Nume și Prenume Tată:", value=st_curr.get("nume_tata", ""))
+                    e_tel_t = st.text_input("Telefon Tată:", value=st_curr.get("telefon_tata", ""))
+                    e_t_plec = st.checkbox("Tată plecat în străinătate", value=st_curr.get("tata_plecat", False))
+                    e_tara_t = st.text_input("Țara unde este plecat tatăl:", value=st_curr.get("tara_tata", ""))
+
+                st.markdown("#### 4. 🩺 Situații Speciale, Burse & CES (Bife)")
+                b1, b2, b3 = st.columns(3)
+                with b1:
+                    e_ces = st.checkbox("Elev cu Cerințe Educaționale Speciale (CES)", value=st_curr.get("ces", False))
+                    e_orfan = st.checkbox("Elev Orfan", value=st_curr.get("orfan", False))
+                with b2:
+                    e_plas = st.checkbox("Elev aflat în Plasament", value=st_curr.get("plasament", False))
+                    e_bmed = st.checkbox("Bursă Socială Medicală", value=st_curr.get("bursa_medicala", False))
+                with b3:
+                    e_bven = st.checkbox("Bursă Socială pe bază de Venit", value=st_curr.get("bursa_venit", False))
+
+                btn_save_edit = st.form_submit_button("💾 Salvează Date Elev", type="primary", use_container_width=True)
+                if btn_save_edit:
+                    n_full = f"{e_nume.strip()} {e_initiala.strip()} {e_prenume.strip()}".replace("  ", " ").strip()
+                    st_curr.update({
+                        "nume": e_nume.strip(),
+                        "initiala": e_initiala.strip(),
+                        "prenume": e_prenume.strip(),
+                        "nume_complet": n_full,
+                        "matricol": e_matr.strip(),
+                        "cnp": e_cnp.strip(),
+                        "telefon": e_tel.strip(),
+                        "nationalitate": e_nat.strip(),
+                        "etnie": e_etn.strip(),
+                        "pin": e_pin.strip(),
+                        "localitate": e_loc.strip(),
+                        "judet": e_jud.strip(),
+                        "strada": e_str.strip(),
+                        "numar_strada": e_nr.strip(),
+                        "bloc": e_bl.strip(),
+                        "apartament": e_apt.strip(),
+                        "nume_mama": e_nume_m.strip(),
+                        "telefon_mama": e_tel_m.strip(),
+                        "mama_plecata": e_m_plec,
+                        "tara_mama": e_tara_m.strip(),
+                        "nume_tata": e_nume_t.strip(),
+                        "telefon_tata": e_tel_t.strip(),
+                        "tata_plecat": e_t_plec,
+                        "tara_tata": e_tara_t.strip(),
+                        "ces": e_ces,
+                        "orfan": e_orfan,
+                        "plasament": e_plas,
+                        "bursa_medicala": e_bmed,
+                        "bursa_venit": e_bven
+                    })
                     save_gestiune_data(gest_data)
-                    st.toast("✅ Datele elevului au fost salvate și sincronizate cu succes!", icon="💾")
-                    st.success(f"✅ Date salvate pentru {n_full}!")
+                    st.success(f"✅ Datele elevului {n_full} au fost salvate cu succes!")
                     st.rerun()
 
     elif op_gest == "➕ Adăugare Elev Nou în Clasă":
-        st.markdown("#### ➕ Adăugare Elev Nou în Catalog")
-        
-        with st.form("form_add_student"):
-            c_a1, c_a2, c_a3, c_a4 = st.columns(4)
-            with c_a1:
-                add_nume = st.text_input("Nume de Familie:*", placeholder="ex: POPA")
-            with c_a2:
-                add_init = st.text_input("Inițiala Tatălui:", placeholder="ex: M.")
-            with c_a3:
-                add_prenume = st.text_input("Prenume Elev:*", placeholder="ex: ANDREI")
-            with c_a4:
-                add_matr = st.text_input("Număr Matricol:*", placeholder="ex: 128/7")
-                
-            c_a5, c_a6, c_a7, c_a8 = st.columns(4)
-            with c_a5:
-                add_cnp = st.text_input("CNP (13 cifre):", placeholder="ex: 5100512...")
-            with c_a6:
-                add_pin = st.text_input("Cod PIN Părinți (4 cifre):", value=str(datetime.datetime.now().microsecond)[:4].zfill(4))
-            with c_a7:
+        with st.form("form_add_elev"):
+            st.markdown("#### Introduceți Datele Noului Elev")
+            a1, a2, a3 = st.columns(3)
+            with a1:
+                add_nume = st.text_input("Nume de Familie:")
+                add_init = st.text_input("Inițiala Tatălui:")
+                add_prenume = st.text_input("Prenume:")
+            with a2:
+                next_id = max([d.get("id", 0) for d in gest_data] or [0]) + 1
+                add_matr = st.text_input("Număr Matricol:", value=f"128/{next_id}")
+                add_cnp = st.text_input("CNP (13 cifre):")
                 add_tel = st.text_input("Telefon Elev:")
-            with c_a8:
-                add_etnie = st.text_input("Etnie:", value="Română")
+            with a3:
+                add_pin = st.text_input("Cod PIN Acces Părinte:", value=str(1000 + next_id))
+                add_nat = st.text_input("Naționalitate:", value="Română")
+                add_etn = st.text_input("Etnie:", value="Română")
                 
-            sub_add_btn = st.form_submit_button("➕ Adaugă Elev în Clasă", type="primary", use_container_width=True)
-            
-            if sub_add_btn:
-                if not add_nume.strip() or not add_prenume.strip() or not add_matr.strip():
-                    st.error("❌ Completați cel puțin Numele, Prenumele și Numărul Matricol!")
+            btn_add = st.form_submit_button("➕ Adaugă Elev în Clasă", type="primary", use_container_width=True)
+            if btn_add:
+                if not add_nume.strip() or not add_prenume.strip():
+                    st.error("Vă rugăm să introduceți cel puțin numele și prenumele elevului!")
                 else:
-                    new_id = max([d.get("id", 0) for d in gest_data] + [0]) + 1
-                    new_rand = 9 + len(gest_data)
-                    n_full = f"{add_nume.strip()} {add_init.strip()} {add_prenume.strip()}".strip()
-                    n_full = " ".join(n_full.split())
-                    
-                    new_rec = {
-                        "id": new_id,
-                        "rand_excel": new_rand,
+                    n_full = f"{add_nume.strip()} {add_init.strip()} {add_prenume.strip()}".replace("  ", " ").strip()
+                    new_item = {
+                        "id": next_id,
+                        "rand_excel": 12 + next_id,
                         "matricol": add_matr.strip(),
                         "pin": add_pin.strip(),
                         "nume": add_nume.strip(),
@@ -2357,60 +2184,58 @@ with tab7:
                         "telefon_tata": "",
                         "tata_plecat": False,
                         "tara_tata": "",
-                        "nationalitate": "Română",
-                        "etnie": add_etnie.strip(),
+                        "nationalitate": add_nat.strip(),
+                        "etnie": add_etn.strip(),
                         "ces": False,
                         "orfan": False,
                         "plasament": False,
                         "bursa_medicala": False,
                         "bursa_venit": False
                     }
-                    gest_data.append(new_rec)
+                    gest_data.append(new_item)
                     save_gestiune_data(gest_data)
-                    st.success(f"✅ Elevul {n_full} a fost adăugat cu succes în catalog!")
+                    st.success(f"✅ Elevul {n_full} a fost adăugat cu succes!")
                     st.rerun()
 
     elif op_gest == "🗑️ Ștergere Elev din Clasă":
-        st.markdown("#### 🗑️ Ștergere Elev din Baza de Date")
-        if not gest_data:
-            st.warning("⚠️ Nu există elevi de șters.")
-        else:
-            options_del = [f"{idx+1}. {d.get('nume_complet', '')} (Matricol {d.get('matricol', '')})" for idx, d in enumerate(gest_data)]
-            sel_del_idx = st.selectbox("Selectează elevul de eliminat:", range(len(gest_data)), format_func=lambda i: options_del[i], key="sel_del_gest")
-            
-            s_del = gest_data[sel_del_idx]
-            st.error(f"⚠️ Sunteți sigur că doriți să ștergeți elevul **{s_del.get('nume_complet', '')}**?")
-            
-            if st.button("🗑️ Confirmă Ștergerea Definitivă", type="primary"):
+        if gest_data:
+            sel_del_idx = st.selectbox(
+                "Selectează Elevul de Șters:",
+                range(len(gest_data)),
+                format_func=lambda i: f"{i+1}. {gest_data[i].get('nume_complet', '')} (Matr. {gest_data[i].get('matricol', '')})",
+                key="sel_st_del"
+            )
+            del_item = gest_data[sel_del_idx]
+            st.warning(f"⚠️ Sunteți sigur că doriți să ștergeți elevul **{del_item.get('nume_complet')}** din baza de date?")
+            if st.button("🗑️ Confirmă Ștergerea Elevului", type="primary", use_container_width=True):
                 removed = gest_data.pop(sel_del_idx)
                 save_gestiune_data(gest_data)
-                st.success(f"✅ Elevul {removed.get('nume_complet', '')} a fost șters din evidență!")
+                st.success(f"✅ Elevul {removed.get('nume_complet')} a fost șters din clasă.")
                 st.rerun()
-                
+
     st.divider()
-    st.markdown("#### 📊 Export Registru & Raport Statistic Clasă (Excel)")
-    
-    col_exp1, col_ex2 = st.columns(2)
-    with col_exp1:
+    st.markdown("#### 📊 Export Registru & Statistică Clasă (Excel)")
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
         try:
             excel_reg_bytes = generate_excel_registru_elevi(gest_data)
             st.download_button(
                 "📊 Descarcă Registru Date Elevi (.xlsx)",
                 data=excel_reg_bytes,
-                file_name="Registru_Date_Generale_Elevi_IX_TH.xlsx",
+                file_name="Registru_Gestiune_Elevi_IX_TH.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
         except Exception as ex:
             st.error(f"Eroare la generare Registru Excel: {ex}")
-            
-    with col_ex2:
+
+    with col_g2:
         try:
             excel_stat_bytes = generate_excel_statistica_clasa(gest_data)
             st.download_button(
                 "📊 Descarcă Statistica Clasa (.xlsx)",
                 data=excel_stat_bytes,
-                file_name="Statistica_Sintetica_Clasa_IX_TH.xlsx",
+                file_name="Statistica_Clasa_IX_TH.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )

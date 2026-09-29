@@ -21,7 +21,12 @@ def sync_excel_from_github():
     ts = int(datetime.datetime.now().timestamp())
     raw_url = f"https://raw.githubusercontent.com/profudeconta-sketch/catalog-online/main/{filename}?t={ts}"
     
-    token = os.environ.get("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
+    token = os.environ.get("GITHUB_TOKEN") or ""
+    try:
+        if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+            token = token or st.secrets["GITHUB_TOKEN"]
+    except Exception:
+        pass
     headers = {"User-Agent": "StreamlitApp", "Cache-Control": "no-cache"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -58,8 +63,6 @@ def sync_excel_from_github():
 # Sincronizare la incarcarea portalului
 sync_excel_from_github()
 
-# Lista celor 32 de elevi (ID, Nume, RM/PG, Nr. Matr., PIN)
-
 GESTIUNE_FILE = "gestiune_elevi.json"
 
 def sync_gestiune_from_github():
@@ -68,9 +71,11 @@ def sync_gestiune_from_github():
     raw_url = f"https://raw.githubusercontent.com/profudeconta-sketch/catalog-online/main/{filename}?t={ts}"
     token = os.environ.get("GITHUB_TOKEN") or ""
     try:
-        token = token or st.secrets.get("GITHUB_TOKEN", "")
+        if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+            token = token or st.secrets["GITHUB_TOKEN"]
     except Exception:
         pass
+        
     headers = {"User-Agent": "StreamlitApp", "Cache-Control": "no-cache"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -87,31 +92,36 @@ def sync_gestiune_from_github():
         pass
     return filename
 
-sync_gestiune_from_github()
+try:
+    sync_gestiune_from_github()
+except Exception:
+    pass
 
-def get_parinti_elevi(default_elevi):
+def get_current_elevi_parinti(default_elevi):
     if os.path.exists(GESTIUNE_FILE):
         try:
             with open(GESTIUNE_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if data and isinstance(data, list):
+                if isinstance(data, list) and len(data) > 0:
                     elevi_list = []
                     for d in data:
-                        nume_full = d.get('nume_complet', f"{d.get('nume','')} {d.get('initiala','')} {d.get('prenume','')}".strip())
+                        nume_full = d.get("nume_complet", f"{d.get('nume','')} {d.get('initiala','')} {d.get('prenume','')}".strip())
                         nume_full = " ".join(nume_full.split())
                         elevi_list.append((
-                            d['id'],
+                            d["id"],
                             nume_full,
-                            d.get('rand_excel', 12 + d['id']),
-                            d['matricol'],
-                            str(d.get('pin', '1234'))
+                            d.get("rand_excel", 12 + d["id"]),
+                            d["matricol"],
+                            str(d.get("pin", "1234"))
                         ))
                     return elevi_list
         except Exception:
             pass
     return default_elevi
 
-DEFAULT_ELEVI_PARINTI = [
+
+# Lista celor 32 de elevi (ID, Nume, RM/PG, Nr. Matr., PIN)
+DEFAULT_ELEVI = [
     (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76", "2951"),
     (2, "BARA D. ADRIAN DANIEL", 14, "126/77", "6234"),
     (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78", "9233"),
@@ -146,8 +156,7 @@ DEFAULT_ELEVI_PARINTI = [
     (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6", "5786")
 ]
 
-
-ELEVI = get_parinti_elevi(DEFAULT_ELEVI_PARINTI)
+ELEVI = get_current_elevi_parinti(DEFAULT_ELEVI)
 
 DISCIPLINE_CG = [
     ("Limba și literatura română", 8),
