@@ -13,20 +13,13 @@ st.set_page_config(
     layout="wide"
 )
 
-WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxf-chEeMc6pA02EU0-pwqMTVp8htzzku6TvX5Uhea_nqqCNEcT3D6RYrmke1n0tAwD/exec"
-
 # --- FUNCTIE DE SINCRONIZARE SI DESCARCARE AUTOMATA EXCEL DIN GITHUB ---
 def sync_excel_from_github():
     filename = "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
     ts = int(datetime.datetime.now().timestamp())
     raw_url = f"https://raw.githubusercontent.com/profudeconta-sketch/catalog-online/main/{filename}?t={ts}"
     
-    token = os.environ.get("GITHUB_TOKEN")
-    if not token:
-        try:
-            token = st.secrets.get("GITHUB_TOKEN", "")
-        except Exception:
-            token = ""
+    token = os.environ.get("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
     headers = {"User-Agent": "StreamlitApp", "Cache-Control": "no-cache"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -63,65 +56,8 @@ def sync_excel_from_github():
 # Sincronizare la incarcarea portalului
 sync_excel_from_github()
 
-
-GESTIUNE_FILE = "gestiune_elevi.json"
-
-def sync_gestiune_from_github():
-    filename = GESTIUNE_FILE
-    ts = int(datetime.datetime.now().timestamp())
-    raw_url = f"https://raw.githubusercontent.com/profudeconta-sketch/catalog-online/main/{filename}?t={ts}"
-    token = os.environ.get("GITHUB_TOKEN")
-    if not token:
-        try:
-            token = st.secrets.get("GITHUB_TOKEN", "")
-        except Exception:
-            token = ""
-    headers = {"User-Agent": "StreamlitApp", "Cache-Control": "no-cache"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    try:
-        req = urllib.request.Request(raw_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            if resp.status == 200:
-                content = resp.read()
-                if len(content) > 10:
-                    with open(filename, "wb") as f:
-                        f.write(content)
-                    return filename
-    except Exception:
-        pass
-    return filename
-
-try:
-    sync_gestiune_from_github()
-except Exception:
-    pass
-
-def load_gestiune_elevi_parinti(default_elevi):
-    if os.path.exists(GESTIUNE_FILE):
-        try:
-            with open(GESTIUNE_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if data and isinstance(data, list):
-                    elevi_list = []
-                    for d in data:
-                        nume_full = d.get('nume_complet', f"{d.get('nume','')} {d.get('initiala','')} {d.get('prenume','')}".strip())
-                        nume_full = ' '.join(nume_full.split())
-                        elevi_list.append((
-                            d['id'],
-                            nume_full,
-                            d.get('rand_excel', 12 + d['id']),
-                            d['matricol'],
-                            str(d.get('pin', '1234'))
-                        ))
-                    return elevi_list
-        except Exception:
-            pass
-    return default_elevi
-
-
 # Lista celor 32 de elevi (ID, Nume, RM/PG, Nr. Matr., PIN)
-DEFAULT_ELEVI_PARINTI = [
+ELEVI = [
     (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76", "2951"),
     (2, "BARA D. ADRIAN DANIEL", 14, "126/77", "6234"),
     (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78", "9233"),
@@ -155,8 +91,6 @@ DEFAULT_ELEVI_PARINTI = [
     (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5", "9815"),
     (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6", "5786")
 ]
-
-ELEVI = load_gestiune_elevi_parinti(DEFAULT_ELEVI_PARINTI)
 
 DISCIPLINE_CG = [
     ("Limba și literatura română", 8),
@@ -254,44 +188,11 @@ elif not pin_correct:
 else:
     col_hdr1, col_hdr2 = st.columns([3, 1])
     with col_hdr1:
-       st.success(
-        f"✅ Autentificare securizată reușită pentru elevul:"
-        f" **{student_found[1]}** (Matricol {student_found[3]})"
-    )
-
-    # --- ÎNREGISTRARE CONECTARE ÎN GOOGLE SHEETS (O SINGURĂ DATĂ PER SESIUNE) ---
-    if "logged_to_sheet" not in st.session_state:
-      st.session_state["logged_to_sheet"] = False
-
-    if not st.session_state["logged_to_sheet"]:
-      import requests
-
-      try:
-        nume_e = requests.utils.quote(str(student_found[1]))
-        matr_e = requests.utils.quote(str(student_found[3]))
-        url_call = f"{WEBAPP_URL}?elev={nume_e}&matricol={matr_e}"
-
-        res = requests.get(url_call, timeout=8)
-
-        if "SUCCESS_LOGGED" in res.text:
-          st.session_state["logged_to_sheet"] = True
-          st.toast(
-              "✅ Autentificarea a fost înregistrată în Google Sheet!", icon="📊"
-          )
-        else:
-          st.warning(
-              "⚠️ Răspuns Google: "
-              + (res.text[:100] if res.text else "Niciun răspuns")
-          )
-      except Exception as err:
-        st.warning(f"⚠️ Eroare conectare Google Sheet: {err}")
-
+        st.success(f"✅ Autentificare securizată reușită pentru elevul: **{student_found[1]}** (Matricol {student_found[3]})")
     with col_hdr2:
-      if st.button(
-          "🔄 Actualizează Datele", use_container_width=True, type="primary"
-      ):
-        sync_excel_from_github()
-        st.rerun()
+        if st.button("🔄 Actualizează Datele", use_container_width=True, type="primary"):
+            sync_excel_from_github()
+            st.rerun()
 
     st.divider()
 
