@@ -863,6 +863,20 @@ def generate_pdf_pins(file_path):
     buffer.seek(0)
     return buffer
 
+def generate_excel_bytes(data_rows, sheet_name="Raport"):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = sheet_name
+    if data_rows:
+        headers = list(data_rows[0].keys())
+        ws.append(headers)
+        for r in data_rows:
+            ws.append([r[h] for h in headers])
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
 # --- TAB 1: NOTĂ ---
 with tab1:
     st.subheader("Adăugare Notă Nouă (Sloturi N1 - N10)")
@@ -1300,6 +1314,11 @@ with tab6:
                 "Total Absențe Clasă": tot_class_all
             })
             st.dataframe(abs_rap_rows, use_container_width=True, hide_index=True)
+            try:
+                excel_abs_bytes = generate_excel_bytes(abs_rap_rows, sheet_name="Absente Discipline")
+                st.download_button("📊 Descarcă Raport Centralizat Absențe (.xlsx)", data=excel_abs_bytes, file_name="Raport_Centralizat_Absente_Discipline_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            except Exception as ex:
+                st.error(f"Eroare la generare Excel: {ex}")
             
             st.divider()
             st.markdown("#### 🏆 Clasament Complet Elevi în Funcție de Absențe (32 Elevi)")
@@ -1326,6 +1345,53 @@ with tab6:
                     "Absențe la Disciplina Maximă": max_sub_det
                 })
             st.dataframe(rank_abs_rows, use_container_width=True, hide_index=True)
+            
+            sorted_tot_stats = sorted(stats, key=lambda x: (x['tot_abs'], x['abs_nem']), reverse=True)
+            rank_tot_rows = []
+            for r_idx, s in enumerate(sorted_tot_stats):
+                max_sub_str = f"{s['max_sub']}"
+                max_sub_det = f"{s['max_sub_info']['tot']} tot ({s['max_sub_info']['nem']} nem. / {s['max_sub_info']['mot']} mot.)" if s['max_sub_info']['tot'] > 0 else "0 absențe"
+                rank_tot_rows.append({
+                    "Loc Absențe": r_idx + 1,
+                    "Nume și Prenume Elev": s['nume'],
+                    "Matricol": s['matr'],
+                    "Total Absențe": s['tot_abs'],
+                    "Absențe Nemotivate": s['abs_nem'],
+                    "Absențe Motivate": s['abs_mot'],
+                    "Disciplina cu Cele Mai Multe Absențe": max_sub_str,
+                    "Absențe la Disciplina Maximă": max_sub_det
+                })
+
+            sorted_nem_stats = sorted(stats, key=lambda x: (x['abs_nem'], x['tot_abs']), reverse=True)
+            rank_nem_rows = []
+            for r_idx, s in enumerate(sorted_nem_stats):
+                max_sub_str = f"{s['max_sub']}"
+                max_sub_det = f"{s['max_sub_info']['tot']} tot ({s['max_sub_info']['nem']} nem. / {s['max_sub_info']['mot']} mot.)" if s['max_sub_info']['tot'] > 0 else "0 absențe"
+                rank_nem_rows.append({
+                    "Loc Absențe": r_idx + 1,
+                    "Nume și Prenume Elev": s['nume'],
+                    "Matricol": s['matr'],
+                    "Total Absențe": s['tot_abs'],
+                    "Absențe Nemotivate": s['abs_nem'],
+                    "Absențe Motivate": s['abs_mot'],
+                    "Disciplina cu Cele Mai Multe Absențe": max_sub_str,
+                    "Absențe la Disciplina Maximă": max_sub_det
+                })
+
+            col_ex1, col_ex2 = st.columns(2)
+            with col_ex1:
+                try:
+                    excel_tot_bytes = generate_excel_bytes(rank_tot_rows, sheet_name="Clasament Total Absente")
+                    st.download_button("📊 Descarcă Clasament după Total Absențe (.xlsx)", data=excel_tot_bytes, file_name="Clasament_Elevi_Dupa_Total_Absente_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                except Exception as ex:
+                    st.error(f"Eroare la generare Excel: {ex}")
+
+            with col_ex2:
+                try:
+                    excel_nem_bytes = generate_excel_bytes(rank_nem_rows, sheet_name="Clasament Absente Nemotivate")
+                    st.download_button("📊 Descarcă Clasament după Absențe Nemotivate (.xlsx)", data=excel_nem_bytes, file_name="Clasament_Elevi_Dupa_Absente_Nemotivate_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                except Exception as ex:
+                    st.error(f"Eroare la generare Excel: {ex}")
 
             st.divider()
             st.markdown("#### 📈 Distribuția Mediilor Generale")
