@@ -141,9 +141,6 @@ DEFAULT_ELEVI_PARINTI = [
     (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6", "5786")
 ]
 
-ELEVI = load_gestiune_data_parinti(DEFAULT_ELEVI_PARINTI)
-
-
 DISCIPLINE_CG = [
     ("Limba și literatura română", 8),
     ("Limba engleză (L1)", 61),
@@ -160,6 +157,9 @@ DISCIPLINE_CG = [
     ("Religie", 644),
     ("Arte vizuale și educație plastică", 697)
 ]
+
+ELEVI = load_gestiune_data_parinti(DEFAULT_ELEVI_PARINTI)
+
 
 MODULE_TH = [
     ("M1: Bazele contabilității", 8),

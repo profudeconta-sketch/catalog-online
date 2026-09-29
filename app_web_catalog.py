@@ -1,233 +1,43 @@
-import datetime
-import os
-import openpyxl
-import streamlit as st
-import urllib.request
-import urllib.parse
-import json
-import base64
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-import io
 
-st.set_page_config(
-    page_title="Catalog Școlar Online IX TH",
-    page_icon="🏫",
-    layout="wide"
-)
-
-# --- SINCRONIZARE AUTOMATĂ PE GITHUB VIA API ---
-def push_to_github(file_path):
-    token = os.environ.get("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
-    if not token:
-        return
-    try:
-        repo = "profudeconta-sketch/catalog-online"
-        filename = os.path.basename(file_path)
-        url = f"https://api.github.com/repos/{repo}/contents/{filename}"
-        
-        req_get = urllib.request.Request(
-            url, 
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github.v3+json",
-                "User-Agent": "StreamlitApp"
-            }
-        )
-        sha = None
-        try:
-            with urllib.request.urlopen(req_get, timeout=5) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                sha = data.get('sha')
-        except Exception:
-            pass
-
-        with open(file_path, "rb") as f:
-            content_b64 = base64.b64encode(f.read()).decode('utf-8')
-
-        payload = {
-            "message": f"Update automat catalog: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}",
-            "content": content_b64
-        }
-        if sha:
-            payload["sha"] = sha
-
-        req_put = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode('utf-8'),
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-                "Accept": "application/vnd.github.v3+json",
-                "User-Agent": "StreamlitApp"
-            },
-            method="PUT"
-        )
-        with urllib.request.urlopen(req_put, timeout=5) as resp:
-            if 200 <= resp.status <= 299:
-                st.toast("☁️ Modificările s-au sincronizat automat pe GitHub!")
-    except Exception:
-        pass
-
-# --- CONFIGURARE FONT UNICODE PENTRU DIACRITICE (PDF) ---
-def get_pdf_font():
-    font_paths = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Regular.ttf"
-    ]
-    font_bold_paths = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-        "/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Bold.ttf"
-    ]
-    
-    font_name = "Helvetica"
-    font_bold_name = "Helvetica-Bold"
-    
-    for fp in font_paths:
-        if os.path.exists(fp):
-            try:
-                pdfmetrics.registerFont(TTFont("CustomUnicode", fp))
-                font_name = "CustomUnicode"
-                break
-            except Exception:
-                pass
-                
-    for fbp in font_bold_paths:
-        if os.path.exists(fbp):
-            try:
-                pdfmetrics.registerFont(TTFont("CustomUnicodeBold", fbp))
-                font_bold_name = "CustomUnicodeBold"
-                break
-            except Exception:
-                pass
-                
-    return font_name, font_bold_name
-
-PDF_FONT, PDF_FONT_BOLD = get_pdf_font()
-
-def safe_str(val):
-    if val is None:
-        return ""
-    return str(val).strip()
-
-def safe_float_str(val):
-    if val is None or val == "":
-        return "-"
-    try:
-        return f"{float(val):.2f}"
-    except Exception:
-        return str(val)
-
-def clean_pdf_text(text):
-    if PDF_FONT == "Helvetica":
-        rep = {'ă':'a', 'Ă':'A', 'â':'a', 'Â':'A', 'î':'i', 'Î':'I', 'ș':'s', 'Ș':'S', 'ț':'t', 'Ț':'T'}
-        for k, v in rep.items():
-            text = text.replace(k, v)
-    return text
-
-def render_copyright_footer():
-    st.markdown("---")
-    st.markdown(
-        """
-        <div style="text-align: center; color: #4A5568; font-size: 0.83rem; line-height: 1.6; padding: 16px 12px; background-color: #F7FAFC; border-radius: 8px; border: 1px solid #E2E8F0; margin-top: 25px; margin-bottom: 10px;">
-            <div style="font-size: 0.95rem; font-weight: bold; color: #1A365D; margin-bottom: 4px;">
-                © Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor
-            </div>
-            <div>
-                Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.<br/>
-                Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.<br/>
-                <span style="color: #C53030; font-weight: bold;">🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!</span><br/>
-                Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-def render_sidebar_copyright():
-    st.sidebar.divider()
-    st.sidebar.markdown(
-        """
-        <div style='font-size: 0.78rem; color: #718096; line-height: 1.4;'>
-            <b>© Prof. Ec. Gherman Octavian-Theodor</b><br/>
-            Drepturi de autor rezervate.<br/>
-            <span style='color: #E53E3E; font-weight: bold;'>Comercializarea interzisă.</span><br/>
-            Utilizare gratuită doar cu acordul autorului.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-# AUTENTIFICARE PROFESORI
-PAROLA_PROFESORI = "profesori2026"
-
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-
-if not st.session_state["authenticated"]:
-    st.title("🔒 Conectare Catalog Profesori")
-    st.caption("Colegiul 'Emil Negruțiu' Turda — Clasa a IX-a TH")
-    
-    with st.form("login_form"):
-        pwd_input = st.text_input("🔑 Introduceți Parola de Acces Profesori:", type="password")
-        submit_btn = st.form_submit_button("🔓 Conectare", type="primary", use_container_width=True)
-        if submit_btn:
-            if pwd_input == PAROLA_PROFESORI:
-                st.session_state["authenticated"] = True
-                st.success("✅ Autentificare reușită!")
-                st.rerun()
-            else:
-                st.error("❌ Parolă incorectă! Vă rugăm să încercați din nou.")
-    
-    render_copyright_footer()
-    st.stop()
-
-# Lista celor 32 de elevi (ID, Nume, RM/PG, Nr. Matr., PIN)
-
-# --- MODUL GESTIUNE ELEVI & EVIDENȚĂ (PERSISTENȚĂ ȘI SINCRONIZARE) ---
+# --- MOCUL GESTIUNE ELEVI & EVIDENȚĂ (PERSISTENȚĂ ȘI SINCRONIZARE) ---
 GESTIUNE_FILE = "gestiune_elevi.json"
 
-DEFAULT_ELEVI_TUPLES = [
-    (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76", "2951"),
-    (2, "BARA D. ADRIAN DANIEL", 14, "126/77", "6234"),
-    (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78", "9233"),
-    (4, "BUDULĂU I.M. VLAD IOAN", 16, "126/79", "9385"),
-    (5, "CHESZOVAN D.E. IRINA JULIETA", 17, "126/80", "2681"),
-    (6, "CIURCUI V. DIANA", 18, "126/81", "4658"),
-    (7, "CORDIȘ M.C. EDUARD IONUȚ", 19, "126/82", "7891"),
-    (8, "DEMETER D.C. DENIS RĂZVAN", 20, "126/83", "9975"),
-    (9, "FERENCZI E.C. MEDEA MARICARMEN", 21, "126/84", "9042"),
-    (10, "FLOREA V. FLAVIU CRISTIAN", 22, "126/85", "8226"),
-    (11, "GHERMAN M.I. DAVID MARIUS", 23, "126/86", "4931"),
-    (12, "LOBONȚ M. MIHNEA", 24, "126/87", "1041"),
-    (13, "LUKACS A.L. LORENA DENISA", 25, "126/88", "2322"),
-    (14, "MAGYARI A.M. ANDREI", 26, "126/89", "2814"),
-    (15, "MARCOVICI L.S. IOANA DENISA", 27, "126/90", "5706"),
-    (16, "MARIAN M.I. MIHAELA DARIA", 28, "126/91", "2606"),
-    (17, "MATEI V.C. ROXANA MIHAELA", 29, "126/92", "8367"),
-    (18, "MENCU R.R. DIANA OLIVIA", 30, "126/93", "1188"),
-    (19, "MUNTEANU V.N. ELENA", 31, "126/94", "9032"),
-    (20, "NAP A.C. ALEXANDRA MARIA", 32, "126/95", "6148"),
-    (21, "PETELEU C.A. CLAUDIA MARIA", 33, "126/96", "4444"),
-    (22, "POP D. ANDRA MARIA", 34, "126/97", "7508"),
-    (23, "POP M.V. LARISA ANDREEA", 35, "126/98", "5120"),
-    (24, "POP I.C. ROBERT EUGEN", 36, "126/99", "6696"),
-    (25, "POPA C.F. ILINCA", 37, "126/100", "6843"),
-    (26, "PUICA G. GEORGE ROBERT", 38, "126/101", "7166"),
-    (27, "RĂDUȚ I.M. ADELINA IOANA", 39, "128/1", "9414"),
-    (28, "ȘIPOȘ T.R. DAVID ADRIAN", 40, "128/2", "2250"),
-    (29, "TRIF S.D. TUȘA DANIEL", 41, "128/3", "6577"),
-    (30, "TUȘINEAN S.V. IRINA", 42, "128/4", "2469"),
-    (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5", "9815"),
-    (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6", "5786")
+DEFAULT_ELEVI = [
+    (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76"),
+    (2, "BARA D. ADRIAN DANIEL", 14, "126/77"),
+    (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78"),
+    (4, "BUDULĂU I.M. VLAD IOAN", 16, "126/79"),
+    (5, "CHESZOVAN D.E. IRINA JULIETA", 17, "126/80"),
+    (6, "CIURCUI V. DIANA", 18, "126/81"),
+    (7, "CORDIȘ M.C. EDUARD IONUȚ", 19, "126/82"),
+    (8, "DEMETER D.C. DENIS RĂZVAN", 20, "126/83"),
+    (9, "FERENCZI E.C. MEDEA MARICARMEN", 21, "126/84"),
+    (10, "FLOREA V. FLAVIU CRISTIAN", 22, "126/85"),
+    (11, "GHERMAN M.I. DAVID MARIUS", 23, "126/86"),
+    (12, "LOBONȚ M. MIHNEA", 24, "126/87"),
+    (13, "LUKACS A.L. LORENA DENISA", 25, "126/88"),
+    (14, "MAGYARI A.M. ANDREI", 26, "126/89"),
+    (15, "MARCOVICI L.S. IOANA DENISA", 27, "126/90"),
+    (16, "MARIAN M.I. MIHAELA DARIA", 28, "126/91"),
+    (17, "MATEI V.C. ROXANA MIHAELA", 29, "126/92"),
+    (18, "MENCU R.R. DIANA OLIVIA", 30, "126/93"),
+    (19, "MUNTEANU V.N. ELENA", 31, "126/94"),
+    (20, "NAP A.C. ALEXANDRA MARIA", 32, "126/95"),
+    (21, "PETELEU C.A. CLAUDIA MARIA", 33, "126/96"),
+    (22, "POP D. ANDRA MARIA", 34, "126/97"),
+    (23, "POP M.V. LARISA ANDREEA", 35, "126/98"),
+    (24, "POP I.C. ROBERT EUGEN", 36, "126/99"),
+    (25, "POPA C.F. ILINCA", 37, "126/100"),
+    (26, "PUICA G. GEORGE ROBERT", 38, "126/101"),
+    (27, "RĂDUȚ I.M. ADELINA IOANA", 39, "128/1"),
+    (28, "ȘIPOȘ T.R. DAVID ADRIAN", 40, "128/2"),
+    (29, "TRIF S.D. TUȘA DANIEL", 41, "128/3"),
+    (30, "TUȘINEAN S.V. IRINA", 42, "128/4"),
+    (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5"),
+    (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6")
 ]
+
+DEFAULT_PINS = ['2951', '6234', '9233', '9385', '2681', '4658', '7891', '9975', '9042', '8226', '4931', '1041', '2322', '2814', '5706', '2606', '8367', '1188', '9032', '6148', '4444', '7508', '5120', '6696', '6843', '7166', '9414', '2250', '6577', '2469', '9815', '5786']
 
 def sync_gestiune_from_github():
     filename = GESTIUNE_FILE
@@ -267,8 +77,9 @@ def parse_student_name_parts(nume_complet):
 
 def init_gestiune_data():
     data = []
-    for idx, (e_id, full_name, r_ex, matr, pin) in enumerate(DEFAULT_ELEVI_TUPLES):
+    for idx, (e_id, full_name, r_ex, matr) in enumerate(DEFAULT_ELEVI):
         nume, init, prenume = parse_student_name_parts(full_name)
+        pin = DEFAULT_PINS[idx] if idx < len(DEFAULT_PINS) else "1234"
         data.append({
             'id': e_id,
             'rand_excel': r_ex,
@@ -323,14 +134,16 @@ def save_gestiune_data(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
     push_to_github(GESTIUNE_FILE)
 
-def get_current_elevi_catalog():
+def get_current_elevi_and_pins():
     data = load_gestiune_data()
     elevi_list = []
+    pins_list = []
     for d in data:
         full = d.get('nume_complet', f"{d.get('nume','')} {d.get('initiala','')} {d.get('prenume','')}".strip())
         full = " ".join(full.split())
-        elevi_list.append((d['id'], full, d.get('rand_excel', 12 + d['id']), d['matricol'], str(d.get('pin', '1234'))))
-    return elevi_list
+        elevi_list.append((d['id'], full, d.get('rand_excel', 12 + d['id']), d['matricol']))
+        pins_list.append(str(d.get('pin', '1234')))
+    return elevi_list, pins_list
 
 def get_student_sex(st_dict):
     cnp = str(st_dict.get('cnp', '')).strip()
@@ -672,8 +485,232 @@ def generate_excel_statistica_clasa(data):
     return buf.getvalue()
 
 
-ELEVI = get_current_elevi_catalog()
-PINS = [e[4] for e in ELEVI]
+ELEVI, PINS = get_current_elevi_and_pins()import datetime
+import os
+import openpyxl
+import streamlit as st
+import urllib.request
+import urllib.parse
+import json
+import base64
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import io
+
+st.set_page_config(
+    page_title="Catalog Școlar Online IX TH",
+    page_icon="🏫",
+    layout="wide"
+)
+
+# --- SINCRONIZARE AUTOMATĂ PE GITHUB VIA API ---
+def push_to_github(file_path):
+    token = os.environ.get("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
+    if not token:
+        return
+    try:
+        repo = "profudeconta-sketch/catalog-online"
+        filename = os.path.basename(file_path)
+        url = f"https://api.github.com/repos/{repo}/contents/{filename}"
+        
+        req_get = urllib.request.Request(
+            url, 
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "StreamlitApp"
+            }
+        )
+        sha = None
+        try:
+            with urllib.request.urlopen(req_get, timeout=5) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                sha = data.get('sha')
+        except Exception:
+            pass
+
+        with open(file_path, "rb") as f:
+            content_b64 = base64.b64encode(f.read()).decode('utf-8')
+
+        payload = {
+            "message": f"Update automat catalog: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}",
+            "content": content_b64
+        }
+        if sha:
+            payload["sha"] = sha
+
+        req_put = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode('utf-8'),
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "StreamlitApp"
+            },
+            method="PUT"
+        )
+        with urllib.request.urlopen(req_put, timeout=5) as resp:
+            if 200 <= resp.status <= 299:
+                st.toast("☁️ Modificările s-au sincronizat automat pe GitHub!")
+    except Exception:
+        pass
+
+# --- CONFIGURARE FONT UNICODE PENTRU DIACRITICE (PDF) ---
+def get_pdf_font():
+    font_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Regular.ttf"
+    ]
+    font_bold_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Bold.ttf"
+    ]
+    
+    font_name = "Helvetica"
+    font_bold_name = "Helvetica-Bold"
+    
+    for fp in font_paths:
+        if os.path.exists(fp):
+            try:
+                pdfmetrics.registerFont(TTFont("CustomUnicode", fp))
+                font_name = "CustomUnicode"
+                break
+            except Exception:
+                pass
+                
+    for fbp in font_bold_paths:
+        if os.path.exists(fbp):
+            try:
+                pdfmetrics.registerFont(TTFont("CustomUnicodeBold", fbp))
+                font_bold_name = "CustomUnicodeBold"
+                break
+            except Exception:
+                pass
+                
+    return font_name, font_bold_name
+
+PDF_FONT, PDF_FONT_BOLD = get_pdf_font()
+
+def safe_str(val):
+    if val is None:
+        return ""
+    return str(val).strip()
+
+def safe_float_str(val):
+    if val is None or val == "":
+        return "-"
+    try:
+        return f"{float(val):.2f}"
+    except Exception:
+        return str(val)
+
+def clean_pdf_text(text):
+    if PDF_FONT == "Helvetica":
+        rep = {'ă':'a', 'Ă':'A', 'â':'a', 'Â':'A', 'î':'i', 'Î':'I', 'ș':'s', 'Ș':'S', 'ț':'t', 'Ț':'T'}
+        for k, v in rep.items():
+            text = text.replace(k, v)
+    return text
+
+def render_copyright_footer():
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="text-align: center; color: #4A5568; font-size: 0.83rem; line-height: 1.6; padding: 16px 12px; background-color: #F7FAFC; border-radius: 8px; border: 1px solid #E2E8F0; margin-top: 25px; margin-bottom: 10px;">
+            <div style="font-size: 0.95rem; font-weight: bold; color: #1A365D; margin-bottom: 4px;">
+                © Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor
+            </div>
+            <div>
+                Acest program este protejat de legea privind drepturile de autor (Legea nr. 8/1996) și legislația internațională aplicabilă.<br/>
+                Orice descărcare, multiplicare, distribuire sau utilizare neautorizată se pedepsește conform legii.<br/>
+                <span style="color: #C53030; font-weight: bold;">🚫 ESTE STRICT INTERZISĂ COMERCIALIZAREA ACESTUI PRODUS!</span><br/>
+                Acest produs se utilizează în mod gratuit exclusiv de către persoanele cărora autorul le conferă în mod explicit acest drept.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+def render_sidebar_copyright():
+    st.sidebar.divider()
+    st.sidebar.markdown(
+        """
+        <div style='font-size: 0.78rem; color: #718096; line-height: 1.4;'>
+            <b>© Prof. Ec. Gherman Octavian-Theodor</b><br/>
+            Drepturi de autor rezervate.<br/>
+            <span style='color: #E53E3E; font-weight: bold;'>Comercializarea interzisă.</span><br/>
+            Utilizare gratuită doar cu acordul autorului.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+# AUTENTIFICARE PROFESORI
+PAROLA_PROFESORI = "profesori2026"
+
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    st.title("🔒 Conectare Catalog Profesori")
+    st.caption("Colegiul 'Emil Negruțiu' Turda — Clasa a IX-a TH")
+    
+    with st.form("login_form"):
+        pwd_input = st.text_input("🔑 Introduceți Parola de Acces Profesori:", type="password")
+        submit_btn = st.form_submit_button("🔓 Conectare", type="primary", use_container_width=True)
+        if submit_btn:
+            if pwd_input == PAROLA_PROFESORI:
+                st.session_state["authenticated"] = True
+                st.success("✅ Autentificare reușită!")
+                st.rerun()
+            else:
+                st.error("❌ Parolă incorectă! Vă rugăm să încercați din nou.")
+    
+    render_copyright_footer()
+    st.stop()
+
+# Lista celor 32 de elevi (ID, Nume, RM/PG, Nr. Matr., PIN)
+ELEVI = [
+    (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76", "2951"),
+    (2, "BARA D. ADRIAN DANIEL", 14, "126/77", "6234"),
+    (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78", "9233"),
+    (4, "BUDULĂU I.M. VLAD IOAN", 16, "126/79", "9385"),
+    (5, "CHESZOVAN D.E. IRINA JULIETA", 17, "126/80", "2681"),
+    (6, "CIURCUI V. DIANA", 18, "126/81", "4658"),
+    (7, "CORDIȘ M.C. EDUARD IONUȚ", 19, "126/82", "7891"),
+    (8, "DEMETER D.C. DENIS RĂZVAN", 20, "126/83", "9975"),
+    (9, "FERENCZI E.C. MEDEA MARICARMEN", 21, "126/84", "9042"),
+    (10, "FLOREA V. FLAVIU CRISTIAN", 22, "126/85", "8226"),
+    (11, "GHERMAN M.I. DAVID MARIUS", 23, "126/86", "4931"),
+    (12, "LOBONȚ M. MIHNEA", 24, "126/87", "1041"),
+    (13, "LUKACS A.L. LORENA DENISA", 25, "126/88", "2322"),
+    (14, "MAGYARI A.M. ANDREI", 26, "126/89", "2814"),
+    (15, "MARCOVICI L.S. IOANA DENISA", 27, "126/90", "5706"),
+    (16, "MARIAN M.I. MIHAELA DARIA", 28, "126/91", "2606"),
+    (17, "MATEI V.C. ROXANA MIHAELA", 29, "126/92", "8367"),
+    (18, "MENCU R.R. DIANA OLIVIA", 30, "126/93", "1188"),
+    (19, "MUNTEANU V.N. ELENA", 31, "126/94", "9032"),
+    (20, "NAP A.C. ALEXANDRA MARIA", 32, "126/95", "6148"),
+    (21, "PETELEU C.A. CLAUDIA MARIA", 33, "126/96", "4444"),
+    (22, "POP D. ANDRA MARIA", 34, "126/97", "7508"),
+    (23, "POP M.V. LARISA ANDREEA", 35, "126/98", "5120"),
+    (24, "POP I.C. ROBERT EUGEN", 36, "126/99", "6696"),
+    (25, "POPA C.F. ILINCA", 37, "126/100", "6843"),
+    (26, "PUICA G. GEORGE ROBERT", 38, "126/101", "7166"),
+    (27, "RĂDUȚ I.M. ADELINA IOANA", 39, "128/1", "9414"),
+    (28, "ȘIPOȘ T.R. DAVID ADRIAN", 40, "128/2", "2250"),
+    (29, "TRIF S.D. TUȘA DANIEL", 41, "128/3", "6577"),
+    (30, "TUȘINEAN S.V. IRINA", 42, "128/4", "2469"),
+    (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5", "9815"),
+    (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6", "5786")
+]
 
 DISCIPLINE_CG = [
     ("Limba și literatura română", 8),
@@ -2055,6 +2092,7 @@ with tab_gest:
             if st.button("🗑️ Confirmă Ștergerea Definitivă", type="primary", use_container_width=True, key="btn_confirm_del_student"):
                 deleted_name = gest_data[del_sel_idx].get('nume_complet', '')
                 gest_data.pop(del_sel_idx)
+                # Re-index IDs cleanly
                 for idx_i, d_item in enumerate(gest_data, 1):
                     d_item['id'] = idx_i
                     d_item['rand_excel'] = 12 + idx_i
