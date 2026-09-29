@@ -384,6 +384,220 @@ def update_excel_computed_values(file_path):
         pass
 
 # --- CALCUL DINAMIC ÎN TIMP REAL PENTRU VIZUALIZĂRI ȘI RAPOARTE ---
+
+MONTH_DEFS = [
+    ('Septembrie 2026', 9),
+    ('Octombrie 2026', 10),
+    ('Noiembrie 2026', 11),
+    ('Decembrie 2026', 12),
+    ('Ianuarie 2027', 1),
+    ('Februarie 2027', 2),
+    ('Martie 2027', 3),
+    ('Aprilie 2027', 4),
+    ('Mai 2027', 5),
+    ('Iunie 2027', 6)
+]
+
+def parse_absence_month(cell_val):
+    if cell_val is None:
+        return None, False
+    s_val = str(cell_val).strip()
+    if not s_val:
+        return None, False
+    is_mot = s_val.endswith('m') or s_val.endswith('M')
+    dt_part = s_val.rstrip('mM').strip()
+    dt_part = dt_part.replace('/', '.').replace('-', '.')
+    parts = dt_part.split('.')
+    m_num = None
+    if len(parts) >= 2:
+        try:
+            m_num = int(parts[1].strip())
+        except Exception:
+            pass
+    return m_num, is_mot
+
+def generate_excel_bytes(rows, sheet_name="Sheet1"):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = sheet_name
+    
+    if rows:
+        headers = list(rows[0].keys())
+        ws.append(headers)
+        
+        header_fill = openpyxl.styles.PatternFill(start_color="1A365D", end_color="1A365D", fill_type="solid")
+        header_font = openpyxl.styles.Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        thin_border = openpyxl.styles.Border(
+            left=openpyxl.styles.Side(style="thin", color="CBD5E0"),
+            right=openpyxl.styles.Side(style="thin", color="CBD5E0"),
+            top=openpyxl.styles.Side(style="thin", color="CBD5E0"),
+            bottom=openpyxl.styles.Side(style="thin", color="CBD5E0")
+        )
+        
+        for col_num in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = openpyxl.styles.Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = thin_border
+            
+        for r_idx, row_dict in enumerate(rows, start=2):
+            row_values = [row_dict[h] for h in headers]
+            ws.append(row_values)
+            for c_idx in range(1, len(headers) + 1):
+                cell = ws.cell(row=r_idx, column=c_idx)
+                cell.border = thin_border
+                cell.font = openpyxl.styles.Font(name="Calibri", size=10)
+                if isinstance(cell.value, (int, float)):
+                    cell.alignment = openpyxl.styles.Alignment(horizontal="center")
+                else:
+                    cell.alignment = openpyxl.styles.Alignment(horizontal="left")
+                    
+        for col in ws.columns:
+            max_len = 0
+            col_letter = openpyxl.utils.get_column_letter(col[0].column)
+            for cell in col:
+                val_str = str(cell.value or '')
+                if len(val_str) > max_len:
+                    max_len = len(val_str)
+            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+            
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+def calculate_lunar_student_absences(file_path):
+    rows = []
+    if not os.path.exists(file_path):
+        return rows
+    try:
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+        ws_cg = wb["Cultură Generală"]
+        ws_th = wb["Module Tehnologice"]
+        
+        for idx, e in enumerate(ELEVI):
+            s_row = 9 + idx
+            student_months = {m: {'nem': 0, 'mot': 0, 'tot': 0} for _, m in MONTH_DEFS}
+            
+            for s_name, col in DISCIPLINE_CG:
+                for k in range(30):
+                    av = ws_cg.cell(row=s_row, column=col + 21 + k).value
+                    m_num, is_mot = parse_absence_month(av)
+                    if m_num in student_months:
+                        if is_mot: student_months[m_num]['mot'] += 1
+                        else: student_months[m_num]['nem'] += 1
+                        student_months[m_num]['tot'] += 1
+                        
+            for s_name, col in MODULE_TH:
+                for k in range(30):
+                    av = ws_th.cell(row=s_row, column=col + 21 + k).value
+                    m_num, is_mot = parse_absence_month(av)
+                    if m_num in student_months:
+                        if is_mot: student_months[m_num]['mot'] += 1
+                        else: student_months[m_num]['nem'] += 1
+                        student_months[m_num]['tot'] += 1
+                        
+            row_dict = {
+                'Nr.': idx + 1,
+                'Nume și Prenume Elev': e[1],
+                'Matricol': e[3]
+            }
+            for m_label, m_num in MONTH_DEFS:
+                m_data = student_months[m_num]
+                row_dict[f'{m_label} - Nemotivate'] = m_data['nem']
+                row_dict[f'{m_label} - Motivate'] = m_data['mot']
+                row_dict[f'{m_label} - Total'] = m_data['tot']
+                
+            row_dict['Total General Nemotivate'] = sum(student_months[m]['nem'] for _, m in MONTH_DEFS)
+            row_dict['Total General Motivate'] = sum(student_months[m]['mot'] for _, m in MONTH_DEFS)
+            row_dict['Total General Absențe'] = sum(student_months[m]['tot'] for _, m in MONTH_DEFS)
+            
+            rows.append(row_dict)
+            
+        wb.close()
+        
+        if rows:
+            tot_row = {
+                'Nr.': '-',
+                'Nume și Prenume Elev': 'TOTAL CLASĂ',
+                'Matricol': 'TOTAL GENERAL'
+            }
+            for m_label, m_num in MONTH_DEFS:
+                tot_row[f'{m_label} - Nemotivate'] = sum(r[f'{m_label} - Nemotivate'] for r in rows)
+                tot_row[f'{m_label} - Motivate'] = sum(r[f'{m_label} - Motivate'] for r in rows)
+                tot_row[f'{m_label} - Total'] = sum(r[f'{m_label} - Total'] for r in rows)
+                
+            tot_row['Total General Nemotivate'] = sum(r['Total General Nemotivate'] for r in rows)
+            tot_row['Total General Motivate'] = sum(r['Total General Motivate'] for r in rows)
+            tot_row['Total General Absențe'] = sum(r['Total General Absențe'] for r in rows)
+            rows.append(tot_row)
+            
+    except Exception as ex:
+        pass
+        
+    return rows
+
+def calculate_lunar_subject_absences(file_path):
+    rows = []
+    if not os.path.exists(file_path):
+        return rows
+    try:
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+        ws_cg = wb["Cultură Generală"]
+        ws_th = wb["Module Tehnologice"]
+        
+        for cat_name, sheet_obj, sub_list in [('Cultură Generală', ws_cg, DISCIPLINE_CG), ('Module Tehnologice', ws_th, MODULE_TH)]:
+            for s_name, col in sub_list:
+                subj_months = {m: {'nem': 0, 'mot': 0, 'tot': 0} for _, m in MONTH_DEFS}
+                for idx, e in enumerate(ELEVI):
+                    s_row = 9 + idx
+                    for k in range(30):
+                        av = sheet_obj.cell(row=s_row, column=col + 21 + k).value
+                        m_num, is_mot = parse_absence_month(av)
+                        if m_num in subj_months:
+                            if is_mot: subj_months[m_num]['mot'] += 1
+                            else: subj_months[m_num]['nem'] += 1
+                            subj_months[m_num]['tot'] += 1
+                            
+                row_dict = {
+                    'Categorie': cat_name,
+                    'Disciplină / Modul': s_name
+                }
+                for m_label, m_num in MONTH_DEFS:
+                    m_data = subj_months[m_num]
+                    row_dict[f'{m_label} - Nemotivate Clasă'] = m_data['nem']
+                    row_dict[f'{m_label} - Motivate Clasă'] = m_data['mot']
+                    row_dict[f'{m_label} - Total Clasă'] = m_data['tot']
+                    
+                row_dict['Total General Nemotivate Clasă'] = sum(subj_months[m]['nem'] for _, m in MONTH_DEFS)
+                row_dict['Total General Motivate Clasă'] = sum(subj_months[m]['mot'] for _, m in MONTH_DEFS)
+                row_dict['Total General Absențe Clasă'] = sum(subj_months[m]['tot'] for _, m in MONTH_DEFS)
+                
+                rows.append(row_dict)
+                
+        wb.close()
+        
+        if rows:
+            tot_row = {
+                'Categorie': 'TOTAL CLASĂ',
+                'Disciplină / Modul': 'TOTAL GENERAL CLASĂ'
+            }
+            for m_label, m_num in MONTH_DEFS:
+                tot_row[f'{m_label} - Nemotivate Clasă'] = sum(r[f'{m_label} - Nemotivate Clasă'] for r in rows)
+                tot_row[f'{m_label} - Motivate Clasă'] = sum(r[f'{m_label} - Motivate Clasă'] for r in rows)
+                tot_row[f'{m_label} - Total Clasă'] = sum(r[f'{m_label} - Total Clasă'] for r in rows)
+                
+            tot_row['Total General Nemotivate Clasă'] = sum(r['Total General Nemotivate Clasă'] for r in rows)
+            tot_row['Total General Motivate Clasă'] = sum(r['Total General Motivate Clasă'] for r in rows)
+            tot_row['Total General Absențe Clasă'] = sum(r['Total General Absențe Clasă'] for r in rows)
+            rows.append(tot_row)
+            
+    except Exception as ex:
+        pass
+        
+    return rows
+
 def calculate_all_class_stats(file_path):
     students_data = []
     subject_totals = {}
@@ -863,20 +1077,6 @@ def generate_pdf_pins(file_path):
     buffer.seek(0)
     return buffer
 
-def generate_excel_bytes(data_rows, sheet_name="Raport"):
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = sheet_name
-    if data_rows:
-        headers = list(data_rows[0].keys())
-        ws.append(headers)
-        for r in data_rows:
-            ws.append([r[h] for h in headers])
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    return buffer.getvalue()
-
 # --- TAB 1: NOTĂ ---
 with tab1:
     st.subheader("Adăugare Notă Nouă (Sloturi N1 - N10)")
@@ -1229,6 +1429,28 @@ with tab5:
                 })
                 
                 st.dataframe(abs_by_sub_rows, use_container_width=True, hide_index=True)
+
+                st.divider()
+                st.subheader("📅 Rapoarte Excel Absențe Lunare pe Elevi și pe Discipline (Sept. 2026 - Iun. 2027)")
+                st.caption("Descarcă evidența lunară a absențelor (Total, Nemotivate, Motivate) pe fiecare lună din anul școlar.")
+                
+                col_lun1, col_lun2 = st.columns(2)
+                with col_lun1:
+                    try:
+                        lunar_stud_rows = calculate_lunar_student_absences(selected_file)
+                        excel_stud_bytes = generate_excel_bytes(lunar_stud_rows, sheet_name="Absente Lunare Elevi")
+                        st.download_button("📊 Descarcă Absențe Lunare pe Elevi (.xlsx)", data=excel_stud_bytes, file_name="Absente_Lunare_Pe_Elevi_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                    except Exception as ex:
+                        st.error(f"Eroare la generare Excel Absențe Lunare Elevi: {ex}")
+                        
+                with col_lun2:
+                    try:
+                        lunar_subj_rows = calculate_lunar_subject_absences(selected_file)
+                        excel_subj_bytes = generate_excel_bytes(lunar_subj_rows, sheet_name="Absente Lunare Discipline")
+                        st.download_button("📊 Descarcă Absențe Lunare pe Discipline (.xlsx)", data=excel_subj_bytes, file_name="Absente_Lunare_Pe_Discipline_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                    except Exception as ex:
+                        st.error(f"Eroare la generare Excel Absențe Lunare Discipline: {ex}")
+
             
             st.divider()
             st.subheader("🔐 Coduri PIN Confidențiale Părinți")
@@ -1314,11 +1536,13 @@ with tab6:
                 "Total Absențe Clasă": tot_class_all
             })
             st.dataframe(abs_rap_rows, use_container_width=True, hide_index=True)
+
             try:
                 excel_abs_bytes = generate_excel_bytes(abs_rap_rows, sheet_name="Absente Discipline")
                 st.download_button("📊 Descarcă Raport Centralizat Absențe (.xlsx)", data=excel_abs_bytes, file_name="Raport_Centralizat_Absente_Discipline_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             except Exception as ex:
                 st.error(f"Eroare la generare Excel: {ex}")
+
             
             st.divider()
             st.markdown("#### 🏆 Clasament Complet Elevi în Funcție de Absențe (32 Elevi)")
@@ -1345,7 +1569,7 @@ with tab6:
                     "Absențe la Disciplina Maximă": max_sub_det
                 })
             st.dataframe(rank_abs_rows, use_container_width=True, hide_index=True)
-            
+
             sorted_tot_stats = sorted(stats, key=lambda x: (x['tot_abs'], x['abs_nem']), reverse=True)
             rank_tot_rows = []
             for r_idx, s in enumerate(sorted_tot_stats):
@@ -1392,6 +1616,7 @@ with tab6:
                     st.download_button("📊 Descarcă Clasament după Absențe Nemotivate (.xlsx)", data=excel_nem_bytes, file_name="Clasament_Elevi_Dupa_Absente_Nemotivate_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
                 except Exception as ex:
                     st.error(f"Eroare la generare Excel: {ex}")
+
 
             st.divider()
             st.markdown("#### 📈 Distribuția Mediilor Generale")
