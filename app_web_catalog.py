@@ -6,6 +6,19 @@ import urllib.request
 import urllib.parse
 import json
 import base64
+
+# --- FUNCTII BAZA DE DATE DOCUMENTE SI CONFIRMARI ---
+DOCUMENT_PARINTI_DIR = "documente_parinti"
+DOCUMENT_OFICIALE_DIR = "documente_oficiale"
+CONFIRMARI_FILE = "confirmari_documente.json"
+META_PARINTI_FILE = "metadata_documente_parinti.json"
+META_OFICIALE_FILE = "metadata_documente_oficiale.json"
+GESTIUNE_ELEVI_FILE = "gestiune_elevi.json"
+
+for d in [DOCUMENT_PARINTI_DIR, DOCUMENT_OFICIALE_DIR]:
+    if not os.path.exists(d):
+        try: os.makedirs(d)
+        except Exception: pass
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
@@ -15,61 +28,6 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import io
 
-
-
-# --- MODUL STOCARE SI GESTIUNE DOCUMENTE PARINTI & GESTIUNE ELEVI ---
-DOCS_PARINTI_DIR = "documente_parinti"
-DOCS_OFICIALE_DIR = "documente_oficiale"
-CONFIRMARI_FILE = "confirmari_documente.json"
-GESTIUNE_ELEVI_FILE = "gestiune_elevi.json"
-
-os.makedirs(DOCS_PARINTI_DIR, exist_ok=True)
-os.makedirs(DOCS_OFICIALE_DIR, exist_ok=True)
-
-def push_file_to_github(file_path):
-    token = os.environ.get("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
-    if not token:
-        return
-    try:
-        repo = "profudeconta-sketch/catalog-online"
-        rel_path = file_path.replace("\\", "/")
-        url = f"https://api.github.com/repos/{repo}/contents/{rel_path}"
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "StreamlitApp"
-        }
-        
-        sha = None
-        req_get = urllib.request.Request(url, headers=headers)
-        try:
-            with urllib.request.urlopen(req_get, timeout=5) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                sha = data.get('sha')
-        except Exception:
-            pass
-
-        with open(file_path, "rb") as f:
-            content_b64 = base64.b64encode(f.read()).decode('utf-8')
-
-        payload = {
-            "message": f"Update catalog/documente: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}",
-            "content": content_b64
-        }
-        if sha:
-            payload["sha"] = sha
-
-        req_put = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode('utf-8'),
-            headers={**headers, "Content-Type": "application/json"},
-            method="PUT"
-        )
-        with urllib.request.urlopen(req_put, timeout=5) as resp:
-            pass
-    except Exception:
-        pass
 st.set_page_config(
     page_title="Catalog Școlar Online IX TH",
     page_icon="🏫",
@@ -1428,266 +1386,219 @@ with tab6:
             st.error(f"Eroare la citire raport: {ex}")
 
 
-
 # --- TAB 8: GESTIUNE ELEVI ---
 with tab8:
-    st.subheader("👥 Gestiune Elevi (32 Elevi în Clasă)")
-    st.info("💡 Aici puteți consulta registrul complet al elevilor, adăuga elevi noi, edita datele existente și salva modificările în baza de date.")
+    st.subheader("👥 Gestiune Registru Elevi Clasă (IX TH)")
+    st.info("Puteți vizualiza, adăuga sau edita datele elevilor din clasă. Modificările se salvează în sistem.")
     
-    # Incarcare elevi din JSON daca exista
-    elevi_actuali = ELEVI
+    col_ge1, col_ge2 = st.columns([2, 1])
+    
+    current_elevi = ELEVI
     if os.path.exists(GESTIUNE_ELEVI_FILE):
         try:
             with open(GESTIUNE_ELEVI_FILE, "r", encoding="utf-8") as f:
-                saved_elevi = json.load(f)
-                if saved_elevi:
-                    elevi_actuali = [tuple(e) for e in saved_elevi]
-        except Exception:
-            pass
+                saved_e = json.load(f)
+                if saved_e:
+                    current_elevi = [tuple(item) for item in saved_e]
+        except Exception: pass
 
-    st.markdown("#### 📋 Registrul Oficial al Elevilor Clasei IX TH")
-    elevi_df_data = []
-    for e in elevi_actuali:
-        elevi_df_data.append({
-            "ID": e[0],
-            "Nume și Prenume Elev": e[1],
-            "Rând / Pozitie": e[2],
-            "Număr Matricol": e[3],
-            "Cod PIN Părinte": e[4]
-        })
-    st.dataframe(elevi_df_data, use_container_width=True, hide_index=True)
-    
-    st.divider()
-    st.markdown("#### ➕ Adăugare Elev Nou")
-    col_e1, col_e2, col_e3, col_e4 = st.columns(4)
-    with col_e1:
-        nume_nou = st.text_input("Nume și Prenume Elev Nou:", placeholder="ex: POPESCU V. IONUT")
-    with col_e2:
-        matr_nou = st.text_input("Număr Matricol Nou:", placeholder="ex: 128/7")
-    with col_e3:
-        poz_nou = st.number_input("Rând / Poziție în bancă:", min_value=1, max_value=50, value=len(elevi_actuali)+1)
-    with col_e4:
-        pin_nou = st.text_input("Cod PIN (4 cifre):", value=f"{1000 + len(elevi_actuali)*31 % 8999}", max_chars=4)
+    with col_ge1:
+        st.markdown("#### 📋 Lista Curentă a Elevilor (32 Elevi)")
+        e_table_data = []
+        for e in current_elevi:
+            e_table_data.append({
+                "ID": e[0],
+                "Nume și Prenume": e[1],
+                "Rând / Poziție Bancă": f"Rând/PG {e[2]}",
+                "Număr Matricol": e[3],
+                "Cod PIN Părinte": e[4]
+            })
+        st.dataframe(e_table_data, use_container_width=True, hide_index=True)
         
-    if st.button("➕ Adaugă Elevul în Registru", type="primary"):
-        if nume_nou and matr_nou:
-            next_id = max([e[0] for e in elevi_actuali]) + 1 if elevi_actuali else 1
-            entry_new = (next_id, nume_nou.strip().upper(), int(poz_nou), matr_nou.strip(), pin_nou.strip())
-            elevi_actuali.append(entry_new)
+    with col_ge2:
+        st.markdown("#### ➕ Adăugare / Editare Elev Nou")
+        with st.form("form_add_elev"):
+            new_id = st.number_input("ID Elev:", min_value=1, max_value=100, value=len(current_elevi)+1)
+            new_nume = st.text_input("Nume și Prenume Elev:").strip().upper()
+            new_pg = st.number_input("Poziție Bancă (13-44):", min_value=1, max_value=100, value=45)
+            new_matr = st.text_input("Număr Matricol (ex: 128/7):").strip()
+            new_pin = st.text_input("Cod PIN Părinte (4 cifre):", value=str(datetime.datetime.now().microsecond)[:4]).strip()
             
-            with open(GESTIUNE_ELEVI_FILE, "w", encoding="utf-8") as f:
-                json.dump(elevi_actuali, f, ensure_ascii=False, indent=2)
-                
-            push_file_to_github(GESTIUNE_ELEVI_FILE)
-            st.success(f"✅ Elevul **{nume_nou.upper()}** a fost adăugat cu succes în registru!")
-            st.rerun()
-        else:
-            st.warning("⚠️ Vă rugăm să completați Numele și Numărul Matricol.")
-
+            btn_save_e = st.form_submit_button("💾 Salvează Elevul")
+            if btn_save_e:
+                if new_nume and new_matr and new_pin:
+                    updated_list = [list(item) for item in current_elevi]
+                    updated_list.append([new_id, new_nume, new_pg, new_matr, new_pin])
+                    try:
+                        with open(GESTIUNE_ELEVI_FILE, "w", encoding="utf-8") as f:
+                            json.dump(updated_list, f, ensure_ascii=False, indent=2)
+                        st.success(f"✅ Elevul **{new_nume}** a fost salvat cu succes!")
+                        st.rerun()
+                    except Exception as ex:
+                        st.error(f"Eroare la salvare: {ex}")
+                else:
+                    st.warning("⚠️ Completați toate câmpurile obligatorii!")
 
 # --- TAB 9: COMUNICARE / DOCUMENTE PĂRINȚI ---
 with tab9:
-    st.subheader("📩 Comunicare și Transmitere Documente Școlare cu Părinții")
+    st.subheader("📩 Comunicare și Gestiune Documente Părinți")
     
-    tab_doc1, tab_doc2, tab_doc3, tab_doc4 = st.tabs([
-        "📥 Documente Primite de la Părinți", 
-        "📤 Transmitere Documente Oficiale", 
-        "⏱️ Stare Confirmări Descărcări", 
+    subtab1, subtab2, subtab3, subtab4 = st.tabs([
+        "📥 Documente Primite de la Părinți",
+        "📤 Transmitere Documente Oficiale",
+        "⏱️ Stare Confirmări Descărcări Părinți",
         "🔐 Coduri PIN Părinți"
     ])
     
-    # 1. Documente primite de la parinti
-    with tab_doc1:
-        st.markdown("#### 📥 Scutiri, Adeverințe și Dosare Încărcate de Părinți")
-        
-        sel_student_p = st.selectbox("Filtrează după elev (sau vezi toți):", ["Toți Elevii"] + [f"{e[0]}. {e[1]} (Matr. {e[3]})" for e in ELEVI])
-        
-        all_incoming_docs = []
-        if os.path.exists(DOCS_PARINTI_DIR):
-            for sub_dir in os.listdir(DOCS_PARINTI_DIR):
-                sub_path = os.path.join(DOCS_PARINTI_DIR, sub_dir)
-                if os.path.isdir(sub_path):
-                    meta_p = os.path.join(sub_path, "documente_parinti_meta.json")
-                    if os.path.exists(meta_p):
-                        try:
-                            with open(meta_p, "r", encoding="utf-8") as f:
-                                items = json.load(f)
-                                all_incoming_docs.extend(items)
-                        except Exception:
-                            pass
-                            
-        if all_incoming_docs:
-            filtered_incoming = all_incoming_docs
-            if sel_student_p != "Toți Elevii":
-                matr_sel = sel_student_p.split("Matr. ")[1].replace(")", "").strip()
-                filtered_incoming = [d for d in all_incoming_docs if str(d.get("matricol")) == matr_sel]
-                
-            if filtered_incoming:
-                for idx_inc, inc_doc in enumerate(reversed(filtered_incoming)):
-                    c_inc1, c_inc2 = st.columns([3, 1])
-                    with c_inc1:
-                        st.markdown(f"👤 **{inc_doc.get('nume_elev')}** (Matricol {inc_doc.get('matricol')})")
-                        st.markdown(f"📌 **{inc_doc.get('tip_document')}** — *{inc_doc.get('nume_fisier_original')}*")
-                        st.caption(f"📅 Data încărcării: {inc_doc.get('data_incarcare')} | Mențiuni: {inc_doc.get('detalii', 'Fără')}")
-                    with c_inc2:
-                        filepath_inc = inc_doc.get("cale", "")
-                        if os.path.exists(filepath_inc):
-                            with open(filepath_inc, "rb") as f_inc:
-                                b_inc = f_inc.read()
-                            st.download_button(
-                                "📥 Deschide / Descarcă",
-                                data=b_inc,
-                                file_name=inc_doc.get("nume_fisier_original", "document"),
-                                key=f"dl_inc_{idx_inc}_{inc_doc.get('matricol')}",
-                                use_container_width=True
-                            )
-                        else:
-                            st.warning("Fișier indisponibil")
-                    st.divider()
-            else:
-                st.info("ℹ️ Nu există documente încărcate pentru elevul selectat.")
-        else:
-            st.info("ℹ️ Nu a fost primit încă niciun document de la părinți.")
-
-    # 2. Transmitere documente oficiale
-    with tab_doc2:
-        st.markdown("#### 📤 Emitere / Transmitere Documente Oficiale către Părinți")
-        st.info("Selectați elevul și atașați fișierul oficial (Mustrare scrisă, Preaviz exmatriculare, Decizie scădere medie purtare, Înștiințare absențe). Documentul va fi vizibil direct în portalul părintelui.")
-        
-        c_of1, c_of2 = st.columns([2, 1])
-        with c_of1:
-            sel_st_target = st.selectbox("Selectați Elevul Destinatar:", [f"{e[0]}. {e[1]} (Matr. {e[3]})" for e in ELEVI], key="sel_st_target_doc")
-            tip_doc_of = st.selectbox(
-                "Tipul Actului Oficial Emis:",
-                ["⚠️ Mustrare Scrisă", "🚨 Preaviz de Exmatriculare", "📉 Decizie Scădere Medie la Purtare", "📑 Înștiințare Număr Absențe", "ℹ️ Informare / Adresă Oficială"]
-            )
-            titlu_doc_of = st.text_input("Titlu / Număr Înregistrare Document:", placeholder="ex: Mustrare Scrisă Nr. 45 / 02.10.2026")
-            file_of_up = st.file_uploader("Atașați Documentul Scanat / PDF:", type=["pdf", "png", "jpg", "jpeg"], key="file_of_up_key")
-            
-        with c_of2:
-            st.write("")
-            st.write("")
-            if st.button("🚀 Trimite Documentul Oficial", type="primary", use_container_width=True):
-                if file_of_up is not None and titlu_doc_of:
-                    try:
-                        matr_target = sel_st_target.split("Matr. ")[1].replace(")", "").strip()
-                        nume_target = sel_st_target.split(". ")[1].split(" (Matr.")[0].strip()
-                        clean_m_target = matr_target.replace("/", "_")
+    with subtab1:
+        st.markdown("#### 📥 Documente Trimise de Părinți (Scutiri, Adeverințe, Dosare)")
+        if os.path.exists(META_PARINTI_FILE):
+            try:
+                with open(META_PARINTI_FILE, "r", encoding="utf-8") as f:
+                    p_docs = json.load(f)
+                if p_docs:
+                    sel_elev_filter = st.selectbox("🔍 Filtrează după elev:", ["Toti elevii"] + [f"{e[1]} (Matr. {e[3]})" for e in ELEVI], key="filter_p_docs")
+                    
+                    filtered_docs = p_docs
+                    if sel_elev_filter != "Toti elevii":
+                        matr_sel = sel_elev_filter.split("Matr. ")[-1].replace(")", "").strip()
+                        filtered_docs = [d for d in p_docs if str(d.get("matricol")) == matr_sel]
                         
-                        target_dir = os.path.join(DOCS_OFICIALE_DIR, f"Matricol_{clean_m_target}")
-                        os.makedirs(target_dir, exist_ok=True)
-                        meta_of_file = os.path.join(target_dir, "documente_oficiale_meta.json")
-                        
-                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                        filename_of_save = f"OFICIAL_{clean_m_target}_{timestamp}_{file_of_up.name}"
-                        save_of_path = os.path.join(target_dir, filename_of_save)
-                        
-                        with open(save_of_path, "wb") as f_out:
-                            f_out.write(file_of_up.getbuffer())
-                            
-                        push_file_to_github(save_of_path)
-                        
-                        docs_of_list = []
-                        if os.path.exists(meta_of_file):
-                            with open(meta_of_file, "r", encoding="utf-8") as f:
-                                docs_of_list = json.load(f)
-                                
-                        new_of_entry = {
-                            "matricol": matr_target,
-                            "nume_elev": nume_target,
-                            "tip_document": tip_doc_of,
-                            "nume_document": titlu_doc_of,
-                            "nume_fisier_original": file_of_up.name,
-                            "cale": save_of_path,
-                            "data_emitere": datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
-                        }
-                        docs_of_list.append(new_of_entry)
-                        
-                        with open(meta_of_file, "w", encoding="utf-8") as f:
-                            json.dump(docs_of_list, f, ensure_ascii=False, indent=2)
-                            
-                        push_file_to_github(meta_of_file)
-                        st.success(f"✅ Documentul oficial **{titlu_doc_of}** a fost emis și transmis părintelui elevului **{nume_target}**!")
-                    except Exception as ex:
-                        st.error(f"Eroare la transmitere: {ex}")
+                    if filtered_docs:
+                        for idx_pd, pd_item in enumerate(reversed(filtered_docs)):
+                            col_pd1, col_pd2 = st.columns([3, 1])
+                            with col_pd1:
+                                st.markdown(f"**{pd_item.get('nume_elev')}** (Matricol {pd_item.get('matricol')}) — **{pd_item.get('tip_document')}**")
+                                st.caption(f"📅 Data încărcării: {pd_item.get('data_incarcare')} | Observații: {pd_item.get('detalii') or 'Fără observații'}")
+                            with col_pd2:
+                                fpath_pd = pd_item.get('cale')
+                                if fpath_pd and os.path.exists(fpath_pd):
+                                    with open(fpath_pd, "rb") as f_pd_b:
+                                        b_pd = f_pd_b.read()
+                                    st.download_button(
+                                        "📥 Deschide Fișier",
+                                        data=b_pd,
+                                        file_name=pd_item.get('nume_fisier_original'),
+                                        key=f"dl_pd_cat_{idx_pd}",
+                                        use_container_width=True
+                                    )
+                                else:
+                                    st.warning("Fișier nedisponibil")
+                            st.divider()
+                    else:
+                        st.info("ℹ️ Nu există documente pentru filtrul selectat.")
                 else:
-                    st.warning("⚠️ Vă rugăm să completați titlul și să atașați fișierul.")
-
-    # 3. Monitorizare confirmari descarcari
-    with tab_doc3:
-        st.markdown("#### ⏱️ Stare Confirmări și Descărcări Documente Oficiale")
-        st.info("Sistemul înregistrează automat data și ora la care părintele a apăsat pe butonul de descărcare/vizualizare al documentului oficial, oferind dovadă digitală de luare la cunoștință.")
+                    st.info("ℹ️ Nu s-a primit niciun document de la părinți încă.")
+            except Exception as ex:
+                st.error(f"Eroare la citirea documentelor părinților: {ex}")
+        else:
+            st.info("ℹ️ Nu există documente încărcate de părinți.")
+            
+    with subtab2:
+        st.markdown("#### 📤 Emitere și Transmitere Document Oficial către Părinți")
+        st.info("Selectați elevul și atașați documentul oficial (ex: Mustrare scrisă, Preaviz, Decizie scădere purtare). Documentul va fi vizibil direct în portalul părintelui.")
         
-        confirmari_data = []
+        col_of_a, col_of_b = st.columns([2, 1])
+        with col_of_a:
+            target_student_str = st.selectbox("👤 Selectați Elevul:", [f"{e[0]}. {e[1]} (Matr. {e[3]})" for e in ELEVI], key="target_student_of")
+            tip_doc_of = st.selectbox(
+                "📋 Tip Document Oficial:",
+                ["⚠️ Mustrare Scrisă", "📉 Decizie ScáderI Medie la Purtare", "🚨 Preaviz de Exmatriculare", "📑 Înștiințare Absențe Acumulate", "ℹ️ Adresă / Informare Oficială"],
+                key="tip_doc_of_select"
+            )
+            titlu_doc_of = st.text_input("📝 Titlu / Număr Înregistrare Document:", value=f"Adresă Oficială_{datetime.datetime.now().strftime('%Y%m%d')}", key="titlu_doc_of_input")
+            
+        with col_of_b:
+            file_of_upload = st.file_uploader("📎 Atașați Fișierul PDF/Imagine:", type=["pdf", "png", "jpg", "jpeg"], key="file_of_upload_key")
+            
+        if file_of_upload is not None:
+            if st.button("🚀 Transmite Documentul Oficial către Părinte", use_container_width=True, type="primary"):
+                try:
+                    s_id = int(target_student_str.split(".")[0])
+                    s_item = ELEVI[s_id - 1]
+                    s_matr = str(s_item[3])
+                    s_nume = str(s_item[1])
+                    clean_m = s_matr.replace('/', '_').replace(' ', '_')
+                    clean_n = s_nume.replace(' ', '_')
+                    
+                    ext = file_of_upload.name.split('.')[-1]
+                    dt_s = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    s_filename = f"OFICIAL_{clean_m}_{clean_n}_{dt_s}.{ext}"
+                    s_path = os.path.join(DOCUMENT_OFICIALE_DIR, s_filename)
+                    
+                    with open(s_path, "wb") as f:
+                        f.write(file_of_upload.getbuffer())
+                        
+                    meta_of = []
+                    if os.path.exists(META_OFICIALE_FILE):
+                        try:
+                            with open(META_OFICIALE_FILE, "r", encoding="utf-8") as f:
+                                meta_of = json.load(f)
+                        except Exception: meta_of = []
+                        
+                    entry_of = {
+                        "matricol": s_matr,
+                        "nume_elev": s_nume,
+                        "tip_document": tip_doc_of,
+                        "nume_document": titlu_doc_of,
+                        "data_emitere": datetime.datetime.now().strftime("%d.%m.%Y %H:%M"),
+                        "nume_fisier_original": file_of_upload.name,
+                        "cale": s_path
+                    }
+                    meta_of.append(entry_of)
+                    with open(META_OFICIALE_FILE, "w", encoding="utf-8") as f:
+                        json.dump(meta_of, f, ensure_ascii=False, indent=2)
+                        
+                    st.success(f"✅ Documentul oficial a fost transmis cu succes pentru **{s_nume}**!")
+                    st.balloons()
+                except Exception as ex:
+                    st.error(f"Eroare transmitere document: {ex}")
+                    
+    with subtab3:
+        st.markdown("#### ⏱️ Stare Monitorizare Confirmări Descărcări Părinți")
+        st.caption("Afișează automat momentul exact în care părintele a descărcat documentul oficial din portal (dovadă digitală de luare la cunoștință).")
+        
         if os.path.exists(CONFIRMARI_FILE):
             try:
                 with open(CONFIRMARI_FILE, "r", encoding="utf-8") as f:
-                    confirmari_data = json.load(f)
-            except Exception:
-                pass
-                
-        # Colectare toate documentele oficiale emise
-        all_emitted = []
-        if os.path.exists(DOCS_OFICIALE_DIR):
-            for sdir in os.listdir(DOCS_OFICIALE_DIR):
-                spath = os.path.join(DOCS_OFICIALE_DIR, sdir)
-                if os.path.isdir(spath):
-                    mfile = os.path.join(spath, "documente_oficiale_meta.json")
-                    if os.path.exists(mfile):
-                        try:
-                            with open(mfile, "r", encoding="utf-8") as f:
-                                items = json.load(f)
-                                all_emitted.extend(items)
-                        except Exception:
-                            pass
-                            
-        if all_emitted:
-            report_status_rows = []
-            for em in reversed(all_emitted):
-                m_val = em.get("matricol")
-                doc_title = em.get("nume_document")
-                
-                # Cautam daca exista confirmare
-                match_conf = [c for c in confirmari_data if str(c.get("matricol")) == str(m_val) and str(c.get("titlu_document")) == str(doc_title)]
-                
-                if match_conf:
-                    status_str = match_conf[-1].get("stare", "✅ Descărcat")
+                    conf_data = json.load(f)
+                if conf_data:
+                    conf_rows = []
+                    for c_item in reversed(conf_data):
+                        conf_rows.append({
+                            "Număr Matricol": c_item.get("matricol"),
+                            "Nume Elev": c_item.get("nume_elev"),
+                            "Document Oficial": c_item.get("titlu_doc"),
+                            "Data Descărcării": c_item.get("data_descarcare"),
+                            "Stare Confirmată": c_item.get("status")
+                        })
+                    st.dataframe(conf_rows, use_container_width=True, hide_index=True)
                 else:
-                    status_str = "⏳ În așteptare (Nedescărcat)"
-                    
-                report_status_rows.append({
-                    "Elev Destinatar": em.get("nume_elev"),
-                    "Matricol": m_val,
-                    "Tip Act": em.get("tip_document"),
-                    "Titlu Document Emis": doc_title,
-                    "Data Emiterii": em.get("data_emitere"),
-                    "Stare Confirmare Părinte": status_str
-                })
-            st.dataframe(report_status_rows, use_container_width=True, hide_index=True)
+                    st.info("ℹ️ Nu există încă confirmări de descărcare înregistrate.")
+            except Exception as ex:
+                st.error(f"Eroare citire confirmări: {ex}")
         else:
-            st.info("ℹ️ Nu au fost emise încă documente oficiale pentru a fi monitorizate.")
-
-    # 4. PIN-uri Parinti
-    with tab_doc4:
-        st.subheader("🔐 Coduri PIN Confidențiale Părinți")
-        col_p1, col_p2 = st.columns([3, 1])
-        with col_p2:
-            if os.path.exists(selected_file):
-                try:
-                    pdf_pins_bytes = generate_pdf_pins(selected_file)
-                    st.download_button("🖨️ Descarcă Listă PIN-uri (PDF)", data=pdf_pins_bytes, file_name="Bilete_Acces_Parinti_IX_TH.pdf", mime="application/pdf", use_container_width=True)
-                except Exception as ex:
-                    st.error(f"Eroare PDF PIN-uri: {ex}")
-        pin_display_data = []
+            st.info("ℹ️ Nicio confirmare înregistrată încă.")
+            
+    with subtab4:
+        st.markdown("#### 🔐 Evidență Coduri PIN Confidențiale Părinți")
+        col_pin_hdr1, col_pin_hdr2 = st.columns([3, 1])
+        with col_pin_hdr2:
+            try:
+                pdf_pins_b = generate_pdf_pins(selected_file)
+                st.download_button("🖨️ Descarcă Listă PIN-uri (PDF)", data=pdf_pins_b, file_name="Bilete_Acces_PIN_Parinti_IX_TH.pdf", mime="application/pdf", use_container_width=True)
+            except Exception as ex:
+                st.error(f"Eroare PDF PIN-uri: {ex}")
+        
+        pin_disp = []
         for e in ELEVI:
-            pin_display_data.append({
+            pin_disp.append({
                 "ID": e[0],
                 "Nume și Prenume Elev": e[1],
+                "Poziție": f"RM/PG {e[2]}",
                 "Număr Matricol": e[3],
                 "COD PIN ACCES PĂRINTE": e[4]
             })
-        st.dataframe(pin_display_data, use_container_width=True, hide_index=True)
-
-
+        st.dataframe(pin_disp, use_container_width=True, hide_index=True)
 
 render_copyright_footer()
