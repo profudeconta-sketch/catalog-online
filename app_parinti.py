@@ -15,52 +15,6 @@ st.set_page_config(
 
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxf-chEeMc6pA02EU0-pwqMTVp8htzzku6TvX5Uhea_nqqCNEcT3D6RYrmke1n0tAwD/exec"
 
-# --- FUNCTII GESTIUNE DOCUMENTE PARINTI ---
-DOCUMENT_PARINTI_DIR = "documente_parinti"
-DOCUMENT_OFICIALE_DIR = "documente_oficiale"
-CONFIRMARI_FILE = "confirmari_documente.json"
-META_PARINTI_FILE = "metadata_documente_parinti.json"
-META_OFICIALE_FILE = "metadata_documente_oficiale.json"
-
-for d in [DOCUMENT_PARINTI_DIR, DOCUMENT_OFICIALE_DIR]:
-    if not os.path.exists(d):
-        try: os.makedirs(d)
-        except Exception: pass
-
-def reg_confirmare_descarcare(matricol, nume_elev, titlu_doc):
-    try:
-        data_conf = []
-        if os.path.exists(CONFIRMARI_FILE):
-            with open(CONFIRMARI_FILE, "r", encoding="utf-8") as f:
-                data_conf = json.load(f)
-        
-        ts_now = datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-        record = {
-            "matricol": str(matricol),
-            "nume_elev": str(nume_elev),
-            "titlu_doc": str(titlu_doc),
-            "data_descarcare": ts_now,
-            "status": f"✅ Descărcat la {ts_now}"
-        }
-        
-        updated = False
-        for item in data_conf:
-            if str(item.get("matricol")) == str(matricol) and item.get("titlu_doc") == str(titlu_doc):
-                item["data_descarcare"] = ts_now
-                item["status"] = f"✅ Descărcat la {ts_now}"
-                updated = True
-                break
-        if not updated:
-            data_conf.append(record)
-            
-        with open(CONFIRMARI_FILE, "w", encoding="utf-8") as f:
-            json.dump(data_conf, f, ensure_ascii=False, indent=2)
-            
-        if 'push_to_github' in globals():
-            push_to_github(CONFIRMARI_FILE)
-    except Exception:
-        pass
-
 # --- FUNCTIE DE SINCRONIZARE SI DESCARCARE AUTOMATA EXCEL DIN GITHUB ---
 def sync_excel_from_github():
     filename = "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
@@ -105,7 +59,115 @@ def sync_excel_from_github():
 sync_excel_from_github()
 
 # Lista celor 32 de elevi (ID, Nume, RM/PG, Nr. Matr., PIN)
-ELEVI = [
+
+GESTIUNE_FILE = "gestiune_elevi.json"
+
+def sync_gestiune_from_github():
+    filename = GESTIUNE_FILE
+    ts = int(datetime.datetime.now().timestamp())
+    raw_url = f"https://raw.githubusercontent.com/profudeconta-sketch/catalog-online/main/{filename}?t={ts}"
+    token = os.environ.get("GITHUB_TOKEN") or ""
+    try:
+        if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+            token = token or st.secrets["GITHUB_TOKEN"]
+    except Exception:
+        pass
+    headers = {"User-Agent": "StreamlitApp", "Cache-Control": "no-cache"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        req = urllib.request.Request(raw_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if resp.status == 200:
+                content = resp.read()
+                if len(content) > 10:
+                    with open(filename, "wb") as f:
+                        f.write(content)
+                    return filename
+    except Exception:
+        pass
+    return filename
+
+def get_current_elevi_parinti(default_elevi):
+    if os.path.exists(GESTIUNE_FILE):
+        try:
+            with open(GESTIUNE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list) and len(data) > 0:
+                    elevi_list = []
+                    for d in data:
+                        nume_full = d.get("nume_complet", f"{d.get('nume','')} {d.get('initiala','')} {d.get('prenume','')}".strip())
+                        nume_full = " ".join(nume_full.split())
+                        elevi_list.append((
+                            d["id"],
+                            nume_full,
+                            d.get("rand_excel", 12 + d["id"]),
+                            d["matricol"],
+                            str(d.get("pin", "1234"))
+                        ))
+                    return elevi_list
+        except Exception:
+            pass
+    return default_elevi
+
+def reg_confirmare_descarcare(matricol, nume_elev, titlu_doc):
+    CONF_FILE = "confirmari_documente.json"
+    confirmari = []
+    if os.path.exists(CONF_FILE):
+        try:
+            with open(CONF_FILE, "r", encoding="utf-8") as f:
+                confirmari = json.load(f)
+        except Exception:
+            pass
+            
+    now_str = datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    for c in confirmari:
+        if c.get("matricol") == matricol and c.get("titlu_document") == titlu_doc:
+            return
+            
+    confirmari.append({
+        "matricol": matricol,
+        "nume_elev": nume_elev,
+        "titlu_document": titlu_doc,
+        "data_ora_descarcare": now_str
+    })
+    
+    try:
+        with open(CONF_FILE, "w", encoding="utf-8") as f:
+            json.dump(confirmari, f, ensure_ascii=False, indent=2)
+        
+        token = os.environ.get("GITHUB_TOKEN") or ""
+        try:
+            if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+                token = token or st.secrets["GITHUB_TOKEN"]
+        except Exception:
+            pass
+        if token:
+            repo = "profudeconta-sketch/catalog-online"
+            url = f"https://api.github.com/repos/{repo}/contents/{CONF_FILE}"
+            
+            sha = None
+            try:
+                req_g = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}", "User-Agent": "StreamlitApp"})
+                with urllib.request.urlopen(req_g, timeout=5) as resp:
+                    sha = json.loads(resp.read().decode('utf-8')).get('sha')
+            except Exception: pass
+            
+            with open(CONF_FILE, "rb") as f_b:
+                content_b64 = base64.b64encode(f_b.read()).decode('utf-8')
+                
+            payload = {
+                "message": f"Confirmare descarcare {matricol} - {titlu_doc}",
+                "content": content_b64
+            }
+            if sha: payload["sha"] = sha
+            
+            req_p = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "User-Agent": "StreamlitApp"}, method="PUT")
+            urllib.request.urlopen(req_p, timeout=5)
+    except Exception:
+        pass
+
+DEFAULT_ELEVI = [
     (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76", "2951"),
     (2, "BARA D. ADRIAN DANIEL", 14, "126/77", "6234"),
     (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78", "9233"),
@@ -165,6 +227,12 @@ MODULE_TH = [
     ("M5: CDEOȘ (IP) - Instruire Practică", 220),
     ("M6: Curriculum de aprofundare și inserție profesională", 273)
 ]
+
+try:
+    sync_gestiune_from_github()
+except Exception: pass
+ELEVI = get_current_elevi_parinti(DEFAULT_ELEVI)
+
 
 def find_excel_file():
     candidates = [
@@ -425,12 +493,11 @@ else:
                     })
                 st.dataframe(rows_data, use_container_width=True, hide_index=True)
 
+            
             st.divider()
+            
             st.markdown("### 📄 Transmitere și Primire Documente Școlare")
             tab_p_up, tab_p_down = st.tabs(["📤 Trimite Document la Școală", "📩 Documente Oficiale de la Școală"])
-            
-            clean_matr = str(student_found[3]).replace('/', '_').replace(' ', '_')
-            clean_nume = str(student_found[1]).replace(' ', '_')
             
             with tab_p_up:
                 st.subheader("📤 Încărcare Scutiri / Adeverințe / Dosare")
@@ -438,117 +505,140 @@ else:
                 
                 col_u1, col_u2 = st.columns([2, 1])
                 with col_u1:
-                    tip_doc_up = st.selectbox(
-                        "📋 Selectați tipul documentului:",
-                        ["🩺 Scutire Medicală / Adeverință", "🪪 Copie Carte de Identitate", "📜 Copie Certificat de Naștere", "💰 Documente Dosar Bursă", "📁 Alt Document"],
-                        key="tip_doc_p_up"
+                    tip_doc_parent = st.selectbox(
+                        "Tipul Documentului Transmis:",
+                        [
+                            "🩺 Scutire Medicală / Adeverință Medicală",
+                            "🪪 Copie Carte de Identitate (CI / Buletin)",
+                            "📜 Copie Certificat de Naștere",
+                            "💰 Documente Dosar Bursă (Socială / Medicală / Venit)",
+                            "📁 Alt Document"
+                        ],
+                        key="tip_doc_parent"
                     )
-                    detalii_doc_up = st.text_input("📝 Detalii / Observații (opțional):", placeholder="Ex: Scutire medicală pentru perioada 01-05 Octombrie", key="det_p_up")
-                
-                with col_u2:
-                    uploaded_file_p = st.file_uploader("📎 Atașați fișierul (PDF, JPG, PNG):", type=["pdf", "png", "jpg", "jpeg"], key="u_file_p")
+                    file_parent = st.file_uploader("Atașați fișierul (PDF, JPG, PNG):", type=["pdf", "png", "jpg", "jpeg"], key="upl_parent_doc")
                     
-                if uploaded_file_p is not None:
+                with col_u2:
+                    st.write("")
+                    st.write("")
                     if st.button("🚀 Trimite Documentul către Diriginte", use_container_width=True, type="primary"):
-                        try:
-                            ext = uploaded_file_p.name.split('.')[-1]
-                            dt_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                            safe_filename = f"{clean_matr}_{clean_nume}_{dt_str}.{ext}"
-                            save_path = os.path.join(DOCUMENT_PARINTI_DIR, safe_filename)
-                            
-                            with open(save_path, "wb") as f:
-                                f.write(uploaded_file_p.getbuffer())
-                                
-                            meta_p = []
-                            if os.path.exists(META_PARINTI_FILE):
-                                try:
-                                    with open(META_PARINTI_FILE, "r", encoding="utf-8") as f:
-                                        meta_p = json.load(f)
-                                except Exception: meta_p = []
-                                
-                            new_entry = {
-                                "matricol": str(student_found[3]),
-                                "nume_elev": str(student_found[1]),
-                                "tip_document": tip_doc_up,
-                                "detalii": detalii_doc_up,
-                                "data_incarcare": datetime.datetime.now().strftime("%d.%m.%Y %H:%M"),
-                                "nume_fisier_original": uploaded_file_p.name,
-                                "nume_fisier_salvat": safe_filename,
-                                "cale": save_path
-                            }
-                            meta_p.append(new_entry)
-                            with open(META_PARINTI_FILE, "w", encoding="utf-8") as f:
-                                json.dump(meta_p, f, ensure_ascii=False, indent=2)
-                                
-                            st.success(f"✅ Documentul '{uploaded_file_p.name}' a fost transmis cu succes către diriginte!")
-                            st.balloons()
-                        except Exception as ex:
-                            st.error(f"Eroare la salvarea documentului: {ex}")
-                            
-                st.divider()
-                st.markdown("##### 📜 Istoric Documente Trimise de Dumneavoastră")
-                if os.path.exists(META_PARINTI_FILE):
-                    try:
-                        with open(META_PARINTI_FILE, "r", encoding="utf-8") as f:
-                            all_p_docs = json.load(f)
-                        my_p_docs = [d for d in all_p_docs if str(d.get("matricol")) == str(student_found[3])]
-                        if my_p_docs:
-                            hist_rows = []
-                            for d in reversed(my_p_docs):
-                                hist_rows.append({
-                                    "Data Încărcării": d.get("data_incarcare"),
-                                    "Tip Document": d.get("tip_document"),
-                                    "Nume Fișier": d.get("nume_fisier_original"),
-                                    "Observații": d.get("detalii") or "-"
-                                })
-                            st.dataframe(hist_rows, use_container_width=True, hide_index=True)
+                        if file_parent is None:
+                            st.error("❌ Vă rugăm să atașați un fișier mai întâi!")
                         else:
-                            st.info("ℹ️ Nu ați trimis încă niciun document.")
-                    except Exception: pass
-                else:
-                    st.info("ℹ️ Nu există documente trimise anterior.")
+                            clean_matr = student_found[3].replace('/', '_')
+                            folder_p = os.path.join("documente_parinti", f"Matricol_{clean_matr}")
+                            os.makedirs(folder_p, exist_ok=True)
+                            
+                            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                            orig_name = file_parent.name
+                            ext = os.path.splitext(orig_name)[1]
+                            
+                            new_fname = f"Doc_{ts}_{clean_matr}{ext}"
+                            new_fpath = os.path.join(folder_p, new_fname)
+                            
+                            with open(new_fpath, "wb") as f_out:
+                                f_out.write(file_parent.getbuffer())
+                                
+                            meta_f = os.path.join(folder_p, "documente_incarcate.json")
+                            rec = {
+                                "matricol": student_found[3],
+                                "nume_elev": student_found[1],
+                                "tip_document": tip_doc_parent,
+                                "nume_fisier_original": orig_name,
+                                "cale_fisier": new_fpath,
+                                "data_incarcare": datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
+                            }
+                            
+                            ex_recs = []
+                            if os.path.exists(meta_f):
+                                try:
+                                    with open(meta_f, "r", encoding="utf-8") as f_m:
+                                        ex_recs = json.load(f_m)
+                                except Exception: pass
+                                
+                            ex_recs.append(rec)
+                            with open(meta_f, "w", encoding="utf-8") as f_m:
+                                json.dump(ex_recs, f_m, ensure_ascii=False, indent=2)
+                                
+                            token = os.environ.get("GITHUB_TOKEN") or ""
+                            try:
+                                if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+                                    token = token or st.secrets["GITHUB_TOKEN"]
+                            except Exception: pass
+                            
+                            if token:
+                                repo = "profudeconta-sketch/catalog-online"
+                                for file_to_push in [new_fpath, meta_f]:
+                                    try:
+                                        url_g = f"https://api.github.com/repos/{repo}/contents/{file_to_push}"
+                                        sha_val = None
+                                        try:
+                                            req_check = urllib.request.Request(url_g, headers={"Authorization": f"Bearer {token}", "User-Agent": "StreamlitApp"})
+                                            with urllib.request.urlopen(req_check, timeout=5) as r_ck:
+                                                sha_val = json.loads(r_ck.read().decode('utf-8')).get('sha')
+                                        except Exception: pass
+                                        
+                                        with open(file_to_push, "rb") as f_in:
+                                            b64_c = base64.b64encode(f_in.read()).decode('utf-8')
+                                            
+                                        payload_g = {
+                                            "message": f"Incarcare doc parinte: {student_found[1]}",
+                                            "content": b64_c
+                                        }
+                                        if sha_val: payload_g["sha"] = sha_val
+                                        
+                                        req_p_g = urllib.request.Request(url_g, data=json.dumps(payload_g).encode('utf-8'), headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "User-Agent": "StreamlitApp"}, method="PUT")
+                                        urllib.request.urlopen(req_p_g, timeout=5)
+                                    except Exception: pass
+                                    
+                            st.success("✅ Documentul a fost trimis cu succes către diriginte!")
+                            st.rerun()
 
             with tab_p_down:
-                st.subheader("📩 Înștiințări și Documente Oficiale de la Școală")
-                st.info("Aici puteți vizualiza și descărca documentele oficiale emise de diriginte pentru elevul dumneavoastră. Descărcarea înregistrează automat dovada de primire.")
+                st.subheader("📩 Documente Oficiale Emise de Școală")
+                clean_matr = student_found[3].replace('/', '_')
+                folder_of = os.path.join("documente_oficiale", f"Matricol_{clean_matr}")
+                meta_of = os.path.join(folder_of, "documente_emise.json")
                 
-                if os.path.exists(META_OFICIALE_FILE):
+                if os.path.exists(meta_of):
                     try:
-                        with open(META_OFICIALE_FILE, "r", encoding="utf-8") as f:
-                            all_of_docs = json.load(f)
-                        my_of_docs = [d for d in all_of_docs if str(d.get("matricol")) == str(student_found[3])]
-                        if my_of_docs:
-                            for idx_of, doc_item in enumerate(reversed(my_of_docs)):
+                        with open(meta_of, "r", encoding="utf-8") as f_of:
+                            docs_of = json.load(f_of)
+                        if docs_of:
+                            for idx_of, doc_item in enumerate(reversed(docs_of)):
                                 col_of1, col_of2 = st.columns([3, 1])
                                 with col_of1:
-                                    st.markdown(f"**{doc_item.get('tip_document')}**: *{doc_item.get('nume_document')}*")
-                                    st.caption(f"📅 Data emiterii: {doc_item.get('data_emitere')} | Fișier: {doc_item.get('nume_fisier_original')}")
+                                    st.markdown(f"**{doc_item['tip_document']}** — *{doc_item['nume_document']}*")
+                                    st.caption(f"📅 Data emiterii: {doc_item['data_emitere']} | Fișier: {doc_item['nume_fisier_original']}")
                                 with col_of2:
-                                    fpath = doc_item.get('cale')
-                                    if fpath and os.path.exists(fpath):
-                                        with open(fpath, "rb") as f_b:
-                                            b_data = f_b.read()
+                                    fpath = doc_item['cale']
+                                    if os.path.exists(fpath):
+                                        with open(fpath, "rb") as f_bytes:
+                                            b_data = f_bytes.read()
                                         
-                                        btn_k = f"btn_dl_of_{clean_matr}_{idx_of}"
+                                        btn_key = f"dl_of_{clean_matr}_{idx_of}"
                                         
-                                        if st.download_button(
+                                        def make_callback(m=student_found[3], n=student_found[1], t=doc_item['nume_document']):
+                                            return lambda: reg_confirmare_descarcare(m, n, t)
+                                            
+                                        st.download_button(
                                             "📥 Descarcă / Vizualizează",
                                             data=b_data,
-                                            file_name=doc_item.get('nume_fisier_original'),
+                                            file_name=doc_item['nume_fisier_original'],
                                             mime="application/pdf" if fpath.endswith(".pdf") else "image/png",
-                                            key=btn_k,
+                                            key=btn_key,
+                                            on_click=make_callback(student_found[3], student_found[1], doc_item['nume_document']),
                                             use_container_width=True
-                                        ):
-                                            reg_confirmare_descarcare(student_found[3], student_found[1], doc_item.get('nume_document'))
+                                        )
                                     else:
-                                        st.warning("Fișier temporar indisponibil")
+                                        st.warning("Fișier indisponibil")
                                 st.divider()
                         else:
-                            st.info("ℹ️ Nu există niciun document oficial emis pentru elevul dumneavoastră.")
+                            st.info("ℹ️ Nu există încă documente oficiale emise pentru elevul dumneavoastră.")
                     except Exception as ex:
-                        st.error(f"Eroare citire documente oficiale: {ex}")
+                        st.error(f"Eroare la încărcarea documentelor oficiale: {ex}")
                 else:
-                    st.info("ℹ️ Nu există documente oficiale emise în sistem.")
+                    st.info("ℹ️ Nu există înregistrat niciun document oficial emis pentru copilul dumneavoastră.")
 
             wb.close()
         except Exception as ex:
