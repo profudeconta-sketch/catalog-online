@@ -6,7 +6,6 @@ import urllib.request
 import urllib.parse
 import json
 import base64
-import pandas as pd
 
 st.set_page_config(
     page_title="Portal Părinți - Catalog IX TH",
@@ -22,7 +21,12 @@ def sync_excel_from_github():
     ts = int(datetime.datetime.now().timestamp())
     raw_url = f"https://raw.githubusercontent.com/profudeconta-sketch/catalog-online/main/{filename}?t={ts}"
     
-    token = os.environ.get("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
+    token = os.environ.get("GITHUB_TOKEN") or ""
+    try:
+        if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+            token = token or st.secrets["GITHUB_TOKEN"]
+    except Exception:
+        pass
     headers = {"User-Agent": "StreamlitApp", "Cache-Control": "no-cache"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -59,8 +63,65 @@ def sync_excel_from_github():
 # Sincronizare la incarcarea portalului
 sync_excel_from_github()
 
+GESTIUNE_FILE = "gestiune_elevi.json"
+
+def sync_gestiune_from_github():
+    filename = GESTIUNE_FILE
+    ts = int(datetime.datetime.now().timestamp())
+    raw_url = f"https://raw.githubusercontent.com/profudeconta-sketch/catalog-online/main/{filename}?t={ts}"
+    token = os.environ.get("GITHUB_TOKEN") or ""
+    try:
+        if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+            token = token or st.secrets["GITHUB_TOKEN"]
+    except Exception:
+        pass
+        
+    headers = {"User-Agent": "StreamlitApp", "Cache-Control": "no-cache"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        req = urllib.request.Request(raw_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if resp.status == 200:
+                content = resp.read()
+                if len(content) > 10:
+                    with open(filename, "wb") as f:
+                        f.write(content)
+                    return filename
+    except Exception:
+        pass
+    return filename
+
+try:
+    sync_gestiune_from_github()
+except Exception:
+    pass
+
+def get_current_elevi_parinti(default_elevi):
+    if os.path.exists(GESTIUNE_FILE):
+        try:
+            with open(GESTIUNE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list) and len(data) > 0:
+                    elevi_list = []
+                    for d in data:
+                        nume_full = d.get("nume_complet", f"{d.get('nume','')} {d.get('initiala','')} {d.get('prenume','')}".strip())
+                        nume_full = " ".join(nume_full.split())
+                        elevi_list.append((
+                            d["id"],
+                            nume_full,
+                            d.get("rand_excel", 12 + d["id"]),
+                            d["matricol"],
+                            str(d.get("pin", "1234"))
+                        ))
+                    return elevi_list
+        except Exception:
+            pass
+    return default_elevi
+
+
 # Lista celor 32 de elevi (ID, Nume, RM/PG, Nr. Matr., PIN)
-ELEVI = [
+DEFAULT_ELEVI = [
     (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76", "2951"),
     (2, "BARA D. ADRIAN DANIEL", 14, "126/77", "6234"),
     (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78", "9233"),
@@ -94,6 +155,8 @@ ELEVI = [
     (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5", "9815"),
     (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6", "5786")
 ]
+
+ELEVI = get_current_elevi_parinti(DEFAULT_ELEVI)
 
 DISCIPLINE_CG = [
     ("Limba și literatura română", 8),
@@ -157,76 +220,6 @@ with col_auth2:
         placeholder="Exemplu: 2951",
         help="Codul PIN confidențial individual eliberat de către diriginte."
     ).strip()
-
-
-def reg_incarcare_document_parinte(matricol, nume_elev, tip_doc, orig_name, fpath):
-    DOCS_DIR = "documente_parinti"
-    os.makedirs(DOCS_DIR, exist_ok=True)
-    meta_file = os.path.join(DOCS_DIR, "registru_incarcari.json")
-    incarcari = []
-    if os.path.exists(meta_file):
-        try:
-            with open(meta_file, "r", encoding="utf-8") as f:
-                incarcari = json.load(f)
-        except Exception: pass
-        
-    incarcari.append({
-        "data_incarcare": datetime.datetime.now().strftime("%d.%m.%Y %H:%M"),
-        "nume_elev": nume_elev,
-        "matricol": matricol,
-        "tip_document": tip_doc,
-        "nume_fisier_original": orig_name,
-        "cale": fpath
-    })
-    try:
-        with open(meta_file, "w", encoding="utf-8") as f:
-            json.dump(incarcari, f, ensure_ascii=False, indent=2)
-        push_to_github(meta_file)
-    except Exception: pass
-
-def reg_confirmare_descarcare(matricol, nume_elev, titlu_doc):
-    CONFIRM_FILE = "confirmari_documente.json"
-    confirms = []
-    if os.path.exists(CONFIRM_FILE):
-        try:
-            with open(CONFIRM_FILE, "r", encoding="utf-8") as f:
-                confirms = json.load(f)
-        except Exception: pass
-        
-    confirms.append({
-        "data_ora": datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
-        "nume_elev": nume_elev,
-        "matricol": matricol,
-        "titlu_document": titlu_doc
-    })
-    try:
-        with open(CONFIRM_FILE, "w", encoding="utf-8") as f:
-            json.dump(confirms, f, ensure_ascii=False, indent=2)
-        push_to_github(CONFIRM_FILE)
-    except Exception: pass
-
-def push_to_github(file_path):
-    token = os.environ.get("GITHUB_TOKEN") or st.secrets.get("GITHUB_TOKEN", "")
-    if not token: return
-    try:
-        repo = "profudeconta-sketch/catalog-online"
-        filename = os.path.basename(file_path)
-        url = f"https://api.github.com/repos/{repo}/contents/{filename}"
-        req_get = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}", "User-Agent": "StreamlitApp"})
-        sha = None
-        try:
-            with urllib.request.urlopen(req_get, timeout=5) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                sha = data.get('sha')
-        except Exception: pass
-        with open(file_path, "rb") as f:
-            content_b64 = base64.b64encode(f.read()).decode('utf-8')
-        payload = {"message": f"Update automat: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}", "content": content_b64}
-        if sha: payload["sha"] = sha
-        req_put = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "User-Agent": "StreamlitApp"}, method="PUT")
-        urllib.request.urlopen(req_put, timeout=5)
-    except Exception: pass
-
 
 def safe_str(val):
     if val is None:
@@ -449,83 +442,6 @@ else:
                         "Medie Actuală": media_str
                     })
                 st.dataframe(rows_data, use_container_width=True, hide_index=True)
-
-            
-            st.divider()
-            st.markdown("### 📄 Transmitere și Primire Documente Școlare")
-            tab_p_up, tab_p_down = st.tabs(["📤 Trimite Document la Școală", "📩 Documente Oficiale de la Școală"])
-            
-            with tab_p_up:
-                st.subheader("📤 Încărcare Scutiri / Adeverințe / Dosare")
-                st.info("Puteți transmite direct către diriginte scutiri medicale, copii după cartea de identitate/certificatul de naștere sau documente pentru dosarul de bursă.")
-                
-                col_u1, col_u2 = st.columns([2, 1])
-                with col_u1:
-                    tip_doc_upload = st.selectbox("Tipul Documentului Încărcat:", [
-                        "🩺 Scutire Medicală / Adeverință",
-                        "🪪 Copie Carte de Identitate (Elev / Părinte)",
-                        "📜 Copie Certificat de Naștere",
-                        "💰 Documente Dosar Bursă (Socială / Medicală / Venit)",
-                        "📁 Alt Document"
-                    ], key="p_tip_doc_sel")
-                    up_file = st.file_uploader("Selectează fișierul (PDF, JPG, PNG):", type=["pdf", "jpg", "jpeg", "png"], key="p_up_file_key")
-                    if st.button("🚀 Trimite Documentul către Diriginte", use_container_width=True, type="primary"):
-                        if up_file is not None:
-                            DOCS_DIR = "documente_parinti"
-                            os.makedirs(DOCS_DIR, exist_ok=True)
-                            clean_m = str(student_found[3]).replace('/', '_')
-                            ext = up_file.name.split('.')[-1]
-                            fname_p = f"Doc_{clean_m}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
-                            fpath_p = os.path.join(DOCS_DIR, fname_p)
-                            with open(fpath_p, "wb") as f:
-                                f.write(up_file.getbuffer())
-                            push_to_github(fpath_p)
-                            reg_incarcare_document_parinte(student_found[3], student_found[1], tip_doc_upload, up_file.name, fpath_p)
-                            st.success("✅ Documentul a fost trimis cu succes către diriginte!")
-                            st.rerun()
-                        else:
-                            st.warning("⚠️ Selectați un fișier mai întâi.")
-
-            with tab_p_down:
-                st.subheader("📩 Documente Oficiale Emise de Școală")
-                st.info("Aici puteți vizualiza și descărca înștiințările oficiale emise exclusiv pentru copilul dumneavoastră.")
-                
-                DOCS_DIR_OUT = "documente_oficiale"
-                clean_m = str(student_found[3]).replace('/', '_')
-                meta_of = os.path.join(DOCS_DIR_OUT, f"oficial_{clean_m}.json")
-                if os.path.exists(meta_of):
-                    try:
-                        with open(meta_of, "r", encoding="utf-8") as f:
-                            docs_of = json.load(f)
-                        if docs_of:
-                            for idx_of, doc_item in enumerate(reversed(docs_of)):
-                                col_of1, col_of2 = st.columns([3, 1])
-                                with col_of1:
-                                    st.markdown(f"**{doc_item['tip_document']}** — *{doc_item['nume_document']}*")
-                                    st.caption(f"📅 Data emiterii: {doc_item['data_emitere']} | Fișier: {doc_item['nume_fisier_original']}")
-                                with col_of2:
-                                    fpath = doc_item['cale']
-                                    if os.path.exists(fpath):
-                                        with open(fpath, "rb") as f_bytes:
-                                            b_data = f_bytes.read()
-                                        st.download_button(
-                                            "📥 Descarcă / Vizualizează",
-                                            data=b_data,
-                                            file_name=doc_item['nume_fisier_original'],
-                                            mime="application/pdf" if fpath.endswith(".pdf") else "image/png",
-                                            key=f"dl_of_{clean_m}_{idx_of}",
-                                            on_click=lambda m=student_found[3], n=student_found[1], t=doc_item['nume_document']: reg_confirmare_descarcare(m, n, t),
-                                            use_container_width=True
-                                        )
-                                    else:
-                                        st.warning("Fișier indisponibil local")
-                                st.divider()
-                        else:
-                            st.info("ℹ️ Nu există documente oficiale emise pentru elev.")
-                    except Exception as ex:
-                        st.error(f"Eroare citire documente oficiale: {ex}")
-                else:
-                    st.info("ℹ️ Nu există înregistrat niciun document oficial emis pentru copilul dumneavoastră.")
 
             wb.close()
         except Exception as ex:
