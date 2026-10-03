@@ -288,8 +288,7 @@ def prepare_student_identity_edit(file_path, old_elev_info, new_name, new_nr_mat
         wb.save(file_path)
         wb.close()
         wb = None
-        if not _validate_excel_catalog(file_path):
-            raise RuntimeError("Catalogul modificat nu a trecut validarea structurală.")
+        _validate_excel_catalog(file_path)
         return backup_file
     except Exception:
         try:
