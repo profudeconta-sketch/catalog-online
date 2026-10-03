@@ -2432,12 +2432,28 @@ with tab7:
                 btn_save_edit = st.form_submit_button("💾 Salvează Date Elev", type="primary", use_container_width=True)
                 if btn_save_edit:
                     n_full = f"{e_nume.strip()} {e_initiala.strip()} {e_prenume.strip()}".replace("  ", " ").strip()
+                    original_student = dict(st_curr)
+                    old_elev_info = (
+                        st_curr.get("id"),
+                        st_curr.get("nume_complet", ""),
+                        st_curr.get("rand_excel", ""),
+                        st_curr.get("matricol", ""),
+                        str(st_curr.get("pin", ""))
+                    )
+                    try:
+                        excel_backup = prepare_student_identity_edit(
+                            selected_file, old_elev_info, n_full, e_nr_matr, e_rm_pg
+                        )
+                    except Exception as ex:
+                        st.error(f"Modificarea a fost oprită înainte de salvare: {ex}")
+                        st.stop()
                     st_curr.update({
                         "nume": e_nume.strip(),
                         "initiala": e_initiala.strip(),
                         "prenume": e_prenume.strip(),
                         "nume_complet": n_full,
-                        "matricol": e_matr.strip(),
+                        "rand_excel": e_nr_matr.strip(),
+                        "matricol": e_rm_pg.strip(),
                         "cnp": e_cnp.strip(),
                         "telefon": e_tel.strip(),
                         "nationalitate": e_nat.strip(),
