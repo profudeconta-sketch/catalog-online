@@ -16,7 +16,8 @@ st.set_page_config(
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxf-chEeMc6pA02EU0-pwqMTVp8htzzku6TvX5Uhea_nqqCNEcT3D6RYrmke1n0tAwD/exec"
 
 def _atomic_replace_bytes(filename, content, validator):
-    temp = filename + ".download.tmp"
+    base, ext = os.path.splitext(filename)
+temp = base + ".download" + ext
     try:
         with open(temp, "wb") as f:
             f.write(content)
