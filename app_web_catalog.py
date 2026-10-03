@@ -21,60 +21,7 @@ import shutil
 
 GESTIUNE_FILE = "gestiune_elevi.json"
 
-def init_default_gestiune_data():
-    data = []
-    for e in DEFAULT_ELEVI:
-        e_id = e[0]
-        nume_full = e[1]
-        parts = nume_full.split(' ', 1)
-        nume = parts[0]
-        rest = parts[1] if len(parts) > 1 else ''
-        if '.' in rest:
-            init_parts = rest.split('.', 1)
-            initiala = init_parts[0] + '.'
-            prenume = init_parts[1].strip()
-        else:
-            initiala = ''
-            prenume = rest.strip()
-            
-        rm_pg = e[2]
-        matr = e[3]
-        pin = e[4] if len(e) > 4 else "1234"
-        
-        data.append({
-            "id": e_id,
-            "rand_excel": rm_pg,
-            "matricol": matr,
-            "pin": pin,
-            "nume": nume,
-            "initiala": initiala,
-            "prenume": prenume,
-            "nume_complet": nume_full,
-            "cnp": "",
-            "telefon": "",
-            "localitate": "Turda",
-            "judet": "Cluj",
-            "strada": "",
-            "numar_strada": "",
-            "bloc": "",
-            "apartament": "",
-            "nume_mama": "",
-            "telefon_mama": "",
-            "mama_plecata": False,
-            "tara_mama": "",
-            "nume_tata": "",
-            "telefon_tata": "",
-            "tata_plecat": False,
-            "tara_tata": "",
-            "nationalitate": "Română",
-            "etnie": "Română",
-            "ces": False,
-            "orfan": False,
-            "plasament": False,
-            "bursa_medicala": False,
-            "bursa_venit": False
-        })
-    return data
+
 
 def _validate_gestiune_data(data):
     if not isinstance(data, list) or not data:
@@ -175,9 +122,13 @@ def load_gestiune_data():
         except Exception:
             pass
 
-    return init_default_gestiune_data()
+    st.error(
+        "Datele elevilor nu au putut fi încărcate din sursa privată. "
+        "Aplicația a fost oprită pentru protejarea integrității datelor."
+    )
+    st.stop()
 
-def save_gestiune_data(data):
+def save_gestiune_data(data):    
     temp_file = GESTIUNE_FILE + ".tmp"
     backup_file = GESTIUNE_FILE + ".bak"
     try:
@@ -891,40 +842,7 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # Lista celor 32 de elevi (ID, Nume, RM/PG, Nr. Matr., PIN)
-DEFAULT_ELEVI = [
-    (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76", "2951"),
-    (2, "BARA D. ADRIAN DANIEL", 14, "126/77", "6234"),
-    (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78", "9233"),
-    (4, "BUDULĂU I.M. VLAD IOAN", 16, "126/79", "9385"),
-    (5, "CHESZOVAN D.E. IRINA JULIETA", 17, "126/80", "2681"),
-    (6, "CIURCUI V. DIANA", 18, "126/81", "4658"),
-    (7, "CORDIȘ M.C. EDUARD IONUȚ", 19, "126/82", "7891"),
-    (8, "DEMETER D.C. DENIS RĂZVAN", 20, "126/83", "9975"),
-    (9, "FERENCZI E.C. MEDEA MARICARMEN", 21, "126/84", "9042"),
-    (10, "FLOREA V. FLAVIU CRISTIAN", 22, "126/85", "8226"),
-    (11, "GHERMAN M.I. DAVID MARIUS", 23, "126/86", "4931"),
-    (12, "LOBONȚ M. MIHNEA", 24, "126/87", "1041"),
-    (13, "LUKACS A.L. LORENA DENISA", 25, "126/88", "2322"),
-    (14, "MAGYARI A.M. ANDREI", 26, "126/89", "2814"),
-    (15, "MARCOVICI L.S. IOANA DENISA", 27, "126/90", "5706"),
-    (16, "MARIAN M.I. MIHAELA DARIA", 28, "126/91", "2606"),
-    (17, "MATEI V.C. ROXANA MIHAELA", 29, "126/92", "8367"),
-    (18, "MENCU R.R. DIANA OLIVIA", 30, "126/93", "1188"),
-    (19, "MUNTEANU V.N. ELENA", 31, "126/94", "9032"),
-    (20, "NAP A.C. ALEXANDRA MARIA", 32, "126/95", "6148"),
-    (21, "PETELEU C.A. CLAUDIA MARIA", 33, "126/96", "4444"),
-    (22, "POP D. ANDRA MARIA", 34, "126/97", "7508"),
-    (23, "POP M.V. LARISA ANDREEA", 35, "126/98", "5120"),
-    (24, "POP I.C. ROBERT EUGEN", 36, "126/99", "6696"),
-    (25, "POPA C.F. ILINCA", 37, "126/100", "6843"),
-    (26, "PUICA G. GEORGE ROBERT", 38, "126/101", "7166"),
-    (27, "RĂDUȚ I.M. ADELINA IOANA", 39, "128/1", "9414"),
-    (28, "ȘIPOȘ T.R. DAVID ADRIAN", 40, "128/2", "2250"),
-    (29, "TRIF S.D. TUȘA DANIEL", 41, "128/3", "6577"),
-    (30, "TUȘINEAN S.V. IRINA", 42, "128/4", "2469"),
-    (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5", "9815"),
-    (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6", "5786")
-]
+
 
 ELEVI, PINS = get_current_elevi_and_pins()
 
