@@ -123,12 +123,10 @@ def load_gestiune_data():
             pass
 
     st.error(
-    "Datele elevilor nu au putut fi încărcate din sursa privată. "
-    "Aplicația a fost oprită pentru protejarea integrității datelor."
-)
-st.stop()
-
-def save_gestiune_data(data):
+        "Datele elevilor nu au putut fi încărcate din sursa privată. "
+        "Aplicația a fost oprită pentru protejarea integrității datelor."
+    )
+    st.stop()
     temp_file = GESTIUNE_FILE + ".tmp"
     backup_file = GESTIUNE_FILE + ".bak"
     try:
