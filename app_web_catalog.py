@@ -211,55 +211,51 @@ def resolve_student_row(wb, elev_info):
         )
     return resolved_rows[0]
 
-def update_student_identity_in_excel(file_path, old_elev_info, new_name, new_nr_matr, new_rm_pg):
-    """Actualizează identitatea elevului pe același rând în foile-sursă ale catalogului v15."""
+def prepare_student_identity_excel(file_path, old_elev_info, new_name, new_nr_matr, new_rm_pg):
+    """Pregătește și validează local modificarea identității, fără publicare GitHub."""
     wb = None
+    backup_file = file_path + ".identity.bak"
     try:
+        shutil.copy2(file_path, backup_file)
         wb = load_workbook(file_path)
         student_row = resolve_student_row(wb, old_elev_info)
         required_sheets = ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii")
-
         new_name = str(new_name).strip()
         new_nr_matr = str(new_nr_matr).strip()
         new_rm_pg = str(new_rm_pg).strip()
         if not new_name or not new_nr_matr or not new_rm_pg:
             raise RuntimeError("Numele, NR. MATR. și RM/PG sunt obligatorii.")
-
         for sheet_name in required_sheets:
             ws = wb[sheet_name]
             for row in range(9, ws.max_row + 1):
                 if row == student_row:
                     continue
-                existing_nr = str(ws.cell(row=row, column=3).value or "").strip()
-                existing_rm = str(ws.cell(row=row, column=4).value or "").strip()
-                if existing_nr == new_nr_matr:
+                if str(ws.cell(row=row, column=3).value or "").strip() == new_nr_matr:
                     raise RuntimeError(f"NR. MATR. {new_nr_matr} este deja atribuit altui elev.")
-                if existing_rm.lower() == new_rm_pg.lower():
+                if str(ws.cell(row=row, column=4).value or "").strip().lower() == new_rm_pg.lower():
                     raise RuntimeError(f"RM/PG {new_rm_pg} este deja atribuit altui elev.")
-
         for sheet_name in required_sheets:
             ws = wb[sheet_name]
             ws.cell(row=student_row, column=2).value = new_name
             ws.cell(row=student_row, column=3).value = new_nr_matr
             ws.cell(row=student_row, column=4).value = new_rm_pg
-
         wb.save(file_path)
         wb.close()
         wb = None
-
         if not _validate_excel_catalog(file_path):
             raise RuntimeError("Catalogul actualizat nu a trecut validarea structurală.")
-        if not push_to_github(file_path):
-            raise RuntimeError("Sincronizarea catalogului Excel cu sursa privată nu a fost confirmată.")
-        return True
+        return backup_file
     except Exception as ex:
         try:
             if wb is not None:
                 wb.close()
         except Exception:
             pass
-        st.error(f"Modificarea identității elevului în catalog a fost oprită: {ex}")
-        return False
+        if os.path.exists(backup_file):
+            shutil.copy2(backup_file, file_path)
+            os.remove(backup_file)
+        st.error(f"Pregătirea modificării identității elevului a fost oprită: {ex}")
+        return None
 
 
 def parse_cnp(cnp_str):
@@ -2378,6 +2374,7 @@ with tab7:
                 btn_save_edit = st.form_submit_button("💾 Salvează Date Elev", type="primary", use_container_width=True)
                 if btn_save_edit:
                     n_full = f"{e_nume.strip()} {e_initiala.strip()} {e_prenume.strip()}".replace("  ", " ").strip()
+                    original_student_data = dict(st_curr)
                     old_elev_info = (
                         st_curr.get("id"),
                         st_curr.get("nume_complet", ""),
@@ -2385,10 +2382,11 @@ with tab7:
                         st_curr.get("matricol", ""),
                         str(st_curr.get("pin", ""))
                     )
-                    if not update_student_identity_in_excel(
+                    excel_identity_backup = prepare_student_identity_excel(
                         selected_file, old_elev_info, n_full, e_nr_matr, e_rm_pg
-                    ):
-                        st.warning("⚠️ Catalogul Excel nu a fost actualizat. Datele JSON au rămas nemodificate.")
+                    )
+                    if not excel_identity_backup:
+                        st.warning("⚠️ Modificarea a fost oprită înainte de sincronizare. Datele originale au rămas active.")
                     else:
                         st_curr.update({
                             "nume": e_nume.strip(),
@@ -2422,11 +2420,20 @@ with tab7:
                         "bursa_medicala": e_bmed,
                             "bursa_venit": e_bven
                         })
-                        if save_gestiune_data(gest_data):
+                        if not push_to_github(selected_file):
+                            shutil.copy2(excel_identity_backup, selected_file)
+                            st_curr.clear()
+                            st_curr.update(original_student_data)
+                            st.warning("⚠️ Sincronizarea Excel nu a fost confirmată. Copia locală originală a fost restaurată; JSON nu a fost modificat.")
+                        elif save_gestiune_data(gest_data):
+                            try:
+                                os.remove(excel_identity_backup)
+                            except Exception:
+                                pass
                             st.success(f"✅ Datele elevului {n_full} au fost salvate și sincronizate cu succes!")
                             st.rerun()
                         else:
-                            st.warning("⚠️ Datele Excel au fost sincronizate, dar actualizarea JSON nu a fost confirmată. Nu modificați din nou elevul până la remediere.")
+                            st.error("⚠️ Sincronizarea Excel a reușit, dar JSON nu a fost confirmat. Opriți modificările și verificați sincronizarea înainte de continuare.")
 
     elif op_gest == "➕ Adăugare Elev Nou în Clasă":
         with st.form("form_add_elev"):
