@@ -2291,6 +2291,20 @@ with tab7:
     st.caption("Meniu administrativ pentru introducerea, modificarea și exportul datelor generale ale elevilor din clasă.")
     
     gest_data = load_gestiune_data()
+    try:
+        wb_identity_check = load_workbook(selected_file, data_only=False)
+        validate_student_identity_consistency(wb_identity_check, gest_data)
+        wb_identity_check.close()
+    except Exception as ex:
+        try:
+            wb_identity_check.close()
+        except Exception:
+            pass
+        st.error(
+            "Gestiunea elevilor a fost blocată deoarece JSON și catalogul Excel "
+            f"nu sunt perfect aliniate: {ex}"
+        )
+        st.stop()
     
     op_gest = st.radio(
         "Alegeți operațiunea dorită:",
