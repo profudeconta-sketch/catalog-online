@@ -101,7 +101,7 @@ GESTIUNE_FILE = "gestiune_elevi.json"
 def sync_gestiune_from_github():
     filename = GESTIUNE_FILE
     ts = int(datetime.datetime.now().timestamp())
-    raw_url = f"https://raw.githubusercontent.com/profudeconta-sketch/catalog-online/main/{filename}?t={ts}"
+    raw_url = f"https://raw.githubusercontent.com/profudeconta-sketch/catalog-online-date-private/main/{filename}?t={ts}"
     token = os.environ.get("GITHUB_TOKEN") or ""
     try:
         if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
