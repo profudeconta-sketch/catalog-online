@@ -15,6 +15,43 @@ st.set_page_config(
 
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxf-chEeMc6pA02EU0-pwqMTVp8htzzku6TvX5Uhea_nqqCNEcT3D6RYrmke1n0tAwD/exec"
 
+def _atomic_replace_bytes(filename, content, validator):
+    temp = filename + ".download.tmp"
+    try:
+        with open(temp, "wb") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        validator(temp)
+        os.replace(temp, filename)
+        return filename
+    except Exception:
+        try:
+            if os.path.exists(temp):
+                os.remove(temp)
+        except Exception:
+            pass
+        raise
+
+def _validate_excel(path):
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=False)
+    try:
+        required = {"Centralizator Medii", "Cultură Generală", "Module Tehnologice", "Absențe & Purtare"}
+        missing = required.difference(wb.sheetnames)
+        if missing:
+            raise ValueError("Fișier Excel incomplet.")
+    finally:
+        wb.close()
+
+def _validate_gestiune(path):
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, list) or not data:
+        raise ValueError("Fișierul de gestiune este gol sau invalid.")
+    for row in data:
+        if not isinstance(row, dict) or not {"id", "matricol", "pin"}.issubset(row):
+            raise ValueError("Structură invalidă în fișierul de gestiune.")
+
 # --- FUNCTIE DE SINCRONIZARE SI DESCARCARE AUTOMATA EXCEL DIN GITHUB ---
 def sync_excel_from_github():
     filename = "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
@@ -37,9 +74,7 @@ def sync_excel_from_github():
             if resp.status == 200:
                 content = resp.read()
                 if len(content) > 2000:
-                    with open(filename, "wb") as f:
-                        f.write(content)
-                    return filename
+                    return _atomic_replace_bytes(filename, content, _validate_excel)
     except Exception:
         pass
 
@@ -52,9 +87,7 @@ def sync_excel_from_github():
                 content_b64 = res_json.get('content', '')
                 if content_b64:
                     binary_data = base64.b64decode(content_b64)
-                    with open(filename, "wb") as f:
-                        f.write(binary_data)
-                    return filename
+                    return _atomic_replace_bytes(filename, binary_data, _validate_excel)
     except Exception:
         pass
 
@@ -85,9 +118,7 @@ def sync_gestiune_from_github():
             if resp.status == 200:
                 content = resp.read()
                 if len(content) > 10:
-                    with open(filename, "wb") as f:
-                        f.write(content)
-                    return filename
+                    return _atomic_replace_bytes(filename, content, _validate_gestiune)
     except Exception:
         pass
     return filename
