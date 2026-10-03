@@ -1301,13 +1301,14 @@ def find_excel_file():
     return "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
 
 excel_path = find_excel_file()
+selected_file = excel_path
 
 st.title("🏫 Colegiul 'Emil Negruțiu' Turda — Catalog Școlar Online (IX TH Turism)")
 st.caption("Sistem Informatizat de Gestionare Note, Absențe și Generare Documente Oficiale")
 
 with st.sidebar:
     st.header("⚙️ Opțiuni Catalog")
-    selected_file = st.text_input("Fișier Excel Sursă:", value=excel_path)
+    st.caption(f"📄 Fișier Excel Sursă: {os.path.basename(selected_file)}")
     st.info("💡 Fișierul se salvează automat la fiecare modificare.")
     
     if os.path.exists(selected_file):
