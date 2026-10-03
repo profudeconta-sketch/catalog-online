@@ -1274,7 +1274,13 @@ def sync_excel_from_private_repo():
         return False
 
 
-sync_excel_from_private_repo()
+if not sync_excel_from_private_repo():
+    st.error(
+        "Catalogul Excel nu a putut fi sincronizat și validat din sursa privată. "
+        "Aplicația a fost oprită pentru protejarea integrității datelor."
+    )
+    st.stop()
+
 def find_excel_file():
     candidates = [
         "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
