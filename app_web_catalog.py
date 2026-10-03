@@ -1004,8 +1004,14 @@ def update_excel_computed_values(file_path):
 
         wb.save(file_path)
         wb.close()
-    except Exception:
-        pass
+        return True
+    except Exception as ex:
+        try:
+            wb.close()
+        except Exception:
+            pass
+        st.error(f"Eroare la recalcularea valorilor din catalog: {ex}")
+        return False
 
 # --- CALCUL DINAMIC ÎN TIMP REAL PENTRU VIZUALIZĂRI ȘI RAPOARTE ---
 def calculate_all_class_stats(file_path):
@@ -1647,7 +1653,8 @@ with tab1:
                         break
                 if slot_found:
                     wb.save(selected_file)
-                    update_excel_computed_values(selected_file)
+                    if not update_excel_computed_values(selected_file):
+                        st.warning("⚠️ Modificarea a fost salvată, dar recalcularea valorilor derivate nu a fost confirmată.")
                     if push_to_github(selected_file):
                         st.success(f"✅ Notă salvată și sincronizată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
                         st.rerun()
@@ -1697,7 +1704,8 @@ with tab2:
                         break
                 if slot_found:
                     wb.save(selected_file)
-                    update_excel_computed_values(selected_file)
+                    if not update_excel_computed_values(selected_file):
+                        st.warning("⚠️ Modificarea a fost salvată, dar recalcularea valorilor derivate nu a fost confirmată.")
                     if push_to_github(selected_file):
                         st.success(f"✅ Absență salvată și sincronizată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
                         st.rerun()
@@ -1753,7 +1761,8 @@ with tab3:
                         
                 if found and cell_a.value == f"{target_d}m":
                     wb.save(selected_file)
-                    update_excel_computed_values(selected_file)
+                    if not update_excel_computed_values(selected_file):
+                        st.warning("⚠️ Modificarea a fost salvată, dar recalcularea valorilor derivate nu a fost confirmată.")
                     if push_to_github(selected_file):
                         st.success(f"✅ Absență motivată și sincronizată ('{target_d}m') pentru {ELEVI[elev_idx_m][1]} la {materii_m[mat_idx_m]}")
                         st.rerun()
@@ -1827,7 +1836,8 @@ with tab_del:
                         ws.cell(row=student_row, column=c2).value = None
                         
                     wb.save(selected_file)
-                    update_excel_computed_values(selected_file)
+                    if not update_excel_computed_values(selected_file):
+                        st.warning("⚠️ Modificarea a fost salvată, dar recalcularea valorilor derivate nu a fost confirmată.")
                     if push_to_github(selected_file):
                         st.success(f"✅ {existing_items[item_selected_idx]} a fost ștearsă și sincronizată cu succes din catalog!")
                         wb.close()
