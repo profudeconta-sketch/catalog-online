@@ -172,10 +172,10 @@ def get_current_elevi_parinti():
         except Exception:
             pass
     st.error(
-    "Datele elevilor nu au putut fi încărcate din sursa privată. "
-    "Portalul părinților a fost oprit pentru protejarea datelor."
-)
-st.stop()
+        "Datele elevilor nu au putut fi încărcate din sursa privată. "
+        "Portalul părinților a fost oprit pentru protejarea datelor."
+    )
+    st.stop()
 
 
 # Lista celor 32 de elevi (ID, Nume, RM/PG, Nr. Matr., PIN)
