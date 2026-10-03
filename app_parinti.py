@@ -100,52 +100,68 @@ GESTIUNE_FILE = "gestiune_elevi.json"
 
 def sync_gestiune_from_github():
     filename = GESTIUNE_FILE
-    ts = int(datetime.datetime.now().timestamp())
-
-    api_url = (
-        "https://api.github.com/repos/"
-        "profudeconta-sketch/catalog-online-date-private/"
-        f"contents/{filename}?ref=main&t={ts}"
-    )
 
     token = os.environ.get("GITHUB_TOKEN") or ""
+
     try:
         if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
-            token = token or st.secrets["GITHUB_TOKEN"]
+            token = token or str(st.secrets["GITHUB_TOKEN"])
     except Exception:
         pass
 
     if not token:
-        return filename
+        return False
+
+    api_url = (
+        "https://api.github.com/repos/"
+        "profudeconta-sketch/catalog-online-date-private/"
+        f"contents/{filename}?ref=main"
+    )
 
     headers = {
         "User-Agent": "StreamlitApp",
         "Cache-Control": "no-cache",
         "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github.v3+json"
+        "Accept": "application/vnd.github.v3+json",
     }
+
+    temp_file = filename + ".download.tmp"
 
     try:
         req = urllib.request.Request(api_url, headers=headers)
+
         with urllib.request.urlopen(req, timeout=5) as resp:
-            if resp.status == 200:
-                res_json = json.loads(resp.read().decode("utf-8"))
-                content_b64 = res_json.get("content", "")
+            if resp.status != 200:
+                return False
 
-                if content_b64:
-                    content = base64.b64decode(content_b64)
+            payload = json.loads(resp.read().decode("utf-8"))
 
-                    if len(content) > 10:
-                        return _atomic_replace_bytes(
-                            filename,
-                            content,
-                            _validate_gestiune
-                        )
+        content_b64 = payload.get("content", "")
+
+        if not content_b64:
+            return False
+
+        content = base64.b64decode(content_b64)
+
+        with open(temp_file, "wb") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+
+        _validate_gestiune(temp_file)
+
+        os.replace(temp_file, filename)
+        return True
+
     except Exception:
-        pass
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except Exception:
+            pass
 
-    return filename
-
+        return False
+        
 try:
     sync_gestiune_from_github()
 except Exception:
