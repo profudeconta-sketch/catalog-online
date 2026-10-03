@@ -1160,6 +1160,108 @@ def calculate_all_class_stats(file_path):
         pass
 
     return students_data, subject_totals
+def _validate_excel_catalog(path):
+    required_sheets = {
+        "Centralizator Medii",
+        "Cultură Generală",
+        "Module Tehnologice",
+        "Absențe & Purtare",
+    }
+
+    wb = openpyxl.load_workbook(
+        path,
+        read_only=True,
+        data_only=False
+    )
+
+    try:
+        missing = required_sheets.difference(wb.sheetnames)
+
+        if missing:
+            raise ValueError(
+                "Lipsesc foi obligatorii din catalog: "
+                + ", ".join(sorted(missing))
+            )
+    finally:
+        wb.close()
+
+
+def sync_excel_from_private_repo():
+    filename = "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
+
+    token = os.environ.get("GITHUB_TOKEN") or ""
+
+    try:
+        if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+            token = token or str(st.secrets["GITHUB_TOKEN"])
+    except Exception:
+        pass
+
+    if not token:
+        return False
+
+    url = (
+        "https://api.github.com/repos/"
+        "profudeconta-sketch/catalog-online-date-private/"
+        f"contents/{filename}?ref=main"
+    )
+
+    headers = {
+        "User-Agent": "StreamlitApp",
+        "Cache-Control": "no-cache",
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+
+    temp_file = filename + ".download.tmp"
+
+    try:
+        req = urllib.request.Request(url, headers=headers)
+
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if resp.status != 200:
+                return False
+
+            payload = json.loads(
+                resp.read().decode("utf-8")
+            )
+
+        content_b64 = payload.get("content", "")
+
+        if not content_b64:
+            return False
+
+        content = base64.b64decode(content_b64)
+
+        with open(temp_file, "wb") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+
+        _validate_excel_catalog(temp_file)
+
+        if os.path.exists(filename):
+            shutil.copy2(
+                filename,
+                filename + ".bak"
+            )
+
+        os.replace(temp_file, filename)
+
+        return True
+
+    except Exception:
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except Exception:
+            pass
+
+        return False
+
+
+sync_excel_from_private_repo()
+
 
 def find_excel_file():
     candidates = [
