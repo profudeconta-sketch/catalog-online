@@ -2479,11 +2479,20 @@ with tab7:
                         "bursa_medicala": e_bmed,
                         "bursa_venit": e_bven
                     })
-                    if save_gestiune_data(gest_data):
+                    if not push_to_github(selected_file):
+                        shutil.copy2(excel_backup, selected_file)
+                        st_curr.clear()
+                        st_curr.update(original_student)
+                        st.warning("⚠️ Excel nu a fost sincronizat. Copia originală a fost restaurată, iar JSON nu a fost modificat.")
+                    elif save_gestiune_data(gest_data):
+                        try:
+                            os.remove(excel_backup)
+                        except Exception:
+                            pass
                         st.success(f"✅ Datele elevului {n_full} au fost salvate și sincronizate cu succes!")
                         st.rerun()
                     else:
-                        st.warning("⚠️ Modificarea nu a fost confirmată în repository-ul privat. Aplicația nu va reîncărca datele automat.")
+                        st.error("⚠️ Excel a fost sincronizat, dar JSON nu a fost confirmat. Gestiunea elevilor va fi blocată la următoarea verificare de consistență.")
 
     elif op_gest == "➕ Adăugare Elev Nou în Clasă":
         with st.form("form_add_elev"):
