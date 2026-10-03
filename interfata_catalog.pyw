@@ -12,73 +12,52 @@ fără erori a notelor și absențelor în catalogul automatizat Excel.
 import os
 import sys
 import datetime
+import json
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, scrolledtext
 import openpyxl
 from openpyxl.utils import get_column_letter
 
-# Lista celor 32 de elevi
-ELEVI = [
-    (1, "ALBAC V. ALEXANDRU ANDREI", 13, "126/76"),
-    (2, "BARA D. ADRIAN DANIEL", 14, "126/77"),
-    (3, "BUDACĂ I. MARIA MADALINA", 15, "126/78"),
-    (4, "BUDULĂU I.M. VLAD IOAN", 16, "126/79"),
-    (5, "CHESZOVAN D.E. IRINA JULIETA", 17, "126/80"),
-    (6, "CIURCUI V. DIANA", 18, "126/81"),
-    (7, "CORDIȘ M.C. EDUARD IONUȚ", 19, "126/82"),
-    (8, "DEMETER D.C. DENIS RĂZVAN", 20, "126/83"),
-    (9, "FERENCZI E.C. MEDEA MARICARMEN", 21, "126/84"),
-    (10, "FLOREA V. FLAVIU CRISTIAN", 22, "126/85"),
-    (11, "GHERMAN M.I. DAVID MARIUS", 23, "126/86"),
-    (12, "LOBONȚ M. MIHNEA", 24, "126/87"),
-    (13, "LUKACS A.L. LORENA DENISA", 25, "126/88"),
-    (14, "MAGYARI A.M. ANDREI", 26, "126/89"),
-    (15, "MARCOVICI L.S. IOANA DENISA", 27, "126/90"),
-    (16, "MARIAN M.I. MIHAELA DARIA", 28, "126/91"),
-    (17, "MATEI V.C. ROXANA MIHAELA", 29, "126/92"),
-    (18, "MENCU R.R. DIANA OLIVIA", 30, "126/93"),
-    (19, "MUNTEANU V.N. ELENA", 31, "126/94"),
-    (20, "NAP A.C. ALEXANDRA MARIA", 32, "126/95"),
-    (21, "PETELEU C.A. CLAUDIA MARIA", 33, "126/96"),
-    (22, "POP D. ANDRA MARIA", 34, "126/97"),
-    (23, "POP M.V. LARISA ANDREEA", 35, "126/98"),
-    (24, "POP I.C. ROBERT EUGEN", 36, "126/99"),
-    (25, "POPA C.F. ILINCA", 37, "126/100"),
-    (26, "PUICA G. GEORGE ROBERT", 38, "126/101"),
-    (27, "RĂDUȚ I.M. ADELINA IOANA", 39, "128/1"),
-    (28, "ȘIPOȘ T.R. DAVID ADRIAN", 40, "128/2"),
-    (29, "TRIF S.D. TUȘA DANIEL", 41, "128/3"),
-    (30, "TUȘINEAN S.V. IRINA", 42, "128/4"),
-    (31, "ȚANDEA M. LUCAS MIHAI", 43, "128/5"),
-    (32, "VRÎNCIANU M.G. DELIA MARIA", 44, "128/6")
-]
+# Structura catalogului v15. Datele elevilor NU sunt hard-codate aici.
+CATALOG_FILE = "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
+GESTIUNE_FILE = "gestiune_elevi.json"
+REQUIRED_SHEETS = {"Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii"}
 
-# Mapare structură discipline și module (start_col în v14)
 DISCIPLINE_CG = [
-    ("Limba și literatura română", 8),
-    ("Limba engleză (L1)", 29),
-    ("Limba franceză (L2)", 50),
-    ("Matematică", 71),
-    ("Fizică", 92),
-    ("Chimie", 113),
-    ("Biologie", 134),
-    ("Istorie", 155),
-    ("Geografie", 176),
-    ("Logică, argumentare și comunicare", 197),
-    ("Informatică / TIC", 218),
-    ("Educație fizică", 239),
-    ("Religie", 260),
-    ("Arte vizuale și educație plastică", 281)
+    ("Limba și literatura română", 8), ("Limba engleză (L1)", 61),
+    ("Limba franceză (L2)", 114), ("Matematică", 167), ("Fizică", 220),
+    ("Chimie", 273), ("Biologie", 326), ("Istorie", 379), ("Geografie", 432),
+    ("Logică, argumentare și comunicare", 485), ("Informatică / TIC", 538),
+    ("Educație fizică", 591), ("Religie", 644),
+    ("Arte vizuale și educație plastică", 697)
+]
+MODULE_TH = [
+    ("M1: Bazele contabilității", 8), ("M2: Etică și comunicare", 61),
+    ("M3: Structuri de primire turistică", 114), ("M4: Procese și calitate în HoReCa", 167),
+    ("M5: CDEOȘ (IP) - Instruire Practică", 220),
+    ("M6: Curriculum de aprofundare și inserție profesională", 273)
 ]
 
-MODULE_TH = [
-    ("M1: Bazele contabilității", 8),
-    ("M2: Etică și comunicare", 29),
-    ("M3: Structuri de primire turistică", 50),
-    ("M4: Procese și calitate în HoReCa", 71),
-    ("M5: CDEOȘ (IP) - Instruire Practică", 92),
-    ("M6: Curriculum de aprofundare și inserție profesională", 113)
-]
+
+def load_elevi_local():
+    if not os.path.exists(GESTIUNE_FILE):
+        raise RuntimeError(f"Lipsește fișierul local {GESTIUNE_FILE}.")
+    with open(GESTIUNE_FILE, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    if not isinstance(data, list) or not data:
+        raise RuntimeError("Fișierul de gestiune nu conține o listă validă de elevi.")
+    elevi = []
+    seen_ids, seen_matricol = set(), set()
+    for d in data:
+        if not isinstance(d, dict) or not {"id", "matricol"}.issubset(d):
+            raise RuntimeError("Structură invalidă în fișierul de gestiune.")
+        if d["id"] in seen_ids or d["matricol"] in seen_matricol:
+            raise RuntimeError("Identificatori de elev duplicați în fișierul de gestiune.")
+        seen_ids.add(d["id"]); seen_matricol.add(d["matricol"])
+        nume = d.get("nume_complet", f"{d.get('nume','')} {d.get('initiala','')} {d.get('prenume','')}").strip()
+        elevi.append((d["id"], " ".join(nume.split()), d.get("rand_excel", 12 + d["id"]), d["matricol"]))
+    return elevi
+
 
 class CatalogGUIApp(tk.Tk):
     def __init__(self):
@@ -104,7 +83,13 @@ class CatalogGUIApp(tk.Tk):
         self.style.configure('Header.TLabel', background=self.NAVY, foreground='white', font=('Calibri', 13, 'bold'), padding=10)
         
         # Cale fișier implicită
-        self.filepath_var = tk.StringVar(value="catalog_scolar_clasa_IX_TH_Turda-v14.xlsx")
+        self.filepath_var = tk.StringVar(value=CATALOG_FILE)
+        try:
+            self.elevi = load_elevi_local()
+        except Exception as ex:
+            messagebox.showerror("Eroare date elevi", f"Aplicația nu poate porni în siguranță:\n{ex}")
+            self.destroy()
+            return
         
         self._build_ui()
         self._on_category_changed()
@@ -142,7 +127,7 @@ class CatalogGUIApp(tk.Tk):
         ttk.Label(selection_frame, text="Selectează Elevul:").grid(row=0, column=0, sticky=tk.W, pady=4)
         self.combo_elevi = ttk.Combobox(
             selection_frame, 
-            values=[f"{e[0]}. {e[1]} (Matr. {e[2]})" for e in ELEVI],
+            values=[f"{e[0]}. {e[1]} (RM/PG {e[2]})" for e in self.elevi],
             state="readonly",
             font=('Calibri', 10),
             width=50
@@ -268,14 +253,34 @@ class CatalogGUIApp(tk.Tk):
             return None
         return path
 
+    def _validate_workbook(self, wb):
+        missing = REQUIRED_SHEETS.difference(wb.sheetnames)
+        if missing:
+            raise RuntimeError("Catalog incompatibil v15: lipsesc foi obligatorii.")
+
+    def _validated_student_row(self, wb, elev_info):
+        self._validate_workbook(wb)
+        expected_row = 9 + (elev_info[0] - 1)
+        if expected_row < 9:
+            raise RuntimeError("ID elev invalid.")
+        # v15: identificatorul de catalog (RM/PG) este în coloana 4.
+        expected_key = str(elev_info[3]).strip()
+        for sheet_name in ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii"):
+            actual_key = str(wb[sheet_name].cell(row=expected_row, column=4).value or "").strip()
+            if actual_key != expected_key:
+                raise RuntimeError(
+                    "Identitatea elevului nu corespunde între gestiune și catalog. "
+                    "Operația a fost oprită fără salvare."
+                )
+        return expected_row
+
     def _save_nota(self):
         filepath = self._get_target_file()
         if not filepath:
             return
             
         elev_idx = self.combo_elevi.current() # 0..31
-        elev_info = ELEVI[elev_idx]
-        student_row = 9 + elev_idx
+        elev_info = self.elevi[elev_idx]
         
         cat = self.cat_var.get()
         subject_idx = self.combo_materii.current()
@@ -296,11 +301,12 @@ class CatalogGUIApp(tk.Tk):
             
         try:
             wb = openpyxl.load_workbook(filepath)
+            student_row = self._validated_student_row(wb, elev_info)
             ws = wb[sheet_name]
             
-            # Căutăm primul slot liber de notă (N1..N5 -> start_col + 0, +2, +4, +6, +8)
+            # Căutăm primul slot liber de notă v15 (N1..N10, perechi notă/datǎ)
             slot_found = False
-            for k in range(5):
+            for k in range(10):
                 n_col = start_col + (k * 2)
                 d_col = n_col + 1
                 
@@ -316,7 +322,7 @@ class CatalogGUIApp(tk.Tk):
                     break
                     
             if not slot_found:
-                messagebox.showerror("Sloturi Pline", f"Elevul {elev_info[1]} are deja 5 note trecute la {subj_name}!")
+                messagebox.showerror("Sloturi Pline", f"Elevul {elev_info[1]} are deja 10 note trecute la {subj_name}!")
                 wb.close()
                 return
                 
@@ -337,8 +343,7 @@ class CatalogGUIApp(tk.Tk):
             return
             
         elev_idx = self.combo_elevi.current()
-        elev_info = ELEVI[elev_idx]
-        student_row = 9 + elev_idx
+        elev_info = self.elevi[elev_idx]
         
         cat = self.cat_var.get()
         subject_idx = self.combo_materii.current()
@@ -361,12 +366,13 @@ class CatalogGUIApp(tk.Tk):
         
         try:
             wb = openpyxl.load_workbook(filepath)
+            student_row = self._validated_student_row(wb, elev_info)
             ws = wb[sheet_name]
             
-            # Căutăm primul slot liber de absență (A1..A8 -> start_col + 11 .. start_col + 18)
+            # Căutăm primul slot liber de absență v15 (A1..A30 -> start_col + 21 .. +50)
             slot_found = False
-            for k in range(8):
-                a_col = start_col + 11 + k
+            for k in range(30):
+                a_col = start_col + 21 + k
                 cell_a = ws.cell(row=student_row, column=a_col)
                 
                 if cell_a.value is None or str(cell_a.value).strip() == "":
@@ -377,7 +383,7 @@ class CatalogGUIApp(tk.Tk):
                     break
                     
             if not slot_found:
-                messagebox.showerror("Sloturi Pline", f"Elevul {elev_info[1]} are deja 8 absențe trecute la {subj_name}!")
+                messagebox.showerror("Sloturi Pline", f"Elevul {elev_info[1]} are deja 30 de absențe trecute la {subj_name}!")
                 wb.close()
                 return
                 
@@ -399,8 +405,7 @@ class CatalogGUIApp(tk.Tk):
             return
             
         elev_idx = self.combo_elevi.current()
-        elev_info = ELEVI[elev_idx]
-        student_row = 9 + elev_idx
+        elev_info = self.elevi[elev_idx]
         
         cat = self.cat_var.get()
         subject_idx = self.combo_materii.current()
@@ -419,11 +424,12 @@ class CatalogGUIApp(tk.Tk):
             
         try:
             wb = openpyxl.load_workbook(filepath)
+            student_row = self._validated_student_row(wb, elev_info)
             ws = wb[sheet_name]
             
             found = False
-            for k in range(8):
-                a_col = start_col + 11 + k
+            for k in range(30):
+                a_col = start_col + 21 + k
                 cell_a = ws.cell(row=student_row, column=a_col)
                 val = str(cell_a.value).strip() if cell_a.value else ""
                 
