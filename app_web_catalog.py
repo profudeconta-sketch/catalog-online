@@ -105,7 +105,12 @@ def sync_gestiune_from_private_repo():
 
 
 def load_gestiune_data():
-    sync_gestiune_from_private_repo()
+    if not sync_gestiune_from_private_repo():
+        st.error(
+            "Datele elevilor nu au putut fi sincronizate și validate din sursa privată. "
+            "Aplicația a fost oprită pentru protejarea integrității datelor."
+        )
+        st.stop()
 
     if os.path.exists(GESTIUNE_FILE):
         try:
