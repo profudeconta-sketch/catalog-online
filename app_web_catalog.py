@@ -713,9 +713,18 @@ def push_to_github(file_path):
             if 200 <= resp.status <= 299:
                 st.toast("☁️ Modificările s-au sincronizat automat pe GitHub!")
                 return True
-    except Exception as ex:
-        st.warning(f"Sincronizarea GitHub nu a fost confirmată: {ex}")
-    return False
+        except Exception as ex:
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except Exception:
+            pass
+
+        st.error(
+            f"Eroare la sincronizarea catalogului Excel din repository-ul privat: "
+            f"{type(ex).__name__}: {ex}"
+        )
+        return False
 
 # --- CONFIGURARE FONT UNICODE PENTRU DIACRITICE (PDF) ---
 def get_pdf_font():
