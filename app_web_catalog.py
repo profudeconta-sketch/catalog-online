@@ -211,6 +211,46 @@ def resolve_student_row(wb, elev_info):
         )
     return resolved_rows[0]
 
+def validate_student_identity_consistency(wb, gest_data):
+    """Validează corespondența Nume / NR. MATR. / RM/PG între JSON și catalogul v15."""
+    sheets = ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii")
+    for sheet_name in sheets:
+        if sheet_name not in wb.sheetnames:
+            raise RuntimeError(f"Lipsește foaia obligatorie: {sheet_name}")
+
+    seen_nr = set()
+    seen_rm = set()
+    for d in gest_data:
+        expected_name = " ".join(str(d.get("nume_complet", "")).split())
+        expected_nr = str(d.get("rand_excel", "")).strip()
+        expected_rm = str(d.get("matricol", "")).strip()
+        if not expected_name or not expected_nr or not expected_rm:
+            raise RuntimeError("Există un elev cu identitate structurală incompletă.")
+        if expected_nr in seen_nr or expected_rm.lower() in seen_rm:
+            raise RuntimeError("NR. MATR. sau RM/PG nu este unic în datele elevilor.")
+        seen_nr.add(expected_nr)
+        seen_rm.add(expected_rm.lower())
+
+        resolved_rows = []
+        for sheet_name in sheets:
+            ws = wb[sheet_name]
+            matches = [
+                row for row in range(9, ws.max_row + 1)
+                if str(ws.cell(row=row, column=4).value or "").strip().lower() == expected_rm.lower()
+            ]
+            if len(matches) != 1:
+                raise RuntimeError(f"RM/PG {expected_rm} nu este unic în {sheet_name}.")
+            row = matches[0]
+            actual_name = " ".join(str(ws.cell(row=row, column=2).value or "").split())
+            actual_nr = str(ws.cell(row=row, column=3).value or "").strip()
+            if actual_name != expected_name or actual_nr != expected_nr:
+                raise RuntimeError(f"Identitatea cu RM/PG {expected_rm} diferă în {sheet_name}.")
+            resolved_rows.append(row)
+        if len(set(resolved_rows)) != 1:
+            raise RuntimeError(f"RM/PG {expected_rm} nu este pe același rând în toate foile.")
+    return True
+
+
 def parse_cnp(cnp_str):
     cnp = str(cnp_str).strip()
     if len(cnp) == 13 and cnp.isdigit():
@@ -2279,7 +2319,8 @@ with tab7:
                     e_initiala = st.text_input("Inițiala Tatălui:", value=st_curr.get("initiala", ""))
                     e_prenume = st.text_input("Prenume:", value=st_curr.get("prenume", ""))
                 with c2:
-                    e_matr = st.text_input("Număr Matricol:", value=st_curr.get("matricol", ""))
+                    e_nr_matr = st.text_input("NR. MATR.:", value=str(st_curr.get("rand_excel", "")))
+                    e_rm_pg = st.text_input("RM/PG:", value=st_curr.get("matricol", ""))
                     e_cnp = st.text_input("Cod Numeric Personal (CNP):", value=st_curr.get("cnp", ""))
                     e_tel = st.text_input("Telefon Elev:", value=st_curr.get("telefon", ""))
                 with c3:
