@@ -1642,9 +1642,11 @@ with tab1:
                 if slot_found:
                     wb.save(selected_file)
                     update_excel_computed_values(selected_file)
-                    push_to_github(selected_file)
-                    st.success(f"✅ Notă salvată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
-                    st.rerun()
+                    if push_to_github(selected_file):
+                        st.success(f"✅ Notă salvată și sincronizată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Nota a fost salvată local, dar sincronizarea cu repository-ul privat nu a fost confirmată.")
                 else:
                     st.error("❌ Toate cele 10 sloturi de note sunt pline pentru această disciplină!")
                 wb.close()
@@ -1690,9 +1692,11 @@ with tab2:
                 if slot_found:
                     wb.save(selected_file)
                     update_excel_computed_values(selected_file)
-                    push_to_github(selected_file)
-                    st.success(f"✅ Absență salvată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
-                    st.rerun()
+                    if push_to_github(selected_file):
+                        st.success(f"✅ Absență salvată și sincronizată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Absența a fost salvată local, dar sincronizarea cu repository-ul privat nu a fost confirmată.")
                 else:
                     st.error("❌ Toate cele 30 de sloturi de absențe sunt pline pentru această disciplină!")
                 wb.close()
@@ -1744,9 +1748,11 @@ with tab3:
                 if found and cell_a.value == f"{target_d}m":
                     wb.save(selected_file)
                     update_excel_computed_values(selected_file)
-                    push_to_github(selected_file)
-                    st.success(f"✅ Absență motivată ('{target_d}m') pentru {ELEVI[elev_idx_m][1]} la {materii_m[mat_idx_m]}")
-                    st.rerun()
+                    if push_to_github(selected_file):
+                        st.success(f"✅ Absență motivată și sincronizată ('{target_d}m') pentru {ELEVI[elev_idx_m][1]} la {materii_m[mat_idx_m]}")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Motivarea a fost salvată local, dar sincronizarea cu repository-ul privat nu a fost confirmată.")
                 elif not found:
                     st.warning(f"Nu s-a găsit nicio absență nemotivată cu data '{target_d}'.")
                 wb.close()
@@ -1816,10 +1822,13 @@ with tab_del:
                         
                     wb.save(selected_file)
                     update_excel_computed_values(selected_file)
-                    push_to_github(selected_file)
-                    st.success(f"✅ {existing_items[item_selected_idx]} a fost ștersă cu succes din catalog!")
-                    wb.close()
-                    st.rerun()
+                    if push_to_github(selected_file):
+                        st.success(f"✅ {existing_items[item_selected_idx]} a fost ștearsă și sincronizată cu succes din catalog!")
+                        wb.close()
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Ștergerea a fost aplicată local, dar sincronizarea cu repository-ul privat nu a fost confirmată.")
+                        wb.close()
                 except Exception as ex:
                     st.error(f"Eroare la ștergere: {ex}")
         else:
