@@ -438,7 +438,7 @@ def calculate_lunar_student_absences(file_path):
     if not os.path.exists(file_path):
         return student_rows
     try:
-        wb = openpyxl.openpyxl.load_workbook(file_path, data_only=True)
+        wb = openpyxl.load_workbook(file_path, data_only=True)
         ws_cg = wb["Cultură Generală"]
         ws_th = wb["Module Tehnologice"]
         
@@ -501,7 +501,7 @@ def calculate_lunar_subject_absences(file_path):
     if not os.path.exists(file_path):
         return sub_rows
     try:
-        wb = openpyxl.openpyxl.load_workbook(file_path, data_only=True)
+        wb = openpyxl.load_workbook(file_path, data_only=True)
         ws_cg = wb["Cultură Generală"]
         ws_th = wb["Module Tehnologice"]
         
@@ -1010,7 +1010,7 @@ def update_excel_computed_values(file_path):
     if not os.path.exists(file_path):
         return
     try:
-        wb = openpyxl.openpyxl.load_workbook(file_path)
+        wb = openpyxl.load_workbook(file_path)
         ws_cg = wb['Cultură Generală']
         ws_th = wb['Module Tehnologice']
         ws_abs = wb['Absențe & Purtare']
@@ -1156,7 +1156,7 @@ def calculate_all_class_stats(file_path):
         return students_data, subject_totals
 
     try:
-        wb = openpyxl.openpyxl.load_workbook(file_path, data_only=True)
+        wb = openpyxl.load_workbook(file_path, data_only=True)
         ws_cg = wb["Cultură Generală"]
         ws_th = wb["Module Tehnologice"]
         
@@ -1304,7 +1304,7 @@ def _validate_excel_catalog(path):
         "Absențe & Purtare",
     }
 
-    wb = openpyxl.openpyxl.load_workbook(
+    wb = openpyxl.load_workbook(
         path,
         read_only=True,
         data_only=False
@@ -1506,7 +1506,7 @@ def generate_pdf_student(student_idx, file_path):
     story.append(Spacer(1, 10))
 
     if os.path.exists(file_path):
-        wb = openpyxl.openpyxl.load_workbook(file_path, data_only=True)
+        wb = openpyxl.load_workbook(file_path, data_only=True)
         s_row = resolve_student_row(wb, ELEVI[student_idx])
         
         for cat_title, sheet_n, sub_list in [("DISCIPLINE CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG), ("MODULE TEHNOLOGICE", "Module Tehnologice", MODULE_TH)]:
@@ -1763,7 +1763,7 @@ with tab1:
             st.error(f"Fișierul {selected_file} nu există!")
         else:
             try:
-                wb = openpyxl.openpyxl.load_workbook(selected_file)
+                wb = openpyxl.load_workbook(selected_file)
                 sheet_name = "Cultură Generală" if cat_n == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
                 student_row = resolve_student_row(wb, ELEVI[elev_idx_n])
@@ -1815,7 +1815,7 @@ with tab2:
             st.error(f"Fișierul {selected_file} nu există!")
         else:
             try:
-                wb = openpyxl.openpyxl.load_workbook(selected_file)
+                wb = openpyxl.load_workbook(selected_file)
                 sheet_name = "Cultură Generală" if cat_a == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
                 student_row = resolve_student_row(wb, ELEVI[elev_idx_a])
@@ -1867,7 +1867,7 @@ with tab3:
             st.warning("Vă rugăm să introduceți data absenței!")
         else:
             try:
-                wb = openpyxl.openpyxl.load_workbook(selected_file)
+                wb = openpyxl.load_workbook(selected_file)
                 sheet_name = "Cultură Generală" if cat_m == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
                 student_row = resolve_student_row(wb, ELEVI[elev_idx_m])
@@ -1924,7 +1924,7 @@ with tab_del:
         
         if os.path.exists(selected_file):
             try:
-                wb = openpyxl.openpyxl.load_workbook(selected_file, data_only=True)
+                wb = openpyxl.load_workbook(selected_file, data_only=True)
                 sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
                 student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
@@ -1956,7 +1956,7 @@ with tab_del:
             
             if st.button(f"🗑️ Șterge {tip_del} Selectată", type="primary", use_container_width=True):
                 try:
-                    wb = openpyxl.openpyxl.load_workbook(selected_file)
+                    wb = openpyxl.load_workbook(selected_file)
                     sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
                     ws = wb[sheet_name]
                     student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
@@ -1998,7 +1998,7 @@ with tab4:
 
     if os.path.exists(selected_file):
         try:
-            wb = openpyxl.openpyxl.load_workbook(selected_file, data_only=True)
+            wb = openpyxl.load_workbook(selected_file, data_only=True)
             e_info = ELEVI[elev_idx_v]
             st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[3]}) | Cod PIN Părinți: `{e_info[4] if len(e_info)>4 else '1234'}`")
             
