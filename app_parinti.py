@@ -17,7 +17,7 @@ WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxf-chEeMc6pA02EU0-pwqMTVp
 
 def _atomic_replace_bytes(filename, content, validator):
     base, ext = os.path.splitext(filename)
-temp = base + ".download" + ext
+    temp = base + ".download" + ext
     try:
         with open(temp, "wb") as f:
             f.write(content)
