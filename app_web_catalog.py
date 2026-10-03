@@ -104,6 +104,40 @@ def sync_gestiune_from_private_repo():
         return False
 
 
+STRUCTURAL_TX_FILE = "structural_update_pending.json"
+
+def write_structural_transaction(payload):
+    temp_file = STRUCTURAL_TX_FILE + ".tmp"
+    with open(temp_file, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temp_file, STRUCTURAL_TX_FILE)
+
+def clear_structural_transaction():
+    try:
+        if os.path.exists(STRUCTURAL_TX_FILE):
+            os.remove(STRUCTURAL_TX_FILE)
+    except Exception:
+        pass
+
+def ensure_no_pending_structural_transaction():
+    if not os.path.exists(STRUCTURAL_TX_FILE):
+        return
+    try:
+        with open(STRUCTURAL_TX_FILE, "r", encoding="utf-8") as f:
+            tx = json.load(f)
+        status = str(tx.get("status", "pending"))
+    except Exception:
+        status = "invalid"
+    st.error(
+        "Există o modificare structurală de elev nefinalizată "
+        f"(stare: {status}). Pentru protejarea datelor, gestiunea elevilor este blocată "
+        "până la reconcilierea surselor."
+    )
+    st.stop()
+
+
 def load_gestiune_data():
     if not sync_gestiune_from_private_repo():
         st.error(
@@ -2308,7 +2342,7 @@ with tab7:
     
     st.divider()
     
-    if op_gest == "✏️ Modificare Date Elev Existent":
+    ensure_no_pending_structural_transaction()\n\n    if op_gest == "✏️ Modificare Date Elev Existent":
         if gest_data:
             sel_st_idx = st.selectbox(
                 "Selectează Elevul de Modificat:",
@@ -2382,10 +2416,27 @@ with tab7:
                         st_curr.get("matricol", ""),
                         str(st_curr.get("pin", ""))
                     )
+                    transaction = {
+                        "operation": "edit_student",
+                        "status": "preparing",
+                        "student_id": st_curr.get("id"),
+                        "old": {
+                            "name": old_elev_info[1],
+                            "nr_matr": old_elev_info[2],
+                            "rm_pg": old_elev_info[3]
+                        },
+                        "new": {
+                            "name": n_full,
+                            "nr_matr": e_nr_matr.strip(),
+                            "rm_pg": e_rm_pg.strip()
+                        }
+                    }
+                    write_structural_transaction(transaction)
                     excel_identity_backup = prepare_student_identity_excel(
                         selected_file, old_elev_info, n_full, e_nr_matr, e_rm_pg
                     )
                     if not excel_identity_backup:
+                        clear_structural_transaction()
                         st.warning("⚠️ Modificarea a fost oprită înainte de sincronizare. Datele originale au rămas active.")
                     else:
                         st_curr.update({
@@ -2420,20 +2471,30 @@ with tab7:
                         "bursa_medicala": e_bmed,
                             "bursa_venit": e_bven
                         })
+                        transaction["status"] = "excel_prepared"
+                        write_structural_transaction(transaction)
                         if not push_to_github(selected_file):
                             shutil.copy2(excel_identity_backup, selected_file)
                             st_curr.clear()
                             st_curr.update(original_student_data)
+                            clear_structural_transaction()
                             st.warning("⚠️ Sincronizarea Excel nu a fost confirmată. Copia locală originală a fost restaurată; JSON nu a fost modificat.")
-                        elif save_gestiune_data(gest_data):
-                            try:
-                                os.remove(excel_identity_backup)
-                            except Exception:
-                                pass
-                            st.success(f"✅ Datele elevului {n_full} au fost salvate și sincronizate cu succes!")
-                            st.rerun()
                         else:
-                            st.error("⚠️ Sincronizarea Excel a reușit, dar JSON nu a fost confirmat. Opriți modificările și verificați sincronizarea înainte de continuare.")
+                            transaction["status"] = "excel_published"
+                            write_structural_transaction(transaction)
+                            json_ok = save_gestiune_data(gest_data)
+                            if json_ok:
+                                try:
+                                    os.remove(excel_identity_backup)
+                                except Exception:
+                                    pass
+                                clear_structural_transaction()
+                                st.success(f"✅ Datele elevului {n_full} au fost salvate și sincronizate cu succes!")
+                                st.rerun()
+                            else:
+                                transaction["status"] = "excel_published_json_pending"
+                                write_structural_transaction(transaction)
+                                st.error("⚠️ Excel a fost sincronizat, dar JSON nu a fost confirmat. Tranzacția a fost marcată pentru reconciliere și gestiunea elevilor va rămâne blocată.")
 
     elif op_gest == "➕ Adăugare Elev Nou în Clasă":
         with st.form("form_add_elev"):
