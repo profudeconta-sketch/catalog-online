@@ -144,6 +144,7 @@ def save_gestiune_data(data):
         os.replace(temp_file, GESTIUNE_FILE)
         if not push_to_github(GESTIUNE_FILE):
             st.warning("Datele au fost salvate local, dar sincronizarea GitHub nu a fost confirmată.")
+            return False
         return True
     except Exception as ex:
         try:
@@ -2317,9 +2318,11 @@ with tab7:
                         "bursa_medicala": e_bmed,
                         "bursa_venit": e_bven
                     })
-                    save_gestiune_data(gest_data)
-                    st.success(f"✅ Datele elevului {n_full} au fost salvate cu succes!")
-                    st.rerun()
+                    if save_gestiune_data(gest_data):
+                        st.success(f"✅ Datele elevului {n_full} au fost salvate și sincronizate cu succes!")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Modificarea nu a fost confirmată în repository-ul privat. Aplicația nu va reîncărca datele automat.")
 
     elif op_gest == "➕ Adăugare Elev Nou în Clasă":
         with st.form("form_add_elev"):
@@ -2379,9 +2382,11 @@ with tab7:
                         "bursa_venit": False
                     }
                     gest_data.append(new_item)
-                    save_gestiune_data(gest_data)
-                    st.success(f"✅ Elevul {n_full} a fost adăugat cu succes!")
-                    st.rerun()
+                    if save_gestiune_data(gest_data):
+                        st.success(f"✅ Elevul {n_full} a fost adăugat și sincronizat cu succes!")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Adăugarea nu a fost confirmată în repository-ul privat. Aplicația nu va reîncărca datele automat.")
 
     elif op_gest == "🗑️ Ștergere Elev din Clasă":
         if gest_data:
@@ -2395,9 +2400,11 @@ with tab7:
             st.warning(f"⚠️ Sunteți sigur că doriți să ștergeți elevul **{del_item.get('nume_complet')}** din baza de date?")
             if st.button("🗑️ Confirmă Ștergerea Elevului", type="primary", use_container_width=True):
                 removed = gest_data.pop(sel_del_idx)
-                save_gestiune_data(gest_data)
-                st.success(f"✅ Elevul {removed.get('nume_complet')} a fost șters din clasă.")
-                st.rerun()
+                if save_gestiune_data(gest_data):
+                    st.success(f"✅ Elevul {removed.get('nume_complet')} a fost șters și modificarea a fost sincronizată.")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ Ștergerea nu a fost confirmată în repository-ul privat. Aplicația nu va reîncărca datele automat.")
 
     st.divider()
     st.markdown("#### 📊 Export Registru & Statistică Clasă (Excel)")
