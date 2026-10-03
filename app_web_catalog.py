@@ -76,15 +76,105 @@ def init_default_gestiune_data():
         })
     return data
 
-def load_gestiune_data():
-    if os.path.exists(GESTIUNE_FILE):
+def _validate_gestiune_data(data):
+    if not isinstance(data, list) or not data:
+        raise ValueError("Fișierul de gestiune este gol sau invalid.")
+
+    for row in data:
+        if not isinstance(row, dict) or not {"id", "matricol", "pin"}.issubset(row):
+            raise ValueError("Structură invalidă în fișierul de gestiune.")
+
+
+def sync_gestiune_from_private_repo():
+    token = os.environ.get("GITHUB_TOKEN") or ""
+
+    try:
+        if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+            token = token or str(st.secrets["GITHUB_TOKEN"])
+    except Exception:
+        pass
+
+    if not token:
+        return False
+
+    url = (
+        "https://api.github.com/repos/"
+        "profudeconta-sketch/catalog-online-date-private/"
+        f"contents/{GESTIUNE_FILE}?ref=main"
+    )
+
+    headers = {
+        "User-Agent": "StreamlitApp",
+        "Cache-Control": "no-cache",
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+
+    temp_file = GESTIUNE_FILE + ".download.tmp"
+
+    try:
+        req = urllib.request.Request(url, headers=headers)
+
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if resp.status != 200:
+                return False
+
+            payload = json.loads(resp.read().decode("utf-8"))
+
+        content_b64 = payload.get("content", "")
+
+        if not content_b64:
+            return False
+
+        content = base64.b64decode(content_b64)
+
+        with open(temp_file, "wb") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+
+        with open(temp_file, "r", encoding="utf-8") as f:
+            downloaded_data = json.load(f)
+
+        _validate_gestiune_data(downloaded_data)
+
+        if os.path.exists(GESTIUNE_FILE):
+            shutil.copy2(
+                GESTIUNE_FILE,
+                GESTIUNE_FILE + ".bak"
+            )
+
+        os.replace(temp_file, GESTIUNE_FILE)
+        return True
+
+    except Exception:
         try:
-            with open(GESTIUNE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list) and len(data) > 0:
-                    return data
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
         except Exception:
             pass
+
+        return False
+
+
+def load_gestiune_data():
+    sync_gestiune_from_private_repo()
+
+    if os.path.exists(GESTIUNE_FILE):
+        try:
+            with open(
+                GESTIUNE_FILE,
+                "r",
+                encoding="utf-8"
+            ) as f:
+                data = json.load(f)
+
+            _validate_gestiune_data(data)
+            return data
+
+        except Exception:
+            pass
+
     return init_default_gestiune_data()
 
 def save_gestiune_data(data):
