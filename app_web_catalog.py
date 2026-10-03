@@ -1217,7 +1217,7 @@ def sync_excel_from_private_repo():
         "Accept": "application/vnd.github.v3+json",
     }
 
-    temp_file = filename + ".download.tmp"
+    temp_file = filename + ".download.xlsx"
 
     try:
         req = urllib.request.Request(url, headers=headers)
