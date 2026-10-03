@@ -211,6 +211,96 @@ def resolve_student_row(wb, elev_info):
         )
     return resolved_rows[0]
 
+def validate_student_identity_consistency(wb, gest_data):
+    """Validează corespondența Nume / NR. MATR. / RM/PG între JSON și catalogul v15."""
+    sheets = ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii")
+    for sheet_name in sheets:
+        if sheet_name not in wb.sheetnames:
+            raise RuntimeError(f"Lipsește foaia obligatorie: {sheet_name}")
+
+    seen_nr = set()
+    seen_rm = set()
+    for d in gest_data:
+        expected_name = " ".join(str(d.get("nume_complet", "")).split())
+        expected_nr = str(d.get("rand_excel", "")).strip()
+        expected_rm = str(d.get("matricol", "")).strip()
+        if not expected_name or not expected_nr or not expected_rm:
+            raise RuntimeError("Există un elev cu identitate structurală incompletă.")
+        if expected_nr in seen_nr or expected_rm.lower() in seen_rm:
+            raise RuntimeError("NR. MATR. sau RM/PG nu este unic în datele elevilor.")
+        seen_nr.add(expected_nr)
+        seen_rm.add(expected_rm.lower())
+
+        resolved_rows = []
+        for sheet_name in sheets:
+            ws = wb[sheet_name]
+            matches = [
+                row for row in range(9, ws.max_row + 1)
+                if str(ws.cell(row=row, column=4).value or "").strip().lower() == expected_rm.lower()
+            ]
+            if len(matches) != 1:
+                raise RuntimeError(f"RM/PG {expected_rm} nu este unic în {sheet_name}.")
+            row = matches[0]
+            actual_name = " ".join(str(ws.cell(row=row, column=2).value or "").split())
+            actual_nr = str(ws.cell(row=row, column=3).value or "").strip()
+            if actual_name != expected_name or actual_nr != expected_nr:
+                raise RuntimeError(f"Identitatea cu RM/PG {expected_rm} diferă în {sheet_name}.")
+            resolved_rows.append(row)
+        if len(set(resolved_rows)) != 1:
+            raise RuntimeError(f"RM/PG {expected_rm} nu este pe același rând în toate foile.")
+    return True
+
+
+def prepare_student_identity_edit(file_path, old_elev_info, new_name, new_nr_matr, new_rm_pg):
+    """Pregătește local editarea identității elevului și păstrează backup-ul Excel."""
+    backup_file = file_path + ".identity.bak"
+    wb = None
+    try:
+        shutil.copy2(file_path, backup_file)
+        wb = openpyxl.load_workbook(file_path)
+        student_row = resolve_student_row(wb, old_elev_info)
+        sheets = ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii")
+
+        new_name = " ".join(str(new_name).split())
+        new_nr_matr = str(new_nr_matr).strip()
+        new_rm_pg = str(new_rm_pg).strip()
+        if not new_name or not new_nr_matr or not new_rm_pg:
+            raise RuntimeError("Numele, NR. MATR. și RM/PG sunt obligatorii.")
+
+        for sheet_name in sheets:
+            ws = wb[sheet_name]
+            for row in range(9, ws.max_row + 1):
+                if row == student_row:
+                    continue
+                nr_value = str(ws.cell(row=row, column=3).value or "").strip()
+                rm_value = str(ws.cell(row=row, column=4).value or "").strip()
+                if nr_value == new_nr_matr:
+                    raise RuntimeError("NR. MATR. este deja atribuit altui elev.")
+                if rm_value.lower() == new_rm_pg.lower():
+                    raise RuntimeError("RM/PG este deja atribuit altui elev.")
+
+        for sheet_name in sheets:
+            ws = wb[sheet_name]
+            ws.cell(row=student_row, column=2).value = new_name
+            ws.cell(row=student_row, column=3).value = new_nr_matr
+            ws.cell(row=student_row, column=4).value = new_rm_pg
+
+        wb.save(file_path)
+        wb.close()
+        wb = None
+        _validate_excel_catalog(file_path)
+        return backup_file
+    except Exception:
+        try:
+            if wb is not None:
+                wb.close()
+        except Exception:
+            pass
+        if os.path.exists(backup_file):
+            shutil.copy2(backup_file, file_path)
+        raise
+
+
 def parse_cnp(cnp_str):
     cnp = str(cnp_str).strip()
     if len(cnp) == 13 and cnp.isdigit():
@@ -2251,6 +2341,20 @@ with tab7:
     st.caption("Meniu administrativ pentru introducerea, modificarea și exportul datelor generale ale elevilor din clasă.")
     
     gest_data = load_gestiune_data()
+    try:
+        wb_identity_check = openpyxl.load_workbook(selected_file, data_only=False)
+        validate_student_identity_consistency(wb_identity_check, gest_data)
+        wb_identity_check.close()
+    except Exception as ex:
+        try:
+            wb_identity_check.close()
+        except Exception:
+            pass
+        st.error(
+            "Gestiunea elevilor a fost blocată deoarece JSON și catalogul Excel "
+            f"nu sunt perfect aliniate: {ex}"
+        )
+        st.stop()
     
     op_gest = st.radio(
         "Alegeți operațiunea dorită:",
@@ -2279,7 +2383,8 @@ with tab7:
                     e_initiala = st.text_input("Inițiala Tatălui:", value=st_curr.get("initiala", ""))
                     e_prenume = st.text_input("Prenume:", value=st_curr.get("prenume", ""))
                 with c2:
-                    e_matr = st.text_input("Număr Matricol:", value=st_curr.get("matricol", ""))
+                    e_nr_matr = st.text_input("NR. MATR.:", value=str(st_curr.get("rand_excel", "")))
+                    e_rm_pg = st.text_input("RM/PG:", value=st_curr.get("matricol", ""))
                     e_cnp = st.text_input("Cod Numeric Personal (CNP):", value=st_curr.get("cnp", ""))
                     e_tel = st.text_input("Telefon Elev:", value=st_curr.get("telefon", ""))
                 with c3:
@@ -2326,12 +2431,28 @@ with tab7:
                 btn_save_edit = st.form_submit_button("💾 Salvează Date Elev", type="primary", use_container_width=True)
                 if btn_save_edit:
                     n_full = f"{e_nume.strip()} {e_initiala.strip()} {e_prenume.strip()}".replace("  ", " ").strip()
+                    original_student = dict(st_curr)
+                    old_elev_info = (
+                        st_curr.get("id"),
+                        st_curr.get("nume_complet", ""),
+                        st_curr.get("rand_excel", ""),
+                        st_curr.get("matricol", ""),
+                        str(st_curr.get("pin", ""))
+                    )
+                    try:
+                        excel_backup = prepare_student_identity_edit(
+                            selected_file, old_elev_info, n_full, e_nr_matr, e_rm_pg
+                        )
+                    except Exception as ex:
+                        st.error(f"Modificarea a fost oprită înainte de salvare: {ex}")
+                        st.stop()
                     st_curr.update({
                         "nume": e_nume.strip(),
                         "initiala": e_initiala.strip(),
                         "prenume": e_prenume.strip(),
                         "nume_complet": n_full,
-                        "matricol": e_matr.strip(),
+                        "rand_excel": e_nr_matr.strip(),
+                        "matricol": e_rm_pg.strip(),
                         "cnp": e_cnp.strip(),
                         "telefon": e_tel.strip(),
                         "nationalitate": e_nat.strip(),
@@ -2357,11 +2478,20 @@ with tab7:
                         "bursa_medicala": e_bmed,
                         "bursa_venit": e_bven
                     })
-                    if save_gestiune_data(gest_data):
+                    if not push_to_github(selected_file):
+                        shutil.copy2(excel_backup, selected_file)
+                        st_curr.clear()
+                        st_curr.update(original_student)
+                        st.warning("⚠️ Excel nu a fost sincronizat. Copia originală a fost restaurată, iar JSON nu a fost modificat.")
+                    elif save_gestiune_data(gest_data):
+                        try:
+                            os.remove(excel_backup)
+                        except Exception:
+                            pass
                         st.success(f"✅ Datele elevului {n_full} au fost salvate și sincronizate cu succes!")
                         st.rerun()
                     else:
-                        st.warning("⚠️ Modificarea nu a fost confirmată în repository-ul privat. Aplicația nu va reîncărca datele automat.")
+                        st.error("⚠️ Excel a fost sincronizat, dar JSON nu a fost confirmat. Gestiunea elevilor va fi blocată la următoarea verificare de consistență.")
 
     elif op_gest == "➕ Adăugare Elev Nou în Clasă":
         with st.form("form_add_elev"):
