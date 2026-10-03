@@ -1250,14 +1250,18 @@ def sync_excel_from_private_repo():
 
         return True
 
+    except Exception as ex:
+    try:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
     except Exception:
-        try:
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-        except Exception:
-            pass
+        pass
 
-        return False
+    st.error(
+        f"Eroare la sincronizarea catalogului Excel din repository-ul privat: "
+        f"{type(ex).__name__}: {ex}"
+    )
+    return False
 
 
 sync_excel_from_private_repo()
