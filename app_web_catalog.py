@@ -16,6 +16,7 @@ from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import io
+import shutil
 
 
 GESTIUNE_FILE = "gestiune_elevi.json"
@@ -87,12 +88,29 @@ def load_gestiune_data():
     return init_default_gestiune_data()
 
 def save_gestiune_data(data):
+    temp_file = GESTIUNE_FILE + ".tmp"
+    backup_file = GESTIUNE_FILE + ".bak"
     try:
-        with open(GESTIUNE_FILE, "w", encoding="utf-8") as f:
+        with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        push_to_github(GESTIUNE_FILE)
+            f.flush()
+            os.fsync(f.fileno())
+        with open(temp_file, "r", encoding="utf-8") as f:
+            if json.load(f) != data:
+                raise ValueError("Verificarea fișierului temporar a eșuat.")
+        if os.path.exists(GESTIUNE_FILE):
+            shutil.copy2(GESTIUNE_FILE, backup_file)
+        os.replace(temp_file, GESTIUNE_FILE)
+        if not push_to_github(GESTIUNE_FILE):
+            st.warning("Datele au fost salvate local, dar sincronizarea GitHub nu a fost confirmată.")
         return True
-    except Exception:
+    except Exception as ex:
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except Exception:
+            pass
+        st.error(f"Eroare la salvarea datelor elevilor: {ex}")
         return False
 
 def get_current_elevi_and_pins():
@@ -600,7 +618,7 @@ def push_to_github(file_path):
     except Exception:
         pass
     if not token:
-        return
+        return False
     try:
         repo = "profudeconta-sketch/catalog-online"
         filename = os.path.basename(file_path)
@@ -646,8 +664,10 @@ def push_to_github(file_path):
         with urllib.request.urlopen(req_put, timeout=5) as resp:
             if 200 <= resp.status <= 299:
                 st.toast("☁️ Modificările s-au sincronizat automat pe GitHub!")
-    except Exception:
-        pass
+                return True
+    except Exception as ex:
+        st.warning(f"Sincronizarea GitHub nu a fost confirmată: {ex}")
+    return False
 
 # --- CONFIGURARE FONT UNICODE PENTRU DIACRITICE (PDF) ---
 def get_pdf_font():
@@ -741,7 +761,19 @@ def render_sidebar_copyright():
     )
 
 # AUTENTIFICARE PROFESORI
-PAROLA_PROFESORI = "profesori2026"
+def get_required_secret(name):
+    value = os.environ.get(name, "")
+    try:
+        if hasattr(st, "secrets") and name in st.secrets:
+            value = value or str(st.secrets[name])
+    except Exception:
+        pass
+    if not value:
+        st.error(f"Configurare lipsă: secretul {name} nu este definit în Streamlit Secrets.")
+        st.stop()
+    return value
+
+PAROLA_PROFESORI = get_required_secret("PAROLA_PROFESORI")
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
