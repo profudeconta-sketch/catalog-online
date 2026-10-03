@@ -663,9 +663,12 @@ def push_to_github(file_path):
     try:
         filename = os.path.basename(file_path)
         repo = (
-            "profudeconta-sketch/catalog-online-date-private"
-            if filename == GESTIUNE_FILE
-            else "profudeconta-sketch/catalog-online"
+             "profudeconta-sketch/catalog-online-date-private"
+              if filename in {
+                 GESTIUNE_FILE,
+                 "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
+              }
+              else "profudeconta-sketch/catalog-online"
         )
         url = f"https://api.github.com/repos/{repo}/contents/{filename}"
         

@@ -55,43 +55,55 @@ def _validate_gestiune(path):
 # --- FUNCTIE DE SINCRONIZARE SI DESCARCARE AUTOMATA EXCEL DIN GITHUB ---
 def sync_excel_from_github():
     filename = "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
-    ts = int(datetime.datetime.now().timestamp())
-    raw_url = f"https://raw.githubusercontent.com/profudeconta-sketch/catalog-online/main/{filename}?t={ts}"
-    
+
     token = os.environ.get("GITHUB_TOKEN") or ""
+
     try:
         if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
-            token = token or st.secrets["GITHUB_TOKEN"]
+            token = token or str(st.secrets["GITHUB_TOKEN"])
     except Exception:
         pass
-    headers = {"User-Agent": "StreamlitApp", "Cache-Control": "no-cache"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-        
+
+    if not token:
+        return False
+
+    api_url = (
+        "https://api.github.com/repos/"
+        "profudeconta-sketch/catalog-online-date-private/"
+        f"contents/{filename}?ref=main"
+    )
+
+    headers = {
+        "User-Agent": "StreamlitApp",
+        "Cache-Control": "no-cache",
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+
     try:
-        req = urllib.request.Request(raw_url, headers=headers)
+        req = urllib.request.Request(api_url, headers=headers)
+
         with urllib.request.urlopen(req, timeout=5) as resp:
-            if resp.status == 200:
-                content = resp.read()
-                if len(content) > 2000:
-                    return _atomic_replace_bytes(filename, content, _validate_excel)
-    except Exception:
-        pass
+            if resp.status != 200:
+                return False
 
-    try:
-        api_url = f"https://api.github.com/repos/profudeconta-sketch/catalog-online/contents/{filename}?t={ts}"
-        req_api = urllib.request.Request(api_url, headers=headers)
-        with urllib.request.urlopen(req_api, timeout=5) as resp:
-            if resp.status == 200:
-                res_json = json.loads(resp.read().decode('utf-8'))
-                content_b64 = res_json.get('content', '')
-                if content_b64:
-                    binary_data = base64.b64decode(content_b64)
-                    return _atomic_replace_bytes(filename, binary_data, _validate_excel)
-    except Exception:
-        pass
+            payload = json.loads(resp.read().decode("utf-8"))
 
-    return filename
+        content_b64 = payload.get("content", "")
+
+        if not content_b64:
+            return False
+
+        content = base64.b64decode(content_b64)
+
+        return _atomic_replace_bytes(
+            filename,
+            content,
+            _validate_excel
+        )
+
+    except Exception:
+        return False
 
 # Sincronizare la incarcarea portalului
 sync_excel_from_github()
