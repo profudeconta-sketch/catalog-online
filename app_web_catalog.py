@@ -178,6 +178,39 @@ def get_current_elevi_and_pins():
         pins_list.append(pin_str)
     return elevi_list, pins_list
 
+def resolve_student_row(wb, elev_info):
+    """Identifică sigur rândul elevului în catalogul v15 și validează identitatea între foi."""
+    required_sheets = ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii")
+    for sheet_name in required_sheets:
+        if sheet_name not in wb.sheetnames:
+            raise RuntimeError(f"Lipsește foaia obligatorie: {sheet_name}")
+
+    expected_key = str(elev_info[3]).strip()
+    if not expected_key:
+        raise RuntimeError("Elevul selectat nu are identificator de catalog valid.")
+
+    resolved_rows = []
+    for sheet_name in required_sheets:
+        ws = wb[sheet_name]
+        matches = []
+        for row in range(9, ws.max_row + 1):
+            actual_key = str(ws.cell(row=row, column=4).value or "").strip()
+            if actual_key == expected_key:
+                matches.append(row)
+        if len(matches) != 1:
+            raise RuntimeError(
+                f"Identitatea elevului nu poate fi stabilită univoc în foaia {sheet_name}. "
+                "Operația a fost oprită fără salvare."
+            )
+        resolved_rows.append(matches[0])
+
+    if len(set(resolved_rows)) != 1:
+        raise RuntimeError(
+            "Identitatea elevului nu corespunde pe același rând în toate foile catalogului. "
+            "Operația a fost oprită fără salvare."
+        )
+    return resolved_rows[0]
+
 def parse_cnp(cnp_str):
     cnp = str(cnp_str).strip()
     if len(cnp) == 13 and cnp.isdigit():
@@ -319,7 +352,7 @@ def calculate_lunar_student_absences(file_path):
         ws_th = wb["Module Tehnologice"]
         
         for idx, e in enumerate(ELEVI):
-            s_row = 9 + idx
+            s_row = resolve_student_row(wb, e)
             lunar_counts = {m_code: {'nem': 0, 'mot': 0, 'tot': 0} for m_code, _ in MONTH_DEFS}
             
             for _, col in DISCIPLINE_CG:
@@ -384,8 +417,8 @@ def calculate_lunar_subject_absences(file_path):
         for cat_name, ws, sub_list in [("Cultură Generală", ws_cg, DISCIPLINE_CG), ("Module Tehnologice", ws_th, MODULE_TH)]:
             for s_name, col in sub_list:
                 lunar_counts = {m_code: {'nem': 0, 'mot': 0, 'tot': 0} for m_code, _ in MONTH_DEFS}
-                for idx in range(len(ELEVI)):
-                    s_row = 9 + idx
+                for idx, e in enumerate(ELEVI):
+                    s_row = resolve_student_row(wb, e)
                     for k in range(30):
                         av = ws.cell(row=s_row, column=col + 21 + k).value
                         if av is not None and str(av).strip() != "":
@@ -895,7 +928,7 @@ def update_excel_computed_values(file_path):
         student_stats = []
         
         for idx, e in enumerate(ELEVI):
-            s_row = 9 + idx
+            s_row = resolve_student_row(wb, e)
             cg_avgs = []
             cg_tot_nem = 0
             cg_tot_mot = 0
@@ -1037,7 +1070,7 @@ def calculate_all_class_stats(file_path):
         ws_th = wb["Module Tehnologice"]
         
         for idx, e in enumerate(ELEVI):
-            s_row = 9 + idx
+            s_row = resolve_student_row(wb, e)
             cg_avgs = []
             tot_abs_nem = 0
             tot_abs_mot = 0
@@ -1383,7 +1416,7 @@ def generate_pdf_student(student_idx, file_path):
 
     if os.path.exists(file_path):
         wb = openpyxl.load_workbook(file_path, data_only=True)
-        s_row = 9 + student_idx
+        s_row = resolve_student_row(wb, ELEVI[student_idx])
         
         for cat_title, sheet_n, sub_list in [("DISCIPLINE CULTURĂ GENERALĂ", "Cultură Generală", DISCIPLINE_CG), ("MODULE TEHNOLOGICE", "Module Tehnologice", MODULE_TH)]:
             story.append(Paragraph(clean_pdf_text(cat_title), heading_style))
@@ -1642,7 +1675,7 @@ with tab1:
                 wb = openpyxl.load_workbook(selected_file)
                 sheet_name = "Cultură Generală" if cat_n == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
-                student_row = 9 + elev_idx_n
+                student_row = resolve_student_row(wb, ELEVI[elev_idx_n])
                 start_col = DISCIPLINE_CG[mat_idx_n][1] if cat_n == "Cultură Generală" else MODULE_TH[mat_idx_n][1]
                 
                 slot_found = False
@@ -1694,7 +1727,7 @@ with tab2:
                 wb = openpyxl.load_workbook(selected_file)
                 sheet_name = "Cultură Generală" if cat_a == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
-                student_row = 9 + elev_idx_a
+                student_row = resolve_student_row(wb, ELEVI[elev_idx_a])
                 start_col = DISCIPLINE_CG[mat_idx_a][1] if cat_a == "Cultură Generală" else MODULE_TH[mat_idx_a][1]
                 
                 abs_val = f"{data_abs.strip()}m" if is_mot else data_abs.strip()
@@ -1746,7 +1779,7 @@ with tab3:
                 wb = openpyxl.load_workbook(selected_file)
                 sheet_name = "Cultură Generală" if cat_m == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
-                student_row = 9 + elev_idx_m
+                student_row = resolve_student_row(wb, ELEVI[elev_idx_m])
                 start_col = DISCIPLINE_CG[mat_idx_m][1] if cat_m == "Cultură Generală" else MODULE_TH[mat_idx_m][1]
                 
                 target_d = data_mot.strip()
@@ -1803,7 +1836,7 @@ with tab_del:
                 wb = openpyxl.load_workbook(selected_file, data_only=True)
                 sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
-                student_row = 9 + elev_idx_del
+                student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
                 start_col = DISCIPLINE_CG[mat_idx_del][1] if cat_del == "Cultură Generală" else MODULE_TH[mat_idx_del][1]
                 
                 if tip_del == "Notă":
@@ -1835,7 +1868,7 @@ with tab_del:
                     wb = openpyxl.load_workbook(selected_file)
                     sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
                     ws = wb[sheet_name]
-                    student_row = 9 + elev_idx_del
+                    student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
                     
                     c1, c2 = item_coords[item_selected_idx]
                     ws.cell(row=student_row, column=c1).value = None
@@ -1881,7 +1914,7 @@ with tab4:
             for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
                 st.markdown(f"#### {cat_title}")
                 ws = wb[sheet_n]
-                s_row = 9 + elev_idx_v
+                s_row = resolve_student_row(wb, ELEVI[elev_idx_v])
                 
                 rows_data = []
                 for s_name, start_col in sub_list:
