@@ -211,6 +211,57 @@ def resolve_student_row(wb, elev_info):
         )
     return resolved_rows[0]
 
+def update_student_identity_in_excel(file_path, old_elev_info, new_name, new_nr_matr, new_rm_pg):
+    """Actualizează identitatea elevului pe același rând în foile-sursă ale catalogului v15."""
+    wb = None
+    try:
+        wb = load_workbook(file_path)
+        student_row = resolve_student_row(wb, old_elev_info)
+        required_sheets = ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii")
+
+        new_name = str(new_name).strip()
+        new_nr_matr = str(new_nr_matr).strip()
+        new_rm_pg = str(new_rm_pg).strip()
+        if not new_name or not new_nr_matr or not new_rm_pg:
+            raise RuntimeError("Numele, NR. MATR. și RM/PG sunt obligatorii.")
+
+        for sheet_name in required_sheets:
+            ws = wb[sheet_name]
+            for row in range(9, ws.max_row + 1):
+                if row == student_row:
+                    continue
+                existing_nr = str(ws.cell(row=row, column=3).value or "").strip()
+                existing_rm = str(ws.cell(row=row, column=4).value or "").strip()
+                if existing_nr == new_nr_matr:
+                    raise RuntimeError(f"NR. MATR. {new_nr_matr} este deja atribuit altui elev.")
+                if existing_rm.lower() == new_rm_pg.lower():
+                    raise RuntimeError(f"RM/PG {new_rm_pg} este deja atribuit altui elev.")
+
+        for sheet_name in required_sheets:
+            ws = wb[sheet_name]
+            ws.cell(row=student_row, column=2).value = new_name
+            ws.cell(row=student_row, column=3).value = new_nr_matr
+            ws.cell(row=student_row, column=4).value = new_rm_pg
+
+        wb.save(file_path)
+        wb.close()
+        wb = None
+
+        if not _validate_excel_catalog(file_path):
+            raise RuntimeError("Catalogul actualizat nu a trecut validarea structurală.")
+        if not push_to_github(file_path):
+            raise RuntimeError("Sincronizarea catalogului Excel cu sursa privată nu a fost confirmată.")
+        return True
+    except Exception as ex:
+        try:
+            if wb is not None:
+                wb.close()
+        except Exception:
+            pass
+        st.error(f"Modificarea identității elevului în catalog a fost oprită: {ex}")
+        return False
+
+
 def parse_cnp(cnp_str):
     cnp = str(cnp_str).strip()
     if len(cnp) == 13 and cnp.isdigit():
@@ -2279,7 +2330,8 @@ with tab7:
                     e_initiala = st.text_input("Inițiala Tatălui:", value=st_curr.get("initiala", ""))
                     e_prenume = st.text_input("Prenume:", value=st_curr.get("prenume", ""))
                 with c2:
-                    e_matr = st.text_input("Număr Matricol:", value=st_curr.get("matricol", ""))
+                    e_nr_matr = st.text_input("NR. MATR.:", value=str(st_curr.get("rand_excel", "")))
+                    e_rm_pg = st.text_input("RM/PG:", value=st_curr.get("matricol", ""))
                     e_cnp = st.text_input("Cod Numeric Personal (CNP):", value=st_curr.get("cnp", ""))
                     e_tel = st.text_input("Telefon Elev:", value=st_curr.get("telefon", ""))
                 with c3:
@@ -2326,12 +2378,25 @@ with tab7:
                 btn_save_edit = st.form_submit_button("💾 Salvează Date Elev", type="primary", use_container_width=True)
                 if btn_save_edit:
                     n_full = f"{e_nume.strip()} {e_initiala.strip()} {e_prenume.strip()}".replace("  ", " ").strip()
-                    st_curr.update({
-                        "nume": e_nume.strip(),
-                        "initiala": e_initiala.strip(),
-                        "prenume": e_prenume.strip(),
-                        "nume_complet": n_full,
-                        "matricol": e_matr.strip(),
+                    old_elev_info = (
+                        st_curr.get("id"),
+                        st_curr.get("nume_complet", ""),
+                        st_curr.get("rand_excel", ""),
+                        st_curr.get("matricol", ""),
+                        str(st_curr.get("pin", ""))
+                    )
+                    if not update_student_identity_in_excel(
+                        selected_file, old_elev_info, n_full, e_nr_matr, e_rm_pg
+                    ):
+                        st.warning("⚠️ Catalogul Excel nu a fost actualizat. Datele JSON au rămas nemodificate.")
+                    else:
+                        st_curr.update({
+                            "nume": e_nume.strip(),
+                            "initiala": e_initiala.strip(),
+                            "prenume": e_prenume.strip(),
+                            "nume_complet": n_full,
+                            "rand_excel": e_nr_matr.strip(),
+                            "matricol": e_rm_pg.strip(),
                         "cnp": e_cnp.strip(),
                         "telefon": e_tel.strip(),
                         "nationalitate": e_nat.strip(),
@@ -2355,13 +2420,13 @@ with tab7:
                         "orfan": e_orfan,
                         "plasament": e_plas,
                         "bursa_medicala": e_bmed,
-                        "bursa_venit": e_bven
-                    })
-                    if save_gestiune_data(gest_data):
-                        st.success(f"✅ Datele elevului {n_full} au fost salvate și sincronizate cu succes!")
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ Modificarea nu a fost confirmată în repository-ul privat. Aplicația nu va reîncărca datele automat.")
+                            "bursa_venit": e_bven
+                        })
+                        if save_gestiune_data(gest_data):
+                            st.success(f"✅ Datele elevului {n_full} au fost salvate și sincronizate cu succes!")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Datele Excel au fost sincronizate, dar actualizarea JSON nu a fost confirmată. Nu modificați din nou elevul până la remediere.")
 
     elif op_gest == "➕ Adăugare Elev Nou în Clasă":
         with st.form("form_add_elev"):
