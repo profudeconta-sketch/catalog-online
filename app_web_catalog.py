@@ -251,6 +251,57 @@ def validate_student_identity_consistency(wb, gest_data):
     return True
 
 
+def prepare_student_identity_edit(file_path, old_elev_info, new_name, new_nr_matr, new_rm_pg):
+    """Pregătește local editarea identității elevului și păstrează backup-ul Excel."""
+    backup_file = file_path + ".identity.bak"
+    wb = None
+    try:
+        shutil.copy2(file_path, backup_file)
+        wb = load_workbook(file_path)
+        student_row = resolve_student_row(wb, old_elev_info)
+        sheets = ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii")
+
+        new_name = " ".join(str(new_name).split())
+        new_nr_matr = str(new_nr_matr).strip()
+        new_rm_pg = str(new_rm_pg).strip()
+        if not new_name or not new_nr_matr or not new_rm_pg:
+            raise RuntimeError("Numele, NR. MATR. și RM/PG sunt obligatorii.")
+
+        for sheet_name in sheets:
+            ws = wb[sheet_name]
+            for row in range(9, ws.max_row + 1):
+                if row == student_row:
+                    continue
+                nr_value = str(ws.cell(row=row, column=3).value or "").strip()
+                rm_value = str(ws.cell(row=row, column=4).value or "").strip()
+                if nr_value == new_nr_matr:
+                    raise RuntimeError("NR. MATR. este deja atribuit altui elev.")
+                if rm_value.lower() == new_rm_pg.lower():
+                    raise RuntimeError("RM/PG este deja atribuit altui elev.")
+
+        for sheet_name in sheets:
+            ws = wb[sheet_name]
+            ws.cell(row=student_row, column=2).value = new_name
+            ws.cell(row=student_row, column=3).value = new_nr_matr
+            ws.cell(row=student_row, column=4).value = new_rm_pg
+
+        wb.save(file_path)
+        wb.close()
+        wb = None
+        if not _validate_excel_catalog(file_path):
+            raise RuntimeError("Catalogul modificat nu a trecut validarea structurală.")
+        return backup_file
+    except Exception:
+        try:
+            if wb is not None:
+                wb.close()
+        except Exception:
+            pass
+        if os.path.exists(backup_file):
+            shutil.copy2(backup_file, file_path)
+        raise
+
+
 def parse_cnp(cnp_str):
     cnp = str(cnp_str).strip()
     if len(cnp) == 13 and cnp.isdigit():
