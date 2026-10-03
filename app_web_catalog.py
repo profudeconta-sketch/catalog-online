@@ -127,6 +127,8 @@ def load_gestiune_data():
         "Aplicația a fost oprită pentru protejarea integrității datelor."
     )
     st.stop()
+
+def save_gestiune_data(data):    
     temp_file = GESTIUNE_FILE + ".tmp"
     backup_file = GESTIUNE_FILE + ".bak"
     try:
