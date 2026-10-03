@@ -19,8 +19,11 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 
 # Structura catalogului v15. Datele elevilor NU sunt hard-codate aici.
-CATALOG_FILE = "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
-GESTIUNE_FILE = "gestiune_elevi.json"
+# Fișierele locale sunt rezolvate relativ la folderul aplicației, nu la
+# directorul curent al procesului (important la pornirea prin dublu-click).
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+CATALOG_FILE = os.path.join(APP_DIR, "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx")
+GESTIUNE_FILE = os.path.join(APP_DIR, "gestiune_elevi.json")
 REQUIRED_SHEETS = {"Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii"}
 
 DISCIPLINE_CG = [
