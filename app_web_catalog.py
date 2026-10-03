@@ -620,8 +620,12 @@ def push_to_github(file_path):
     if not token:
         return False
     try:
-        repo = "profudeconta-sketch/catalog-online"
         filename = os.path.basename(file_path)
+        repo = (
+            "profudeconta-sketch/catalog-online-date-private"
+            if filename == GESTIUNE_FILE
+            else "profudeconta-sketch/catalog-online"
+        )
         url = f"https://api.github.com/repos/{repo}/contents/{filename}"
         
         req_get = urllib.request.Request(
