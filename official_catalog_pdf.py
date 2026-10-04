@@ -200,39 +200,127 @@ def _draw_prototype_notice(c: canvas.Canvas) -> None:
     c.drawString(30, 30, "PROTOTIP ETAPA 5.5 – NU REPREZINTĂ CATALOG ÎNCHEIAT")
 
 
+def _fit_text(c: canvas.Canvas, text: str, max_width: float, font: str, size: float, min_size: float = 5.0) -> float:
+    """Micșorează numai cât este necesar; nu trunchiază denumirile oficiale."""
+    current = size
+    while current > min_size and pdfmetrics.stringWidth(text, font, current) > max_width:
+        current -= 0.2
+    if pdfmetrics.stringWidth(text, font, current) > max_width:
+        raise OfficialCatalogError(f"Textul nu încape în rubrica oficială: {text}")
+    return current
+
+
+def _draw_labeled_line(c: canvas.Canvas, label: str, value: str, y: float, x: float = 178, end_x: float = 442) -> None:
+    c.setFont(PDF_FONT, 8.2)
+    c.drawString(x, y, label)
+    line_x = x + pdfmetrics.stringWidth(label, PDF_FONT, 8.2) + 5
+    c.line(line_x, y - 1, end_x, y - 1)
+    size = _fit_text(c, value, end_x - line_x - 6, PDF_FONT_BOLD, 8.2)
+    c.setFont(PDF_FONT_BOLD, size)
+    c.drawCentredString((line_x + end_x) / 2, y + 1, value)
+
+
 def _draw_admin_page(c: canvas.Canvas) -> None:
+    """Pagina 2, construită după geometria tipizatului oficial."""
     width, height = A4
-    y = height - 78
-    c.setFont(PDF_FONT_BOLD, 12)
-    c.drawCentredString(width / 2, y, "CATALOG – ÎNVĂȚĂMÂNT LICEAL")
-    y -= 30
-    c.setFont(PDF_FONT, 9)
-    for label, key in (
-        ("Unitatea de învățământ", "unitate"),
-        ("Clasa", "clasa"),
-        ("An școlar", "an_scolar"),
-        ("Filiera", "filiera"),
-        ("Profilul", "profil"),
-        ("Domeniul pregătirii de bază", "domeniu"),
-        ("Specializarea/Calificarea profesională", "calificare"),
-        ("Director", "director"),
-        ("Diriginte", "diriginte"),
-    ):
-        c.drawString(42, y, f"{label}:")
-        c.drawString(220, y, str(CATALOG_CONFIG[key]))
-        y -= 17
 
-    y -= 10
-    c.setFont(PDF_FONT_BOLD, 8)
-    c.drawString(42, y, "DISCIPLINĂ / MODUL")
-    c.drawString(340, y, "CADRU DIDACTIC")
-    y -= 13
+    c.setFont(PDF_FONT_BOLD, 23)
+    c.drawCentredString(width / 2, height - 58, "MINISTERUL EDUCAȚIEI*")
+
+    c.setLineWidth(1.4)
+    c.line(34, height - 75, width - 34, height - 75)
+    c.setFont(PDF_FONT_BOLD, 8.5)
+    c.drawCentredString(width / 2, height - 69, CATALOG_CONFIG["unitate"])
     c.setFont(PDF_FONT, 6.5)
-    for subject, professor in PROFESSORS.items():
-        c.drawString(42, y, subject[:75])
-        c.drawString(340, y, professor)
-        y -= 12
+    c.drawCentredString(width / 2, height - 84, "(Unitatea de învățământ)")
 
+    locality = "Turda, județul Cluj"
+    c.setLineWidth(0.7)
+    c.line(145, height - 108, width - 145, height - 108)
+    c.setFont(PDF_FONT_BOLD, 8.2)
+    c.drawCentredString(width / 2, height - 104, locality)
+    c.setFont(PDF_FONT, 6.5)
+    c.drawCentredString(width / 2, height - 121, "(Localitatea și județul)")
+
+    c.setFont(PDF_FONT, 22)
+    c.drawString(140, height - 159, "Catalogul clasei")
+    c.setFont(PDF_FONT_BOLD, 16)
+    c.drawString(360, height - 158, CATALOG_CONFIG["clasa"])
+    c.line(355, height - 162, 445, height - 162)
+    c.setFont(PDF_FONT, 7.5)
+    c.drawCentredString(width / 2, height - 178, "(Învățământ liceal)")
+
+    _draw_labeled_line(c, "Filiera", CATALOG_CONFIG["filiera"], height - 203)
+    _draw_labeled_line(c, "Profilul", CATALOG_CONFIG["profil"], height - 222)
+    _draw_labeled_line(
+        c,
+        "Domeniul pregătirii de bază** (Clasa a IX-a și a X-a)",
+        CATALOG_CONFIG["domeniu"],
+        height - 241,
+    )
+    _draw_labeled_line(
+        c,
+        "Specializarea/Calificarea profesională**",
+        CATALOG_CONFIG["calificare"],
+        height - 260,
+    )
+
+    c.setFont(PDF_FONT, 16)
+    c.drawString(194, height - 290, "Anul școlar")
+    c.line(302, height - 293, 405, height - 293)
+    c.setFont(PDF_FONT_BOLD, 11)
+    c.drawCentredString(353, height - 289, CATALOG_CONFIG["an_scolar"])
+
+    c.setFont(PDF_FONT_BOLD, 10)
+    c.drawString(96, height - 333, "DIRECTOR,")
+    c.drawString(410, height - 333, "DIRIGINTE,")
+    c.setFont(PDF_FONT, 8)
+    c.drawString(96, height - 350, CATALOG_CONFIG["director"])
+    c.drawRightString(width - 58, height - 350, CATALOG_CONFIG["diriginte"])
+    c.drawString(96, height - 369, "L.S.")
+
+    c.setFont(PDF_FONT_BOLD, 12)
+    c.drawCentredString(width / 2, height - 397, "PROFESORI")
+
+    left = 34
+    right = width - 34
+    top = height - 407
+    bottom = 117
+    mid = width / 2
+    col_x = [left, 143, mid, mid + 109, right]
+    header_h = 24
+    row_h = (top - bottom - header_h) / 10
+
+    c.setLineWidth(0.8)
+    c.rect(left, bottom, right - left, top - bottom)
+    for x in col_x[1:-1]:
+        c.line(x, bottom, x, top)
+    c.line(left, top - header_h, right, top - header_h)
+    for i in range(1, 10):
+        y = top - header_h - i * row_h
+        c.line(left, y, right, y)
+
+    c.setFont(PDF_FONT_BOLD, 6.7)
+    headers = ("DISCIPLINA/MODUL", "PROFESOR", "DISCIPLINA/MODUL", "PROFESOR")
+    for i, header in enumerate(headers):
+        c.drawCentredString((col_x[i] + col_x[i + 1]) / 2, top - 15, header)
+
+    entries = list(PROFESSORS.items())
+    c.setFont(PDF_FONT, 5.5)
+    for row in range(10):
+        y = top - header_h - (row + 0.67) * row_h
+        for side, entry_index in ((0, row), (2, row + 10)):
+            subject, professor = entries[entry_index]
+            subject_size = _fit_text(c, subject, col_x[side + 1] - col_x[side] - 6, PDF_FONT, 5.5, 4.0)
+            professor_size = _fit_text(c, professor, col_x[side + 2] - col_x[side + 1] - 6, PDF_FONT, 5.5, 4.0)
+            c.setFont(PDF_FONT, subject_size)
+            c.drawString(col_x[side] + 3, y, subject)
+            c.setFont(PDF_FONT, professor_size)
+            c.drawString(col_x[side + 1] + 3, y, professor)
+
+    c.setFont(PDF_FONT, 5.7)
+    c.drawString(34, 101, "*) denumirea curentă a ministerului")
+    c.drawString(34, 92, "**) se completează pentru filierea tehnologică")
 
 def _draw_students_grid(c: canvas.Canvas, students: Sequence[StudentIdentity], page_no: int) -> None:
     width, height = A4
