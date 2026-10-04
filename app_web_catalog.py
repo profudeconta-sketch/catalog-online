@@ -2207,10 +2207,96 @@ with tab_del:
         else:
             st.info(f"ℹ️ Nu există nicio {tip_del.lower()} înregistrată pentru elevul selectat la {materii_del[mat_idx_del]}.")
 
+def generate_parent_access_pdf(elev_idx, file_path):
+    """Generează în memorie fișa individuală de acces pentru părintele/reprezentantul legal."""
+    elev_info = ELEVI[elev_idx]
+    wb = openpyxl.load_workbook(file_path, data_only=True)
+    try:
+        resolve_student_row(wb, elev_info)
+    finally:
+        wb.close()
+
+    student_name = str(elev_info[1]).strip()
+    nr_matr = str(elev_info[2]).strip()
+    rm_pg = str(elev_info[3]).strip()
+    pin = str(elev_info[4]).strip() if len(elev_info) > 4 else ""
+    if not student_name or not nr_matr or not rm_pg or not pin:
+        raise RuntimeError("Datele de acces ale elevului sunt incomplete. PDF-ul nu a fost generat.")
+
+    portal_url = "https://catalog-online-5482kppsbvvl6nffpe332g.streamlit.app/"
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=32,
+        bottomMargin=32,
+        invariant=1,
+    )
+    try:
+        import fontpkg_noto_sans
+        noto_dir = os.path.dirname(fontpkg_noto_sans.__file__)
+        regular_font = os.path.join(noto_dir, "NotoSans-Regular.ttf")
+        bold_font = os.path.join(noto_dir, "NotoSans-Bold.ttf")
+        if "ParentAccessNoto" not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont("ParentAccessNoto", regular_font))
+        if "ParentAccessNotoBold" not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont("ParentAccessNotoBold", bold_font))
+    except Exception as ex:
+        raise RuntimeError("Fontul Unicode necesar pentru fișa de acces nu este disponibil.") from ex
+
+    styles = getSampleStyleSheet()
+    body = ParagraphStyle(
+        "AccessBody",
+        parent=styles["BodyText"],
+        fontName="ParentAccessNoto",
+        fontSize=10,
+        leading=14,
+        spaceAfter=8,
+    )
+    title = ParagraphStyle(
+        "AccessTitle",
+        parent=styles["Heading2"],
+        fontName="ParentAccessNotoBold",
+        fontSize=14,
+        leading=18,
+        alignment=1,
+        spaceAfter=14,
+    )
+    centered = ParagraphStyle(
+        "AccessCentered",
+        parent=body,
+        alignment=1,
+    )
+
+    story = [
+        Paragraph("COLEGIUL „EMIL NEGRUȚIU” TURDA", centered),
+        Paragraph("AN ȘCOLAR 2026–2027 | CLASA a IX-a TH (TURISM ȘI ALIMENTAȚIE)", centered),
+        Paragraph("Prof. Diriginte: Prof. Ec. Gherman Octavian-Theodor", centered),
+        Spacer(1, 10),
+        Paragraph("BILET INDIVIDUAL DE ACCES — PORTAL PĂRINȚI", title),
+        Paragraph(f"<b>ELEV / ELEVĂ:</b> {student_name}", body),
+        Paragraph(f"<b>NUMĂR MATRICOL (UTILIZATOR):</b> {rm_pg} (sau numărul simplu: {nr_matr})", body),
+        Paragraph(f"<b>COD PIN CONFIDENȚIAL (PAROLĂ):</b> {pin}", body),
+        Paragraph(f"<b>ADRESĂ WEB PORTAL:</b> {portal_url}", body),
+        Spacer(1, 8),
+        Paragraph("<b>INSTRUCȚIUNI DE CONECTARE ȘI ADĂUGARE PE ECRANUL TELEFONULUI:</b>", body),
+        Paragraph(f"1. <b>Autentificare:</b> Accesați adresa {portal_url} și introduceți Numărul Matricol și Codul PIN de mai sus.", body),
+        Paragraph("2. <b>Telefoane Android (Samsung, Xiaomi, Motorola etc.):</b> Deschideți în Google Chrome → apăsați pe cele 3 puncte (dreapta sus) → selectați opțiunea „Adaugă pe ecranul de pornire” (sau „Instalează aplicația”).", body),
+        Paragraph("3. <b>Telefoane iPhone (Apple iOS):</b> Deschideți în Safari → apăsați pe butonul Partajare → selectați opțiunea „Adaugă pe ecranul principal”.", body),
+        Spacer(1, 18),
+        Paragraph("© Software Creat și Deținut de Prof. Ec. Gherman Octavian-Theodor | Protejat de Legea nr. 8/1996 privind drepturile de autor.", centered),
+        Paragraph("Comercializarea este interzisă! Produs utilizat gratuit exclusiv de persoanele autorizate de autor.", centered),
+    ]
+    doc.build(story)
+    return buffer.getvalue()
+
+
 # --- TAB 5: FIȘĂ ELEV ---
 with tab4:
     st.subheader("Fișă Elev & Rezumat")
-    col_v1, col_v2 = st.columns([3, 1])
+    col_v1, col_v2, col_v3 = st.columns([3, 1, 1])
     with col_v1:
         elev_idx_v = st.selectbox("Alege Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_v")
     with col_v2:
@@ -2221,6 +2307,20 @@ with tab4:
             st.download_button("🖨️ Descarcă Fișă PDF", data=pdf_bytes, file_name=f"Fisa_Elev_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
         except Exception as ex:
             st.error(f"Eroare PDF: {ex}")
+    with col_v3:
+        st.write("")
+        st.write("")
+        try:
+            access_pdf_bytes = generate_parent_access_pdf(elev_idx_v, selected_file)
+            st.download_button(
+                "🔐 Descarcă Fișa de acces pentru părinte",
+                data=access_pdf_bytes,
+                file_name=f"Fisa_Acces_Parinte_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        except Exception as ex:
+            st.error(f"Eroare fișă acces: {ex}")
 
     if os.path.exists(selected_file):
         try:
