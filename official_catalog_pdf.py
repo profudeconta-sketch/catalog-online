@@ -381,6 +381,30 @@ def extract_existing_average(wb, student: StudentIdentity, source_key: str) -> o
 
 
 @dataclass(frozen=True)
+class ExistingAttendanceSummary:
+    unmotivated: object | None
+    motivated: object | None
+    total: object | None
+    conduct: object | None
+
+
+def extract_existing_attendance_summary(wb, student: StudentIdentity) -> ExistingAttendanceSummary:
+    """Citește valorile persistente din «Absențe & Purtare», fără recalculare."""
+    ws = wb["Absențe & Purtare"]
+
+    def existing(column: int) -> object | None:
+        value = ws.cell(row=student.row, column=column).value
+        return None if value is None or not _norm(value) else value
+
+    return ExistingAttendanceSummary(
+        unmotivated=existing(5),
+        motivated=existing(6),
+        total=existing(7),
+        conduct=existing(8),
+    )
+
+
+@dataclass(frozen=True)
 class PhysicalSubjectData:
     label: str | None
     source_key: str | None
@@ -1002,6 +1026,34 @@ def _draw_marks_spread_placeholder(
                             y_bottom + 2 * mean_row_h + 2,
                             _norm(subject.average),
                         )
+
+            if student is not None:
+                attendance = extract_existing_attendance_summary(wb, student)
+                c.setFont(PDF_FONT_BOLD, 4.2)
+
+                # Nota la purtare este valoarea persistentă din coloana 8.
+                # Se înscrie în zona de corp Purtare; rândul median barat cu X
+                # și celelalte câmpuri manuale ale tipizatului rămân neatinse.
+                if attendance.conduct is not None:
+                    conduct_body_y = (y_bottom + mean_h + conduct_split_y) / 2
+                    c.drawCentredString(
+                        (x_conduct + x_total) / 2,
+                        conduct_body_y,
+                        _norm(attendance.conduct),
+                    )
+
+                if attendance.total is not None:
+                    c.drawCentredString(
+                        (x_total + x_unmotiv) / 2,
+                        y_bottom + 2 * mean_row_h + 2,
+                        _norm(attendance.total),
+                    )
+                if attendance.unmotivated is not None:
+                    c.drawCentredString(
+                        (x_unmotiv + right) / 2,
+                        y_bottom + 2 * mean_row_h + 2,
+                        _norm(attendance.unmotivated),
+                    )
 
             # X-ul tipărit în celula mediană a rubricii Purtare.
             x1, x2 = x_conduct, x_total
