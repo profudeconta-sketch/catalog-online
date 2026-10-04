@@ -164,6 +164,35 @@ CATALOG_P4_SOURCE_KEYS = (
 )
 
 
+# Structura de coloane este aceeași cu aplicația existentă. Generatorul oficial
+# doar citește aceste poziții; nu recalculează și nu scrie nimic în workbook.
+CG_START_COLUMNS = {
+    "Limba și literatura română": 8,
+    "Limba engleză (L1)": 61,
+    "Limba franceză (L2)": 114,
+    "Matematică": 167,
+    "Fizică": 220,
+    "Chimie": 273,
+    "Biologie": 326,
+    "Istorie": 379,
+    "Geografie": 432,
+    "Logică, argumentare și comunicare": 485,
+    "Informatică / TIC": 538,
+    "Educație fizică": 591,
+    "Religie": 644,
+    "Arte vizuale și educație plastică": 697,
+}
+
+TH_START_COLUMNS = {
+    "M1: Bazele contabilității": 8,
+    "M2: Etică și comunicare": 61,
+    "M3: Structuri de primire turistică": 114,
+    "M4: Procese și calitate în HoReCa": 167,
+    "M5: CDEOȘ (IP) - Instruire Practică": 220,
+    "M6: Curriculum de aprofundare și inserție profesională": 273,
+}
+
+
 def _validate_physical_source_mapping() -> None:
     """Oprește generarea dacă harta fizică și sursele Excel se desincronizează."""
     for physical, sources, page in (
@@ -187,6 +216,7 @@ def _validate_physical_source_mapping() -> None:
                 raise OfficialCatalogError(
                     f"Maparea {source_key!r} nu corespunde rubricii fizice {label!r} de pe {page}."
                 )
+            _source_location(source_key)
 
 
 @dataclass(frozen=True)
@@ -195,6 +225,33 @@ class StudentIdentity:
     nr_matr: str
     rm_pg: str
     row: int
+
+
+@dataclass(frozen=True)
+class GradeEntry:
+    grade: object
+    date: object
+
+
+def _source_location(source_key: str) -> tuple[str, int]:
+    if source_key in CG_START_COLUMNS:
+        return "Cultură Generală", CG_START_COLUMNS[source_key]
+    if source_key in TH_START_COLUMNS:
+        return "Module Tehnologice", TH_START_COLUMNS[source_key]
+    raise OfficialCatalogError(f"Nu există poziție Excel validată pentru {source_key!r}.")
+
+
+def extract_grade_entries(wb, student: StudentIdentity, source_key: str) -> tuple[GradeEntry, ...]:
+    """Citește cele 10 perechi Notă/Data exact ca aplicația existentă."""
+    sheet_name, start_col = _source_location(source_key)
+    ws = wb[sheet_name]
+    entries: list[GradeEntry] = []
+    for k in range(10):
+        grade = ws.cell(row=student.row, column=start_col + k * 2).value
+        date = ws.cell(row=student.row, column=start_col + k * 2 + 1).value
+        if grade is not None and _norm(grade):
+            entries.append(GradeEntry(grade=grade, date=date))
+    return tuple(entries)
 
 
 PDF_FONT = "OfficialCatalogNoto"
