@@ -587,8 +587,8 @@ else:
             if leave_status == LEAVE_STATUS_APPROVED:
                 st.success("✅ ÎNVOIRE APROBATĂ")
                 st.markdown(
-                    f"**Data:** {current_leave_request.get('request_date')}  \\n"
-                    f"**Ora plecării:** {current_leave_request.get('departure_time')}  \\n"
+                    f"**Data:** {current_leave_request.get('request_date')}  \n"
+                    f"**Ora plecării:** {current_leave_request.get('departure_time')}  \n"
                     f"**Motiv:** {current_leave_request.get('reason_label')}"
                 )
                 st.info(
