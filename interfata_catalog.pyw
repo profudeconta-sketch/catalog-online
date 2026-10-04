@@ -263,19 +263,30 @@ class CatalogGUIApp(tk.Tk):
 
     def _validated_student_row(self, wb, elev_info):
         self._validate_workbook(wb)
-        expected_row = 9 + (elev_info[0] - 1)
-        if expected_row < 9:
-            raise RuntimeError("ID elev invalid.")
-        # v15: identificatorul de catalog (RM/PG) este în coloana 4.
         expected_key = str(elev_info[3]).strip()
+        if not expected_key:
+            raise RuntimeError("RM/PG lipsește pentru elevul selectat.")
+
+        rows = []
         for sheet_name in ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii"):
-            actual_key = str(wb[sheet_name].cell(row=expected_row, column=4).value or "").strip()
-            if actual_key != expected_key:
+            ws = wb[sheet_name]
+            matches = [
+                row for row in range(9, ws.max_row + 1)
+                if str(ws.cell(row=row, column=4).value or "").strip().lower() == expected_key.lower()
+            ]
+            if len(matches) != 1:
                 raise RuntimeError(
-                    "Identitatea elevului nu corespunde între gestiune și catalog. "
+                    f"RM/PG trebuie să apară exact o dată în foaia {sheet_name}. "
                     "Operația a fost oprită fără salvare."
                 )
-        return expected_row
+            rows.append(matches[0])
+
+        if len(set(rows)) != 1:
+            raise RuntimeError(
+                "Rândul elevului nu este consistent între foile catalogului. "
+                "Operația a fost oprită fără salvare."
+            )
+        return rows[0]
 
     def _save_nota(self):
         filepath = self._get_target_file()

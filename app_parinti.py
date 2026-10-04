@@ -280,6 +280,37 @@ def safe_str(val):
         return ""
     return str(val).strip()
 
+
+def resolve_student_row(wb, elev_info):
+    """Rezolvă rândul elevului exclusiv prin RM/PG și verifică toate foile sursă."""
+    required = ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii")
+    missing = [name for name in required if name not in wb.sheetnames]
+    if missing:
+        raise RuntimeError("Catalog incompatibil v15: lipsesc foi obligatorii.")
+
+    expected_rm = str(elev_info[3]).strip()
+    if not expected_rm:
+        raise RuntimeError("RM/PG lipsește pentru elevul selectat.")
+
+    rows = []
+    for sheet_name in required:
+        ws = wb[sheet_name]
+        matches = [
+            row for row in range(9, ws.max_row + 1)
+            if str(ws.cell(row=row, column=4).value or "").strip().lower() == expected_rm.lower()
+        ]
+        if len(matches) != 1:
+            raise RuntimeError(
+                f"RM/PG trebuie să apară exact o dată în foaia {sheet_name}; "
+                "afișarea a fost blocată pentru protecția datelor."
+            )
+        rows.append(matches[0])
+
+    if len(set(rows)) != 1:
+        raise RuntimeError("Rândul elevului nu este consistent între foile catalogului.")
+    return rows[0]
+
+
 def safe_float_str(val):
     if val is None or val == "":
         return "-"
@@ -369,8 +400,8 @@ else:
             all_abs = []
             student_specific_data = None
 
-            for idx_e, e_item in enumerate(ELEVI):
-                r_row = 9 + idx_e
+            for e_item in ELEVI:
+                r_row = resolve_student_row(wb, e_item)
                 
                 c_avgs = []
                 t_nem = 0
@@ -456,8 +487,7 @@ else:
 
             st.divider()
 
-            s_idx = student_found[0] - 1
-            s_row = 9 + s_idx
+            s_row = resolve_student_row(wb, student_found)
 
             for cat_title, ws, sub_list in [("📚 DISCIPLINE CULTURĂ GENERALĂ", ws_cg, DISCIPLINE_CG), ("⚙️ MODULE TEHNOLOGICE", ws_th, MODULE_TH)]:
                 st.markdown(f"#### {cat_title}")
