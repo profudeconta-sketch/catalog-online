@@ -7,7 +7,7 @@ import urllib.parse
 import json
 import base64
 
-from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES
+from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentStorageError, build_document_record, store_new_document
 
 st.set_page_config(
     page_title="Portal Părinți - Catalog IX TH",
@@ -441,29 +441,49 @@ else:
             key="doc_type_preview",
         )
 
+        scholarship_type = None
         if category == "DOSAR_BURSA":
-            st.selectbox(
+            scholarship_type = st.selectbox(
                 "Tipul bursei",
                 sorted(SCHOLARSHIP_TYPES),
                 format_func=lambda value: scholarship_labels.get(value, value),
                 key="doc_scholarship_preview",
             )
 
-        st.file_uploader(
+        uploaded_document = st.file_uploader(
             "Selectează documentul (PDF, JPG/JPEG sau PNG)",
             type=["pdf", "jpg", "jpeg", "png"],
             accept_multiple_files=False,
-            disabled=True,
             key="doc_upload_preview",
-            help="Încărcarea va fi activată după validarea Etapei 4A.",
         )
-        st.button(
+        send_document = st.button(
             "📤 Salvează și trimite",
-            disabled=True,
             use_container_width=True,
             key="doc_send_preview",
         )
-        st.info("ℹ️ Modul de previzualizare: niciun document nu poate fi trimis sau salvat încă.")
+        if send_document and uploaded_document is None:
+            st.warning("Selectați mai întâi documentul care trebuie transmis.")
+        elif send_document:
+            try:
+                record, validated_bytes = build_document_record(
+                    student_rm_pg=student_found[3],
+                    direction="PARINTE_SCOALA",
+                    category=category,
+                    document_type=document_type,
+                    original_filename=uploaded_document.name,
+                    mime_type=uploaded_document.type,
+                    content=uploaded_document.getvalue(),
+                    school_year="2026-2027",
+                    scholarship_type=scholarship_type,
+                    sender_role="PARINTE_REPREZENTANT",
+                    recipient_role="DIRIGINTE",
+                )
+                store_new_document(record, validated_bytes)
+                st.success("✅ Documentul a fost salvat și înregistrat. Transmiterea a fost confirmată.")
+            except (ValueError, DocumentStorageError) as ex:
+                st.error(f"❌ Documentul nu a fost transmis: {ex}")
+            except Exception:
+                st.error("❌ Eroare neașteptată. Documentul nu este considerat transmis.")
 
     if not os.path.exists(excel_path):
         st.error(f"Fișierul catalog '{excel_path}' nu a fost găsit.")
