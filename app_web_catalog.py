@@ -2583,7 +2583,7 @@ with tab7:
     
     op_gest = st.radio(
         "Alegeți operațiunea dorită:",
-        ["✏️ Modificare Date Elev Existent", "➕ Adăugare Elev Nou în Clasă", "🔄 Transfer/Retragere Elev"],
+        ["✏️ Modificare Date Elev Existent", "➕ Adăugare Elev Nou în Clasă", "🔄 Transfer/Retragere Elev", "↩️ Anulare adăugare greșită"],
         horizontal=True,
         key="radio_op_gest"
     )
@@ -2858,6 +2858,58 @@ with tab7:
                         "⚠️ Modificarea stării nu a fost confirmată în repository-ul privat. "
                         "Datele încărcate în sesiunea curentă au fost restaurate."
                     )
+
+    elif op_gest == "↩️ Anulare adăugare greșită":
+        if gest_data:
+            last_index = len(gest_data) - 1
+            last_item = gest_data[last_index]
+            st.warning(
+                "Această operație este destinată exclusiv anulării ultimei înregistrări introduse din greșeală. "
+                "Este refuzată dacă elevul are deja note, absențe sau alte date școlare."
+            )
+            st.write(
+                f"Ultima înregistrare: **{last_item.get('nume_complet', '')}** "
+                f"(NR. MATR. {last_item.get('rand_excel', '')}, RM/PG {last_item.get('matricol', '')})"
+            )
+            confirm_cancel = st.checkbox(
+                "Confirm că această înregistrare a fost introdusă din greșeală și trebuie anulată.",
+                key="confirm_cancel_last_student"
+            )
+            if st.button(
+                "↩️ Anulează ultima adăugare",
+                type="primary",
+                use_container_width=True,
+                disabled=not confirm_cancel
+            ):
+                try:
+                    excel_backup = prepare_last_student_cancellation(selected_file, gest_data, last_index)
+                except Exception as ex:
+                    st.error(f"Anularea a fost oprită fără modificări: {ex}")
+                else:
+                    if not push_to_github(selected_file):
+                        shutil.copy2(excel_backup, selected_file)
+                        st.warning(
+                            "⚠️ Excel nu a fost sincronizat. Copia originală a fost restaurată, "
+                            "iar JSON nu a fost modificat."
+                        )
+                    else:
+                        removed = gest_data.pop()
+                        if save_gestiune_data(gest_data):
+                            try:
+                                os.remove(excel_backup)
+                            except Exception:
+                                pass
+                            st.success(
+                                f"✅ Adăugarea greșită pentru {removed.get('nume_complet', '')} a fost anulată "
+                                "în catalog și în gestiune."
+                            )
+                            st.rerun()
+                        else:
+                            gest_data.append(removed)
+                            st.error(
+                                "⚠️ Excel a fost sincronizat, dar JSON nu a fost confirmat. "
+                                "Gestiunea elevilor va fi blocată la următoarea verificare de consistență."
+                            )
 
     st.divider()
     st.markdown("#### 📊 Export Registru & Statistică Clasă (Excel)")
