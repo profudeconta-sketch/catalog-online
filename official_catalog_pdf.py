@@ -397,7 +397,7 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
     usable_h = top - bottom - header_h - 2 * gap
     block_h = usable_h / 3
     mean_h = 34
-    identity_w = 139
+    identity_w = 132
 
     c.setLineWidth(0.65)
 
@@ -454,22 +454,36 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
             c.line(grid_left, y_bottom, grid_left, y_top)
 
             student = students[idx] if idx < len(students) else None
-            x = left + 6
-            c.setFont(PDF_FONT_BOLD, 5.5)
-            c.drawString(x, y_top - 15, student.name if student else "........................................................")
-            c.setFont(PDF_FONT, 4.7)
-            c.drawString(x, y_top - 30, "........................................................")
-            c.drawString(x, y_top - 45, "........................................................")
-            c.drawString(x, y_top - 62, f"Nr. matricol: {student.nr_matr if student else '.....................'}")
-            c.drawString(x, y_top - 75, f"Trecut în registrul matricol vol. ...... p. {student.rm_pg if student else '.......'}")
-            c.setFont(PDF_FONT_BOLD, 5.2)
-            c.drawString(x, y_top - 94, "SITUAȚIA ȘCOLARĂ")
-            c.setFont(PDF_FONT, 4.6)
-            c.drawString(x, y_top - 110, "La încheierea cursurilor ...............................")
-            c.drawString(x, y_top - 124, "La finalul anului școlar ................................")
-            c.drawString(x, y_top - 149, "Media generală ............................................")
-            c.drawString(x, y_top - 170, "Mențiuni (transferări, retrageri, amânări,")
-            c.drawString(x, y_top - 180, "corigențe etc.)")
+            x = left + 5
+            identity_right = grid_left - 4
+
+            # Blocul de identificare reproduce numai rubricile tipizatului;
+            # nu inventează stări școlare și nu completează câmpuri manuale.
+            c.setFont(PDF_FONT_BOLD, 5.4)
+            c.drawString(x, y_top - 14, student.name if student else "....................................................")
+            c.setFont(PDF_FONT, 4.4)
+            c.drawString(x, y_top - 28, "Prenumele tatălui (mamei) ........................")
+            c.drawString(x, y_top - 41, "Data și locul nașterii ...............................")
+
+            c.line(left, y_top - 51, grid_left, y_top - 51)
+            c.setFont(PDF_FONT, 4.3)
+            c.drawString(x, y_top - 63, "Nr. matricol")
+            c.drawRightString(identity_right, y_top - 63, student.nr_matr if student else ".............")
+            c.drawString(x, y_top - 76, "Registrul matricol: vol. .......... pag.")
+            c.drawRightString(identity_right, y_top - 76, student.rm_pg if student else ".......")
+
+            c.line(left, y_top - 86, grid_left, y_top - 86)
+            c.setFont(PDF_FONT_BOLD, 4.8)
+            c.drawCentredString((left + grid_left) / 2, y_top - 98, "SITUAȚIA ȘCOLARĂ")
+            c.setFont(PDF_FONT, 4.2)
+            c.drawString(x, y_top - 112, "La încheierea cursurilor .........................")
+            c.drawString(x, y_top - 125, "La sfârșitul anului școlar .......................")
+            c.drawString(x, y_top - 140, "Media generală ......................................")
+
+            c.line(left, y_top - 150, grid_left, y_top - 150)
+            c.setFont(PDF_FONT, 4.0)
+            c.drawString(x, y_top - 162, "Mențiuni .................................................")
+            c.drawString(x, y_top - 174, "............................................................")
 
             for j, slot in enumerate(slots):
                 gx = grid_left + j * pair_w
