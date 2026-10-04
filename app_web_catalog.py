@@ -17,6 +17,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import io
 import shutil
+import copy
+from openpyxl.formula.translate import Translator
 
 
 GESTIUNE_FILE = "gestiune_elevi.json"
@@ -290,6 +292,144 @@ def prepare_student_identity_edit(file_path, old_elev_info, new_name, new_nr_mat
         wb = None
         _validate_excel_catalog(file_path)
         return backup_file
+    except Exception:
+        try:
+            if wb is not None:
+                wb.close()
+        except Exception:
+            pass
+        if os.path.exists(backup_file):
+            shutil.copy2(backup_file, file_path)
+        raise
+
+
+
+def prepare_student_addition(file_path, gest_data, new_name, new_nr_matr, new_rm_pg):
+    """Pregătește local un rând nou de elev în catalogul v15, cu backup și validare fail-closed."""
+    backup_file = file_path + ".student-add.bak"
+    wb = None
+    try:
+        shutil.copy2(file_path, backup_file)
+        wb = openpyxl.load_workbook(file_path)
+        validate_student_identity_consistency(wb, gest_data)
+
+        sheets = ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii")
+        new_name = " ".join(str(new_name).split())
+        new_nr_matr = str(new_nr_matr).strip()
+        new_rm_pg = str(new_rm_pg).strip()
+        if not new_name or not new_nr_matr or not new_rm_pg:
+            raise RuntimeError("Numele, NR. MATR. și RM/PG sunt obligatorii.")
+
+        existing_rows = []
+        for d in gest_data:
+            elev_info = (
+                d.get("id"),
+                d.get("nume_complet", ""),
+                d.get("rand_excel", ""),
+                d.get("matricol", ""),
+                str(d.get("pin", "")),
+            )
+            existing_rows.append(resolve_student_row(wb, elev_info))
+
+        if not existing_rows:
+            raise RuntimeError("Catalogul nu conține elevi existenți care să poată servi drept model.")
+        if sorted(existing_rows) != list(range(9, 9 + len(existing_rows))):
+            raise RuntimeError("Rândurile elevilor existenți nu sunt continue; adăugarea a fost blocată.")
+
+        source_row = max(existing_rows)
+        new_row = source_row + 1
+
+        for sheet_name in sheets:
+            ws = wb[sheet_name]
+            for row in range(9, ws.max_row + 1):
+                nr_value = str(ws.cell(row=row, column=3).value or "").strip()
+                rm_value = str(ws.cell(row=row, column=4).value or "").strip()
+                if nr_value == new_nr_matr:
+                    raise RuntimeError(f"NR. MATR. este deja folosit în {sheet_name}.")
+                if rm_value.lower() == new_rm_pg.lower():
+                    raise RuntimeError(f"RM/PG este deja folosit în {sheet_name}.")
+
+        # Foile de note și centralizatorul folosesc rândul imediat următor,
+        # fără inserare globală și fără deplasarea elevilor existenți.
+        for sheet_name in ("Cultură Generală", "Module Tehnologice", "Centralizator Medii"):
+            ws = wb[sheet_name]
+            if any(str(ws.cell(new_row, c).value or "").strip() for c in (2, 3, 4)):
+                raise RuntimeError(f"Rândul {new_row} nu este liber în {sheet_name}.")
+
+            ws.row_dimensions[new_row].height = ws.row_dimensions[source_row].height
+            for col in range(1, ws.max_column + 1):
+                src = ws.cell(source_row, col)
+                dst = ws.cell(new_row, col)
+                dst._style = copy.copy(src._style)
+                if src.has_style:
+                    dst.font = copy.copy(src.font)
+                    dst.fill = copy.copy(src.fill)
+                    dst.border = copy.copy(src.border)
+                    dst.alignment = copy.copy(src.alignment)
+                    dst.protection = copy.copy(src.protection)
+                if isinstance(src.value, str) and src.value.startswith("="):
+                    dst.value = Translator(src.value, origin=src.coordinate).translate_formula(dst.coordinate)
+                else:
+                    dst.value = None
+
+            ws.cell(new_row, 1).value = len(existing_rows) + 1
+            ws.cell(new_row, 2).value = new_name
+            ws.cell(new_row, 3).value = new_nr_matr
+            ws.cell(new_row, 4).value = new_rm_pg
+
+        # În foaia de absențe, rândul următor este TOTAL ABSENȚE CLASĂ.
+        ws = wb["Absențe & Purtare"]
+        total_label = str(ws.cell(new_row, 1).value or "").strip().upper()
+        if total_label != "TOTAL ABSENȚE CLASĂ":
+            raise RuntimeError(
+                f"Structura foii Absențe & Purtare este neașteptată la rândul {new_row}; "
+                "adăugarea a fost blocată."
+            )
+
+        total_row = new_row + 1
+        total_values = [ws.cell(new_row, c).value for c in range(1, ws.max_column + 1)]
+        total_styles = [copy.copy(ws.cell(new_row, c)._style) for c in range(1, ws.max_column + 1)]
+        total_height = ws.row_dimensions[new_row].height
+
+        merge_to_move = None
+        for merged in list(ws.merged_cells.ranges):
+            if merged.min_row == new_row and merged.max_row == new_row and merged.min_col == 1 and merged.max_col == 4:
+                merge_to_move = str(merged)
+                break
+        if merge_to_move:
+            ws.unmerge_cells(merge_to_move)
+
+        for c in range(1, ws.max_column + 1):
+            dst = ws.cell(total_row, c)
+            dst._style = total_styles[c - 1]
+            dst.value = total_values[c - 1]
+        ws.row_dimensions[total_row].height = total_height
+        ws.merge_cells(start_row=total_row, start_column=1, end_row=total_row, end_column=4)
+        ws.cell(total_row, 1).value = "TOTAL ABSENȚE CLASĂ"
+        for c in (5, 6, 7):
+            letter = get_column_letter(c)
+            ws.cell(total_row, c).value = f"=SUM({letter}9:{letter}{new_row})"
+
+        ws.row_dimensions[new_row].height = ws.row_dimensions[source_row].height
+        for col in range(1, ws.max_column + 1):
+            src = ws.cell(source_row, col)
+            dst = ws.cell(new_row, col)
+            dst._style = copy.copy(src._style)
+            if isinstance(src.value, str) and src.value.startswith("="):
+                dst.value = Translator(src.value, origin=src.coordinate).translate_formula(dst.coordinate)
+            else:
+                dst.value = None
+
+        ws.cell(new_row, 1).value = len(existing_rows) + 1
+        ws.cell(new_row, 2).value = new_name
+        ws.cell(new_row, 3).value = new_nr_matr
+        ws.cell(new_row, 4).value = new_rm_pg
+
+        wb.save(file_path)
+        wb.close()
+        wb = None
+        _validate_excel_catalog(file_path)
+        return backup_file, new_row
     except Exception:
         try:
             if wb is not None:
