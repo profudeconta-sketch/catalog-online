@@ -343,6 +343,25 @@ def validate_parent_excuse_hours(student_rm_pg, school_year, requested_hours):
     return usage
 
 
+
+def find_parent_excuse_document(student_rm_pg, school_year, absence_date, hours, parent_name):
+    student_key = normalize_student_key(student_rm_pg)
+    expected_name = f"Scutire_Motivare_Absente_{str(absence_date)}.pdf"
+    registry, _ = load_registry()
+    matches = [
+        item for item in registry["documents"]
+        if item.get("student_key") == student_key
+        and str(item.get("school_year")) == str(school_year)
+        and item.get("category") == "MOTIVARE_PARINTE"
+        and item.get("document_type") == "MOTIVARE_ABSENTE_PARINTE"
+        and item.get("direction") == "PARINTE_SCOALA"
+        and item.get("original_filename") == expected_name
+    ]
+    if len(matches) > 1:
+        raise DocumentConflictError("Exista mai multe documente pentru aceeasi cerere.")
+    return matches[0] if matches else None
+
+
 def register_transmitted_parent_excuse(
     *,
     student_rm_pg,
