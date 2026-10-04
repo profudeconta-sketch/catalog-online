@@ -677,8 +677,13 @@ def _draw_students_grid(c: canvas.Canvas, students: Sequence[StudentIdentity], p
             c.drawCentredString((cols[3] + cols[4]) / 2, y, s.rm_pg)
 
 
-def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentIdentity], side: str) -> None:
-    """Geometrie P3/P4 apropiată de tipizatul oficial; datele școlare nu sunt încă populate."""
+def _draw_marks_spread_placeholder(
+    c: canvas.Canvas,
+    wb,
+    students: Sequence[StudentIdentity],
+    side: str,
+) -> None:
+    """Geometrie P3/P4; populează numai Note/Data și Absențe în corpul rubricilor."""
     width, height = A4
     left, right = 18, width - 16
     top, bottom = height - 47, 47
@@ -690,6 +695,63 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
     identity_w = 132
 
     c.setLineWidth(0.65)
+
+    def draw_recording_body(
+        student: StudentIdentity | None,
+        slots: Sequence[str | None],
+        source_keys: Sequence[str | None],
+        grid_start: float,
+        pair_width: float,
+        y_body_bottom: float,
+        y_body_top: float,
+    ) -> None:
+        if student is None:
+            return
+        subject_data = extract_physical_subject_data(wb, student, slots, source_keys)
+        body_h = y_body_top - y_body_bottom
+        for j, subject in enumerate(subject_data):
+            if subject.source_key is None:
+                continue
+            gx = grid_start + j * pair_width
+            abs_x = gx + 1.0
+            note_x = gx + pair_width / 2 + 1.0
+
+            # Notele sunt scrise vertical, în ordinea înregistrării din workbook.
+            c.saveState()
+            c.translate(note_x, y_body_bottom + 2)
+            c.rotate(90)
+            c.setFont(PDF_FONT, 3.5)
+            cursor = 0.0
+            for entry in subject.grades:
+                text = format_catalog_grade(entry)
+                text_w = pdfmetrics.stringWidth(text, PDF_FONT, 3.5)
+                if cursor + text_w > body_h - 4:
+                    raise OfficialCatalogError(
+                        f"Notele pentru {subject.label!r} nu încap în geometria prototipului."
+                    )
+                c.drawString(cursor, 0, text)
+                cursor += text_w + 2.0
+            c.restoreState()
+
+            # Absențele sunt grupate lunar. Zilele motivate sunt încercuite grafic.
+            by_month: dict[int, list[AbsenceEntry]] = {}
+            for entry in subject.absences:
+                by_month.setdefault(entry.date.month, []).append(entry)
+            c.saveState()
+            c.translate(abs_x, y_body_bottom + 2)
+            c.rotate(90)
+            cursor = 0.0
+            for month in sorted(by_month):
+                month_entries = sorted(by_month[month], key=lambda item: item.date.day)
+                if cursor:
+                    cursor += 2.0
+                end_x = draw_catalog_absence_line(c, month_entries, cursor, 0, font_size=3.5)
+                if end_x > body_h - 4:
+                    raise OfficialCatalogError(
+                        f"Absențele pentru {subject.label!r} nu încap în geometria prototipului."
+                    )
+                cursor = end_x
+            c.restoreState()
 
     if side == "stângă":
         grid_left = left + identity_w
@@ -789,6 +851,15 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
                     c.drawString(0, 0, slot)
                     c.restoreState()
             c.line(right, y_bottom, right, y_top)
+            draw_recording_body(
+                student,
+                CATALOG_P3_SLOTS,
+                CATALOG_P3_SOURCE_KEYS,
+                grid_left,
+                pair_w,
+                y_bottom + mean_h,
+                y_top,
+            )
 
             # Cele trei rânduri de medii traversează rubricile disciplinelor,
             # fără subdiviziunea verticală Absențe/Note.
@@ -805,6 +876,7 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
             c.drawRightString(label_x, y_bottom + mean_row_h + 2, "Media la ex. de corig.")
             c.drawRightString(label_x, y_bottom + 2, "Media anuală")
         else:
+            student = students[idx] if idx < len(students) else None
             slots = CATALOG_P4_SLOTS
             terminal_w = 76
             grid_right = right - terminal_w
@@ -825,6 +897,15 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
                     c.drawString(0, 0, slot)
                     c.restoreState()
             c.line(grid_right, y_bottom, grid_right, y_top)
+            draw_recording_body(
+                student,
+                CATALOG_P4_SLOTS,
+                CATALOG_P4_SOURCE_KEYS,
+                left,
+                pair_w,
+                y_bottom + mean_h,
+                y_top,
+            )
 
             conduct_w = 32
             total_w = 22
@@ -921,12 +1002,12 @@ def generate_official_catalog_prototype(
             right_page = left_page + 1
 
             _draw_page_frame(c, left_page, "Situația școlară – corp catalog")
-            _draw_marks_spread_placeholder(c, group, "stângă")
+            _draw_marks_spread_placeholder(c, wb, group, "stângă")
             _draw_prototype_notice(c)
             c.showPage()
 
             _draw_page_frame(c, right_page, "Situația școlară – corp catalog")
-            _draw_marks_spread_placeholder(c, group, "dreaptă")
+            _draw_marks_spread_placeholder(c, wb, group, "dreaptă")
             _draw_prototype_notice(c)
             c.showPage()
 
