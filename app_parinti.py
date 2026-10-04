@@ -449,8 +449,8 @@ else:
                 else: mg_val = None
                     
                 tot_abs_val = t_nem + t_mot
-                all_mgs.append((idx_e, mg_val))
-                all_abs.append((idx_e, tot_abs_val, t_nem))
+                all_mgs.append((e_item[3], mg_val))
+                all_abs.append((e_item[3], tot_abs_val, t_nem))
                 
                 if str(e_item[3]).strip().lower() == str(student_found[3]).strip().lower():
                     purtare_val = max(1, 10 - int(t_nem / 20))
