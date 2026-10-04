@@ -388,108 +388,179 @@ def _draw_students_grid(c: canvas.Canvas, students: Sequence[StudentIdentity], p
 
 
 def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentIdentity], side: str) -> None:
-    """Geometrie prototip pentru o deschidere oficială de 3 elevi.
-
-    Rubricile sunt desenate după structura tipizatului; conectarea notelor,
-    absențelor și mediilor se face numai după validarea vizuală a geometriei.
-    """
+    """Geometrie P3/P4 apropiată de tipizatul oficial; datele școlare nu sunt încă populate."""
     width, height = A4
-    left, right = 30, width - 20
-    top, bottom = height - 62, 54
-    block_h = (top - bottom) / 3
-    identity_w = 142
+    left, right = 18, width - 16
+    top, bottom = height - 47, 47
+    header_h = 43
+    gap = 5
+    usable_h = top - bottom - header_h - 2 * gap
+    block_h = usable_h / 3
+    mean_h = 34
+    identity_w = 139
 
-    c.setLineWidth(0.55)
-    c.setFont(PDF_FONT_BOLD, 7.2)
-    c.drawString(left, top + 12, "SITUAȚIA ȘCOLARĂ – DESCHIDERE MODEL")
-
-    for idx in range(3):
-        y_top = top - idx * block_h
-        y_bottom = y_top - block_h
-        c.rect(left, y_bottom, right - left, block_h)
-
-        if side == "stângă":
-            c.line(left + identity_w, y_bottom, left + identity_w, y_top)
-            student = students[idx] if idx < len(students) else None
-            x = left + 5
-            c.setFont(PDF_FONT_BOLD, 5.8)
-            c.drawString(x, y_top - 13, student.name if student else f"Elev {idx + 1}")
-            c.setFont(PDF_FONT, 4.8)
-            c.drawString(x, y_top - 27, f"Nr. matricol: {student.nr_matr if student else '........'}")
-            c.drawString(x, y_top - 39, f"Registrul matricol: {student.rm_pg if student else '........'}")
-            c.drawString(x, y_top - 57, "Situația la încheierea cursurilor: ................")
-            c.drawString(x, y_top - 69, "Situația la finalul anului școlar: .................")
-            c.drawString(x, y_top - 81, "Media generală: ....................................")
-            c.drawString(x, y_top - 98, "Mențiuni: ..........................................")
-
-            grid_left = left + identity_w
-            slots = CATALOG_P3_SLOTS
-            pair_count = len(slots)
-            pair_w = (right - grid_left) / pair_count
-            for j in range(pair_count + 1):
-                gx = grid_left + j * pair_w
-                c.line(gx, y_bottom, gx, y_top)
-                if j < pair_count:
-                    c.line(gx + pair_w / 2, y_bottom + 28, gx + pair_w / 2, y_top)
-                    c.setFont(PDF_FONT, 3.2)
-                    c.drawCentredString(gx + pair_w * .25, y_top - 10, "Abs.")
-                    c.drawCentredString(gx + pair_w * .75, y_top - 10, "Note")
-                    if idx == 0 and slots[j]:
-                        c.saveState()
-                        c.translate(gx + pair_w * .5, y_bottom + 42)
-                        c.rotate(90)
-                        c.setFont(PDF_FONT, 3.2)
-                        c.drawString(0, 0, slots[j])
-                        c.restoreState()
-            for k, label in enumerate(("Media", "Media la ex. de corig.", "Media anuală")):
-                yy = y_bottom + (k + 1) * (28 / 3)
-                c.line(grid_left, yy, right, yy)
-                c.setFont(PDF_FONT, 3.1)
-                c.drawString(grid_left + 2, yy + 1, label)
-        else:
-            terminal_w = 72
-            grid_right = right - terminal_w
-            slots = CATALOG_P4_SLOTS
-            pair_count = len(slots)
-            pair_w = (grid_right - left) / pair_count
-            for j in range(pair_count + 1):
-                gx = left + j * pair_w
-                c.line(gx, y_bottom, gx, y_top)
-                if j < pair_count:
-                    c.line(gx + pair_w / 2, y_bottom + 28, gx + pair_w / 2, y_top)
-                    c.setFont(PDF_FONT, 3.2)
-                    c.drawCentredString(gx + pair_w * .25, y_top - 10, "Abs.")
-                    c.drawCentredString(gx + pair_w * .75, y_top - 10, "Note")
-                    if idx == 0 and slots[j]:
-                        c.saveState()
-                        c.translate(gx + pair_w * .5, y_bottom + 42)
-                        c.rotate(90)
-                        c.setFont(PDF_FONT, 3.0)
-                        c.drawString(0, 0, slots[j])
-                        c.restoreState()
-            c.line(grid_right, y_bottom, grid_right, y_top)
-            c.line(grid_right + 30, y_bottom, grid_right + 30, y_top)
-            c.line(grid_right + 48, y_bottom, grid_right + 48, y_top)
-            c.setFont(PDF_FONT, 3.8)
-            c.drawCentredString(grid_right + 15, y_top - 12, "Consiliere")
-            c.drawCentredString(grid_right + 15, y_top - 20, "și orientare")
-            c.drawCentredString(grid_right + 15, y_top - 32, "Purtare")
-            c.saveState()
-            c.translate(grid_right + 39, y_bottom + 12)
-            c.rotate(90)
-            c.drawString(0, 0, "TOTAL ABSENȚE")
-            c.restoreState()
-            c.saveState()
-            c.translate(grid_right + 58, y_bottom + 12)
-            c.rotate(90)
-            c.drawString(0, 0, "NEMOTIVATE")
-            c.restoreState()
-            for k in range(1, 4):
-                c.line(left, y_bottom + k * (28 / 3), right, y_bottom + k * (28 / 3))
+    c.setLineWidth(0.65)
 
     if side == "stângă":
-        c.setFont(PDF_FONT, 4.5)
-        c.drawString(left, bottom - 10, "Disciplinele/modulele se înscriu cu denumirile complete, în ordinea planului-cadru.")
+        grid_left = left + identity_w
+        slots = CATALOG_P3_SLOTS
+        pair_w = (right - grid_left) / len(slots)
+
+        c.rect(left, top - header_h, identity_w, header_h)
+        c.setFont(PDF_FONT_BOLD, 13)
+        c.drawCentredString(left + identity_w / 2, top - 28, "ELEVII")
+        c.rect(grid_left, top - header_h, right - grid_left, header_h)
+        c.setFont(PDF_FONT_BOLD, 8.5)
+        c.drawRightString(right - 4, top - 10, "DISCIPLINELE/MODULELE***  DE")
+        c.line(grid_left, top - 25, right, top - 25)
+        for j in range(len(slots)):
+            gx = grid_left + j * pair_w
+            c.line(gx, top - header_h, gx, top - 25)
+            c.line(gx + pair_w / 2, top - header_h, gx + pair_w / 2, top - 25)
+            c.setFont(PDF_FONT, 2.8)
+            c.drawCentredString(gx + pair_w * .25, top - 38, "Absențe")
+            c.drawCentredString(gx + pair_w * .75, top - 38, "Note")
+        c.line(right, top - header_h, right, top - 25)
+    else:
+        slots = CATALOG_P4_SLOTS
+        terminal_w = 66
+        grid_right = right - terminal_w
+        pair_w = (grid_right - left) / len(slots)
+
+        c.rect(left, top - header_h, right - left, header_h)
+        c.setFont(PDF_FONT_BOLD, 8.5)
+        c.drawString(left + 22, top - 10, "ÎNVĂȚĂMÂNT")
+        c.setFont(PDF_FONT_BOLD, 5.5)
+        c.drawCentredString(grid_right + terminal_w * .70, top - 10, "Absențe")
+        c.line(left, top - 25, grid_right, top - 25)
+        for j in range(len(slots)):
+            gx = left + j * pair_w
+            c.line(gx, top - header_h, gx, top - 25)
+            c.line(gx + pair_w / 2, top - header_h, gx + pair_w / 2, top - 25)
+            c.setFont(PDF_FONT, 2.8)
+            c.drawCentredString(gx + pair_w * .25, top - 38, "Absențe")
+            c.drawCentredString(gx + pair_w * .75, top - 38, "Note")
+        c.line(grid_right, top - header_h, grid_right, top)
+
+    for idx in range(3):
+        y_top = top - header_h - idx * (block_h + gap)
+        y_bottom = y_top - block_h
+
+        if side == "stângă":
+            grid_left = left + identity_w
+            slots = CATALOG_P3_SLOTS
+            pair_w = (right - grid_left) / len(slots)
+            c.rect(left, y_bottom, right - left, block_h)
+            c.line(grid_left, y_bottom, grid_left, y_top)
+
+            student = students[idx] if idx < len(students) else None
+            x = left + 6
+            c.setFont(PDF_FONT_BOLD, 5.5)
+            c.drawString(x, y_top - 15, student.name if student else "........................................................")
+            c.setFont(PDF_FONT, 4.7)
+            c.drawString(x, y_top - 30, "........................................................")
+            c.drawString(x, y_top - 45, "........................................................")
+            c.drawString(x, y_top - 62, f"Nr. matricol: {student.nr_matr if student else '.....................'}")
+            c.drawString(x, y_top - 75, f"Trecut în registrul matricol vol. ...... p. {student.rm_pg if student else '.......'}")
+            c.setFont(PDF_FONT_BOLD, 5.2)
+            c.drawString(x, y_top - 94, "SITUAȚIA ȘCOLARĂ")
+            c.setFont(PDF_FONT, 4.6)
+            c.drawString(x, y_top - 110, "La încheierea cursurilor ...............................")
+            c.drawString(x, y_top - 124, "La finalul anului școlar ................................")
+            c.drawString(x, y_top - 149, "Media generală ............................................")
+            c.drawString(x, y_top - 170, "Mențiuni (transferări, retrageri, amânări,")
+            c.drawString(x, y_top - 180, "corigențe etc.)")
+
+            for j, slot in enumerate(slots):
+                gx = grid_left + j * pair_w
+                c.line(gx, y_bottom, gx, y_top)
+                c.line(gx + pair_w / 2, y_bottom + mean_h, gx + pair_w / 2, y_top)
+                if slot:
+                    c.saveState()
+                    c.translate(gx + pair_w * .55, y_bottom + mean_h + 5)
+                    c.rotate(90)
+                    c.setFont(PDF_FONT, 3.0)
+                    c.drawString(0, 0, slot)
+                    c.restoreState()
+            c.line(right, y_bottom, right, y_top)
+
+            label_w = pair_w
+            label_x = grid_left - label_w
+            for k in range(1, 3):
+                c.line(label_x, y_bottom + k * mean_h / 3, right, y_bottom + k * mean_h / 3)
+            c.setFont(PDF_FONT, 3.5)
+            c.drawString(label_x + 2, y_bottom + mean_h * 2 / 3 + 2, "Media")
+            c.drawString(label_x + 2, y_bottom + mean_h / 3 + 2, "Media la")
+            c.drawString(label_x + 2, y_bottom + mean_h / 3 - 4, "ex. de corig.")
+            c.drawString(label_x + 2, y_bottom + 2, "Media")
+            c.drawString(label_x + 2, y_bottom - 4 + mean_h / 6, "anuală")
+        else:
+            slots = CATALOG_P4_SLOTS
+            terminal_w = 66
+            grid_right = right - terminal_w
+            pair_w = (grid_right - left) / len(slots)
+            c.rect(left, y_bottom, right - left, block_h)
+
+            for j, slot in enumerate(slots):
+                gx = left + j * pair_w
+                c.line(gx, y_bottom, gx, y_top)
+                c.line(gx + pair_w / 2, y_bottom + mean_h, gx + pair_w / 2, y_top)
+                if slot:
+                    c.saveState()
+                    c.translate(gx + pair_w * .55, y_bottom + mean_h + 5)
+                    c.rotate(90)
+                    c.setFont(PDF_FONT, 2.9)
+                    c.drawString(0, 0, slot)
+                    c.restoreState()
+            c.line(grid_right, y_bottom, grid_right, y_top)
+
+            conduct_w = 28
+            total_w = 19
+            unmotiv_w = terminal_w - conduct_w - total_w
+            x_conduct = grid_right
+            x_total = x_conduct + conduct_w
+            x_unmotiv = x_total + total_w
+            c.line(x_total, y_bottom, x_total, y_top)
+            c.line(x_unmotiv, y_bottom, x_unmotiv, y_top)
+
+            # Geometria specială a tipizatului: Consiliere/orientare sus, Purtare jos,
+            # diagonală în corpul coloanei și celula de medie barată cu X.
+            c.line(x_conduct, y_top - 22, x_total, y_top - 22)
+            c.setFont(PDF_FONT, 3.1)
+            c.drawCentredString((x_conduct + x_total) / 2, y_top - 8, "Consiliere")
+            c.drawCentredString((x_conduct + x_total) / 2, y_top - 14, "și orientare")
+            c.drawCentredString((x_conduct + x_total) / 2, y_top - 34, "Purtare")
+            c.line(x_conduct, y_bottom + mean_h, x_total, y_top - 22)
+
+            c.saveState()
+            c.translate(x_total + total_w * .55, y_top - 38)
+            c.rotate(90)
+            c.setFont(PDF_FONT_BOLD, 4.0)
+            c.drawString(0, 0, "TOTAL")
+            c.restoreState()
+            c.saveState()
+            c.translate(x_unmotiv + unmotiv_w * .55, y_top - 58)
+            c.rotate(90)
+            c.setFont(PDF_FONT_BOLD, 3.3)
+            c.drawString(0, 0, "din care nemotivate")
+            c.restoreState()
+
+            for k in range(1, 3):
+                yy = y_bottom + k * mean_h / 3
+                c.line(left, yy, right, yy)
+            # X-ul tipărit în celula de medie a rubricii Purtare.
+            x1, x2 = x_conduct, x_total
+            yy1, yy2 = y_bottom + mean_h / 3, y_bottom + 2 * mean_h / 3
+            c.line(x1, yy1, x2, yy2)
+            c.line(x1, yy2, x2, yy1)
+
+    if side == "stângă":
+        c.setFont(PDF_FONT, 4.2)
+        c.drawString(
+            left,
+            bottom - 12,
+            "***) Disciplinele/modulele de învățământ se înscriu în ordinea Planului-cadru, cu denumirile complete.",
+        )
 
 def generate_official_catalog_prototype(
     excel_path: str,
