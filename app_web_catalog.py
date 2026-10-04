@@ -3089,10 +3089,10 @@ with tab8:
             }
             st.markdown(f"**Stare:** {leave_status_labels.get(leave_status, leave_status)}")
             st.markdown(
-                f"**Părinte/Reprezentant legal:** {leave_request.get('parent_name')}  \\n"
-                f"**Data:** {leave_request.get('request_date')}  \\n"
-                f"**Ora solicitată pentru plecare:** {leave_request.get('departure_time')}  \\n"
-                f"**Motiv:** {leave_request.get('reason_label')}  \\n"
+                f"**Părinte/Reprezentant legal:** {leave_request.get('parent_name')}  \n"
+                f"**Data:** {leave_request.get('request_date')}  \n"
+                f"**Ora solicitată pentru plecare:** {leave_request.get('departure_time')}  \n"
+                f"**Motiv:** {leave_request.get('reason_label')}  \n"
                 f"**Revizia solicitării:** {leave_request.get('revision')}"
             )
             transmitted_raw = str(leave_request.get("transmitted_at_utc") or "")
