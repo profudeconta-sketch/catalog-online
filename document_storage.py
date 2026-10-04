@@ -406,6 +406,19 @@ def register_transmitted_parent_excuse(
     return record
 
 
+
+def get_parent_excuse_for_document(student_rm_pg, document_id):
+    student_key = normalize_student_key(student_rm_pg)
+    registry, _ = load_parent_excuse_registry()
+    matches = [
+        item for item in registry["requests"]
+        if item.get("student_key") == student_key
+        and item.get("document_id") == str(document_id)
+    ]
+    if len(matches) > 1:
+        raise DocumentConflictError("Există mai multe înregistrări pentru aceeași cerere de motivare.")
+    return dict(matches[0]) if matches else None
+
 def list_student_documents(student_rm_pg, direction=None):
     student_key = normalize_student_key(student_rm_pg)
     registry, _ = load_registry()

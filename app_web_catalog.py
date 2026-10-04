@@ -18,7 +18,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 import io
 import shutil
 import copy
-from document_storage import DocumentStorageError, list_student_documents, read_registered_document
+from document_storage import DocumentStorageError, get_parent_excuse_for_document, list_student_documents, read_registered_document
 from openpyxl.formula.translate import Translator
 
 
@@ -2977,6 +2977,7 @@ with tab8:
                 "DOSAR_PERSONAL": "Dosar personal",
                 "SCUTIRE_MEDICALA": "Scutire / document medical",
                 "DOSAR_BURSA": "Dosar bursă",
+                "MOTIVARE_PARINTE": "Scutire / Motivare absențe — Părinte",
             }
             selected_doc_id = st.selectbox(
                 "Document primit:",
@@ -3000,6 +3001,43 @@ with tab8:
                 f"An școlar: {selected_meta.get('school_year')} | "
                 f"Dimensiune: {selected_meta.get('size_bytes', 0)} bytes"
             )
+
+            if selected_meta.get("category") == "MOTIVARE_PARINTE":
+                try:
+                    excuse_meta = get_parent_excuse_for_document(
+                        doc_student[3],
+                        selected_doc_id,
+                    )
+                    if excuse_meta is None:
+                        st.warning(
+                            "Documentul există în registrul general, dar înregistrarea administrativă "
+                            "a motivării nu a fost găsită. Situația trebuie verificată înainte de prelucrare."
+                        )
+                    else:
+                        absence_date = str(excuse_meta.get("absence_date", ""))
+                        try:
+                            absence_date_display = datetime.date.fromisoformat(absence_date).strftime("%d.%m.%Y")
+                        except ValueError:
+                            absence_date_display = absence_date or "—"
+                        transmitted_at = str(excuse_meta.get("transmitted_at_utc", ""))
+                        try:
+                            transmitted_display = datetime.datetime.fromisoformat(transmitted_at).strftime("%d.%m.%Y %H:%M")
+                        except ValueError:
+                            transmitted_display = transmitted_at or "—"
+                        st.markdown(
+                            f"**Data absenței:** {absence_date_display}  \n"
+                            f"**Număr ore:** {excuse_meta.get('hours', '—')}  \n"
+                            f"**Transmis de:** {excuse_meta.get('parent_name') or '—'}  \n"
+                            f"**Stare:** {excuse_meta.get('status') or '—'}  \n"
+                            f"**Înregistrat la:** {transmitted_display} UTC"
+                        )
+                        st.info(
+                            "Cererea a fost transmisă prin contul autentificat al părintelui/reprezentantului "
+                            "legal și este considerată depusă. Dacă sunt necesare clarificări sau documente "
+                            "suplimentare, părintele va fi contactat."
+                        )
+                except DocumentStorageError as ex:
+                    st.error(f"Datele administrative ale motivării nu pot fi încărcate în siguranță: {ex}")
 
             try:
                 verified_meta, verified_content = read_registered_document(
