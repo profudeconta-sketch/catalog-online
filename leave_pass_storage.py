@@ -113,19 +113,25 @@ def get_leave_request_for_day(student_rm_pg, request_date=None, refresh_expiry=T
     day = str(request_date or _local_now(now).date().isoformat())
     for _ in range(3):
         registry, sha = load_leave_pass_registry()
+        registry_changed = False
+        if refresh_expiry:
+            for item in registry["requests"]:
+                if item.get("student_key") == student_key and _expire_record_if_needed(item, now):
+                    registry_changed = True
+
         matches = _student_day_matches(registry, student_key, day)
         if len(matches) > 1:
             raise DocumentConflictError("Există mai multe solicitări de învoire pentru același elev și aceeași zi.")
-        if not matches:
-            return None
-        record = matches[0]
-        if refresh_expiry and _expire_record_if_needed(record, now):
+
+        if registry_changed:
             try:
                 save_leave_pass_registry(registry, sha)
-                return dict(record)
             except DocumentConflictError:
                 continue
-        return dict(record)
+
+        if not matches:
+            return None
+        return dict(matches[0])
     raise DocumentConflictError("Starea solicitării nu a putut fi actualizată în siguranță.")
 
 
