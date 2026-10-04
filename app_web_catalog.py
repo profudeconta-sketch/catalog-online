@@ -1,4 +1,5 @@
 import datetime
+from zoneinfo import ZoneInfo
 import os
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -3154,10 +3155,15 @@ with tab8:
             first_accessed = str(selected_sent.get("first_accessed_at_utc") or "")
             if first_accessed:
                 try:
-                    accessed_display = datetime.datetime.fromisoformat(first_accessed).strftime("%d.%m.%Y %H:%M")
-                except ValueError:
+                    accessed_dt = datetime.datetime.fromisoformat(first_accessed.replace("Z", "+00:00"))
+                    if accessed_dt.tzinfo is None:
+                        accessed_dt = accessed_dt.replace(tzinfo=datetime.timezone.utc)
+                    accessed_display = accessed_dt.astimezone(
+                        ZoneInfo("Europe/Bucharest")
+                    ).strftime("%d.%m.%Y, ora %H:%M")
+                except (ValueError, TypeError):
                     accessed_display = first_accessed
-                st.success(f"✅ Accesat de părinte — {accessed_display} UTC")
+                st.success(f"✅ Accesat de părinte — {accessed_display}")
             else:
                 st.warning("🔔 Neaccesat de părinte")
 
