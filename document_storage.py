@@ -466,6 +466,7 @@ def register_first_school_document_access(*, student_rm_pg, student_name, docume
     confirmation_id = hashlib.sha256(
         ("confirmare-acces|" + source_id).encode("utf-8")
     ).hexdigest()[:32]
+    accessed_at = dt.datetime.now(dt.timezone.utc).isoformat()
 
     for _attempt in range(3):
         registry, registry_sha = load_registry()
@@ -506,7 +507,6 @@ def register_first_school_document_access(*, student_rm_pg, student_name, docume
                 "Operația a fost oprită pentru verificare."
             )
 
-        accessed_at = dt.datetime.now(dt.timezone.utc).isoformat()
         confirmation_filename = f"Confirmare_primire_{source_id}.pdf"
         confirmation_data = generate_school_document_receipt_pdf(
             student_name=student_name,
