@@ -426,8 +426,8 @@ else:
     with st.expander("📁 Centru documente — Etapa 4", expanded=False):
         st.markdown("#### Documente către școală")
         st.caption(
-            "Zona de documente este pregătită pentru elevul autentificat. "
-            "În această etapă trimiterea este intenționat dezactivată până la validarea fluxului complet."
+            "Documentele încărcate aici sunt transmise către școală pentru elevul autentificat "
+            "și sunt înregistrate în Centrul de documente."
         )
 
         category_labels = {
