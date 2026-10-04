@@ -375,6 +375,7 @@ def register_transmitted_parent_excuse(
         "id": uuid.uuid4().hex,
         "schema_version": 1,
         "student_key": student_key,
+        "request_fingerprint": request_fingerprint,
         "school_year": str(school_year),
         "absence_date": str(absence_date),
         "hours": int(hours),
