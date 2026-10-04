@@ -296,9 +296,9 @@ col_auth1, col_auth2 = st.columns(2)
 
 with col_auth1:
     nr_matricol_input = st.text_input(
-        "🔑 Introduceți Numărul Matricol (ex: 126/76 sau 13):",
+        "🔑 Introduceți Numărul Matricol:",
         value="",
-        placeholder="Exemplu: 126/76",
+        placeholder="Introduceți numărul matricol",
         help="Numărul matricol se găsește pe carnetul de elev sau adeverința de înscriere."
     ).strip()
 
@@ -307,7 +307,7 @@ with col_auth2:
         "🔒 Introduceți Codul PIN Confidențial (4 cifre):",
         value="",
         type="password",
-        placeholder="Exemplu: 2951",
+        placeholder="Introduceți codul PIN",
         help="Codul PIN confidențial individual eliberat de către diriginte."
     ).strip()
 
@@ -423,24 +423,18 @@ else:
 
     st.divider()
 
-    with st.expander("📁 Centru documente — Etapa 4", expanded=False):
-        st.markdown("#### Documente către școală")
+    with st.expander("📁 Încarcă Documente și Solicitări Către Școală", expanded=False):
         st.caption(
-            "Documentele încărcate aici sunt transmise către școală pentru elevul autentificat "
-            "și sunt înregistrate în Centrul de documente."
+            "Selectați secțiunea corespunzătoare documentului sau solicitării pe care doriți "
+            "să o transmiteți către școală pentru elevul autentificat."
         )
 
-        category_labels = {
-            "DOSAR_PERSONAL": "Dosar personal elev",
-            "SCUTIRE_MEDICALA": "Scutire / document medical",
-            "DOSAR_BURSA": "Dosar bursă",
-        }
         type_labels = {
             "CARTE_IDENTITATE": "Carte de identitate",
             "DOVADA_ADRESA": "Dovadă adresă",
             "CERTIFICAT_NASTERE": "Certificat de naștere",
             "DIVERSE": "Diverse",
-            "SCUTIRE_MEDICALA": "Document / scutire medicală",
+            "SCUTIRE_MEDICALA": "Scutire medicală",
             "CERERE_BURSA": "Cerere bursă",
             "ACORD_PRELUCRARE_DATE": "Acord prelucrare date",
             "DECLARATIE_VENITURI_NETE_IMPOZABILE": "Declarație venituri nete impozabile",
@@ -452,232 +446,270 @@ else:
             "CERTIFICAT_DECES_PARINTE": "Certificat deces părinte",
             "ALTE_DOCUMENTE_JUSTIFICATIVE": "Alte documente justificative",
         }
-        scholarship_labels = {
-            "MERIT": "Bursă de merit",
-            "SOCIALA_VENIT": "Bursă socială — venit",
-            "SOCIALA_ORFAN": "Bursă socială — orfan",
-            "SOCIALA_MEDICALA": "Bursă socială — medicală",
-            "SOCIALA_MAME_MINORE": "Bursă socială — mame minore",
-            "CES": "Bursă CES",
-        }
 
-        category = st.selectbox(
-            "Categoria documentului",
-            list(category_labels),
-            format_func=lambda value: category_labels[value],
-            key="doc_category_preview",
-        )
-        document_types = sorted(DOCUMENT_CATEGORIES[category])
-        document_type = st.selectbox(
-            "Tipul documentului",
-            document_types,
-            format_func=lambda value: type_labels.get(value, value),
-            key="doc_type_preview",
-        )
-
-        scholarship_type = None
-        if category == "DOSAR_BURSA":
-            scholarship_type = st.selectbox(
-                "Tipul bursei",
-                sorted(SCHOLARSHIP_TYPES),
-                format_func=lambda value: scholarship_labels.get(value, value),
-                key="doc_scholarship_preview",
+        def render_document_upload(category, key_prefix, scholarship_type=None):
+            document_types = sorted(DOCUMENT_CATEGORIES[category])
+            document_type = st.selectbox(
+                "Tipul documentului",
+                document_types,
+                format_func=lambda value: type_labels.get(value, value),
+                key=f"{key_prefix}_type",
             )
+            uploaded_document = st.file_uploader(
+                "Selectează documentul (PDF, JPG/JPEG sau PNG)",
+                type=["pdf", "jpg", "jpeg", "png"],
+                accept_multiple_files=False,
+                key=f"{key_prefix}_upload",
+            )
+            send_document = st.button(
+                "📤 Salvează și trimite",
+                use_container_width=True,
+                key=f"{key_prefix}_send",
+            )
+            if send_document and uploaded_document is None:
+                st.warning("Selectați mai întâi documentul care trebuie transmis.")
+            elif send_document:
+                try:
+                    record, validated_bytes = build_document_record(
+                        student_rm_pg=student_found[3],
+                        direction="PARINTE_SCOALA",
+                        category=category,
+                        document_type=document_type,
+                        original_filename=uploaded_document.name,
+                        mime_type=uploaded_document.type,
+                        content=uploaded_document.getvalue(),
+                        school_year="2026-2027",
+                        scholarship_type=scholarship_type,
+                        sender_role="PARINTE_REPREZENTANT",
+                        recipient_role="DIRIGINTE",
+                    )
+                    store_new_document(record, validated_bytes)
+                    st.success(
+                        "✅ Documentul a fost salvat și înregistrat. Transmiterea a fost confirmată."
+                    )
+                except (ValueError, DocumentStorageError) as ex:
+                    st.error(f"❌ Documentul nu a fost transmis: {ex}")
+                except Exception:
+                    st.error("❌ Eroare neașteptată. Documentul nu este considerat transmis.")
 
-        uploaded_document = st.file_uploader(
-            "Selectează documentul (PDF, JPG/JPEG sau PNG)",
-            type=["pdf", "jpg", "jpeg", "png"],
-            accept_multiple_files=False,
-            key="doc_upload_preview",
+        tab_personal, tab_medical, tab_scholarship, tab_excuse = st.tabs(
+            [
+                "👤 Dosar personal",
+                "🏥 Scutiri medicale",
+                "🎓 Dosar bursă",
+                "📝 Motivare absențe părinte",
+            ]
         )
-        send_document = st.button(
-            "📤 Salvează și trimite",
-            use_container_width=True,
-            key="doc_send_preview",
-        )
-        if send_document and uploaded_document is None:
-            st.warning("Selectați mai întâi documentul care trebuie transmis.")
-        elif send_document:
+
+        with tab_personal:
+            st.markdown("#### Dosar personal")
+            st.caption("Selectați tipul documentului pe care doriți să îl încărcați.")
+            render_document_upload("DOSAR_PERSONAL", "doc_personal")
+
+        with tab_medical:
+            st.markdown("#### Scutiri medicale")
+            st.caption("Încărcați scutirea medicală pe care doriți să o transmiteți dirigintelui.")
+            render_document_upload("SCUTIRE_MEDICALA", "doc_medical")
+
+        with tab_scholarship:
+            st.markdown("#### Dosar bursă")
+            st.caption(
+                "Selectați tipul bursei, apoi tipul documentului pe care doriți să îl încărcați."
+            )
+            scholarship_tabs = st.tabs(
+                [
+                    "🏅 Merit",
+                    "💰 Socială – venit",
+                    "👨‍👩‍👧 Socială – orfan",
+                    "🏥 Socială – medicală",
+                    "👩‍🍼 Mame minore",
+                    "♿ CES",
+                ]
+            )
+            scholarship_types = [
+                "MERIT",
+                "SOCIALA_VENIT",
+                "SOCIALA_ORFAN",
+                "SOCIALA_MEDICALA",
+                "SOCIALA_MAME_MINORE",
+                "CES",
+            ]
+            scholarship_keys = [
+                "merit",
+                "sociala_venit",
+                "sociala_orfan",
+                "sociala_medicala",
+                "mame_minore",
+                "ces",
+            ]
+            for scholarship_tab, scholarship_type, scholarship_key in zip(
+                scholarship_tabs, scholarship_types, scholarship_keys
+            ):
+                with scholarship_tab:
+                    render_document_upload(
+                        "DOSAR_BURSA",
+                        f"doc_bursa_{scholarship_key}",
+                        scholarship_type=scholarship_type,
+                    )
+
+        with tab_excuse:
             try:
-                record, validated_bytes = build_document_record(
-                    student_rm_pg=student_found[3],
-                    direction="PARINTE_SCOALA",
-                    category=category,
-                    document_type=document_type,
-                    original_filename=uploaded_document.name,
-                    mime_type=uploaded_document.type,
-                    content=uploaded_document.getvalue(),
-                    school_year="2026-2027",
-                    scholarship_type=scholarship_type,
-                    sender_role="PARINTE_REPREZENTANT",
-                    recipient_role="DIRIGINTE",
-                )
-                store_new_document(record, validated_bytes)
-                st.success("✅ Documentul a fost salvat și înregistrat. Transmiterea a fost confirmată.")
-            except (ValueError, DocumentStorageError) as ex:
-                st.error(f"❌ Documentul nu a fost transmis: {ex}")
-            except Exception:
-                st.error("❌ Eroare neașteptată. Documentul nu este considerat transmis.")
+                excuse_student = get_authenticated_student_details(student_found[3])
+                excuse_usage = parent_excuse_usage(student_found[3], "2026-2027")
 
-
-    with st.expander("📝 Scutire / Motivare absențe — Părinte", expanded=False):
-        try:
-            excuse_student = get_authenticated_student_details(student_found[3])
-            excuse_usage = parent_excuse_usage(student_found[3], "2026-2027")
-
-            st.metric(
-                "Ore disponibile pentru cereri în anul școlar 2026-2027",
-                f"{excuse_usage['remaining_hours']} / {excuse_usage['annual_limit']}",
-            )
-
-            parent_options = []
-            if excuse_student["nume_mama"]:
-                parent_options.append((excuse_student["nume_mama"], "Părinte"))
-            if excuse_student["nume_tata"]:
-                parent_options.append((excuse_student["nume_tata"], "Părinte"))
-
-            if not parent_options:
-                st.warning(
-                    "Nu există încă un părinte/reprezentant legal înregistrat pentru acest elev. "
-                    "Contactați dirigintele pentru actualizarea datelor."
-                )
-            else:
-                selected_parent = st.selectbox(
-                    "Persoana care transmite cererea:",
-                    parent_options,
-                    format_func=lambda item: f"{item[0]} — {item[1]}",
-                    key="excuse_parent",
+                st.metric(
+                    "Ore disponibile pentru cereri în anul școlar 2026-2027",
+                    f"{excuse_usage['remaining_hours']} / {excuse_usage['annual_limit']}",
                 )
 
-                st.text_input(
-                    "Elev:",
-                    value=excuse_student["nume_complet"] or student_found[1],
-                    disabled=True,
-                    key="excuse_student_name",
-                )
-                st.text_input(
-                    "Adresa elevului:",
-                    value=excuse_student["adresa"],
-                    disabled=True,
-                    key="excuse_address",
-                )
-                st.text_input(
-                    "NR. MATR.:",
-                    value=excuse_student["nr_matr"],
-                    disabled=True,
-                    key="excuse_nr_matr",
-                )
-                st.date_input(
-                    "Data absenței:",
-                    value=datetime.date.today(),
-                    max_value=datetime.date.today(),
-                    key="excuse_absence_date",
-                )
-                st.number_input(
-                    "Numărul de ore absente în ziua selectată:",
-                    min_value=1,
-                    max_value=max(1, excuse_usage["remaining_hours"]),
-                    value=1,
-                    step=1,
-                    key="excuse_hours",
-                )
+                parent_options = []
+                if excuse_student["nume_mama"]:
+                    parent_options.append((excuse_student["nume_mama"], "Părinte"))
+                if excuse_student["nume_tata"]:
+                    parent_options.append((excuse_student["nume_tata"], "Părinte"))
 
-                st.caption(
-                    "Cererea va fi considerată depusă la diriginte numai după confirmarea "
-                    "generării, salvării și transmiterii documentului."
-                )
-                preview_excuse = st.button(
-                    "📄 Generează previzualizare PDF",
-                    use_container_width=True,
-                    key="excuse_generate_preview",
-                )
-                if preview_excuse:
-                    try:
-                        preview_pdf = generate_parent_excuse_pdf(
-                            parent_name=selected_parent[0],
-                            parent_role=selected_parent[1],
-                            student_name=excuse_student["nume_complet"] or student_found[1],
-                            student_address=excuse_student["adresa"],
-                            nr_matr=excuse_student["nr_matr"],
-                            absence_date=st.session_state["excuse_absence_date"],
-                            hours=st.session_state["excuse_hours"],
-                        )
-                        st.session_state["excuse_preview_pdf"] = preview_pdf
-                    except ValueError as ex:
-                        st.error(f"PDF-ul nu poate fi generat: {ex}")
+                if not parent_options:
+                    st.warning(
+                        "Nu există încă un părinte/reprezentant legal înregistrat pentru acest elev. "
+                        "Contactați dirigintele pentru actualizarea datelor."
+                    )
+                else:
+                    selected_parent = st.selectbox(
+                        "Persoana care transmite cererea:",
+                        parent_options,
+                        format_func=lambda item: f"{item[0]} — {item[1]}",
+                        key="excuse_parent",
+                    )
 
-                if st.session_state.get("excuse_preview_pdf"):
-                    st.download_button(
-                        "📥 Descarcă previzualizarea PDF",
-                        data=st.session_state["excuse_preview_pdf"],
-                        file_name="Scutire_Motivare_Absente_PREVIZUALIZARE.pdf",
-                        mime="application/pdf",
+                    st.text_input(
+                        "Elev:",
+                        value=excuse_student["nume_complet"] or student_found[1],
+                        disabled=True,
+                        key="excuse_student_name",
+                    )
+                    st.text_input(
+                        "Adresa elevului:",
+                        value=excuse_student["adresa"],
+                        disabled=True,
+                        key="excuse_address",
+                    )
+                    st.text_input(
+                        "NR. MATR.:",
+                        value=excuse_student["nr_matr"],
+                        disabled=True,
+                        key="excuse_nr_matr",
+                    )
+                    st.date_input(
+                        "Data absenței:",
+                        value=datetime.date.today(),
+                        max_value=datetime.date.today(),
+                        key="excuse_absence_date",
+                    )
+                    st.number_input(
+                        "Numărul de ore absente în ziua selectată:",
+                        min_value=1,
+                        max_value=max(1, excuse_usage["remaining_hours"]),
+                        value=1,
+                        step=1,
+                        key="excuse_hours",
+                    )
+
+                    st.caption(
+                        "Cererea va fi considerată depusă la diriginte numai după confirmarea "
+                        "generării, salvării și transmiterii documentului."
+                    )
+                    preview_excuse = st.button(
+                        "📄 Generează previzualizare PDF",
                         use_container_width=True,
-                        key="excuse_download_preview",
+                        key="excuse_generate_preview",
                     )
-                    st.info(
-                        "Previzualizarea nu este transmisă dirigintelui și nu consumă ore "
-                        "din plafonul anual."
-                    )
+                    if preview_excuse:
+                        try:
+                            preview_pdf = generate_parent_excuse_pdf(
+                                parent_name=selected_parent[0],
+                                parent_role=selected_parent[1],
+                                student_name=excuse_student["nume_complet"] or student_found[1],
+                                student_address=excuse_student["adresa"],
+                                nr_matr=excuse_student["nr_matr"],
+                                absence_date=st.session_state["excuse_absence_date"],
+                                hours=st.session_state["excuse_hours"],
+                            )
+                            st.session_state["excuse_preview_pdf"] = preview_pdf
+                        except ValueError as ex:
+                            st.error(f"PDF-ul nu poate fi generat: {ex}")
 
-                send_excuse = st.button(
-                    "📨 Generează, salvează și trimite",
-                    use_container_width=True,
-                    type="primary",
-                    key="excuse_send_preview",
-                )
-                if send_excuse:
-                    try:
-                        absence_date = st.session_state["excuse_absence_date"]
-                        requested_hours = st.session_state["excuse_hours"]
-                        validate_parent_excuse_hours(student_found[3], "2026-2027", requested_hours)
-                        final_pdf = generate_parent_excuse_pdf(
-                            parent_name=selected_parent[0],
-                            parent_role=selected_parent[1],
-                            student_name=excuse_student["nume_complet"] or student_found[1],
-                            student_address=excuse_student["adresa"],
-                            nr_matr=excuse_student["nr_matr"],
-                            absence_date=absence_date,
-                            hours=requested_hours,
+                    if st.session_state.get("excuse_preview_pdf"):
+                        st.download_button(
+                            "📥 Descarcă previzualizarea PDF",
+                            data=st.session_state["excuse_preview_pdf"],
+                            file_name="Scutire_Motivare_Absente_PREVIZUALIZARE.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                            key="excuse_download_preview",
                         )
-                        record, validated_pdf = build_document_record(
-                            student_rm_pg=student_found[3],
-                            direction="PARINTE_SCOALA",
-                            category="MOTIVARE_PARINTE",
-                            document_type="MOTIVARE_ABSENTE_PARINTE",
-                            original_filename=f"Scutire_Motivare_Absente_{absence_date.isoformat()}.pdf",
-                            mime_type="application/pdf",
-                            content=final_pdf,
-                            school_year="2026-2027",
-                            sender_role="PARINTE_REPREZENTANT",
-                            recipient_role="DIRIGINTE",
+                        st.info(
+                            "Previzualizarea nu este transmisă dirigintelui și nu consumă ore "
+                            "din plafonul anual."
                         )
-                        existing_record = find_parent_excuse_document(
-                            student_found[3], "2026-2027", record["sha256"]
-                        )
-                        if existing_record is None:
-                            store_new_document(record, validated_pdf)
-                        else:
-                            record = existing_record
-                        register_transmitted_parent_excuse(
-                            student_rm_pg=student_found[3],
-                            school_year="2026-2027",
-                            absence_date=absence_date.isoformat(),
-                            hours=requested_hours,
-                            document_id=record["id"],
-                            parent_name=selected_parent[0],
-                        )
-                        st.session_state.pop("excuse_preview_pdf", None)
-                        st.success(
-                            "✅ Cererea a fost transmisă cu succes dirigintelui și este considerată depusă. "
-                            "Nu este necesar să prezentați la școală aceeași cerere în format tipărit."
-                        )
-                    except (ValueError, DocumentStorageError) as ex:
-                        st.error(f"❌ Cererea nu este considerată transmisă: {ex}")
-                    except Exception:
-                        st.error("❌ Eroare neașteptată. Cererea nu este considerată transmisă.")
-        except (ValueError, DocumentStorageError) as ex:
-            st.error(f"Formularul de motivare nu poate fi încărcat: {ex}")
+
+                    send_excuse = st.button(
+                        "📨 Generează, salvează și trimite",
+                        use_container_width=True,
+                        type="primary",
+                        key="excuse_send_preview",
+                    )
+                    if send_excuse:
+                        try:
+                            absence_date = st.session_state["excuse_absence_date"]
+                            requested_hours = st.session_state["excuse_hours"]
+                            validate_parent_excuse_hours(student_found[3], "2026-2027", requested_hours)
+                            final_pdf = generate_parent_excuse_pdf(
+                                parent_name=selected_parent[0],
+                                parent_role=selected_parent[1],
+                                student_name=excuse_student["nume_complet"] or student_found[1],
+                                student_address=excuse_student["adresa"],
+                                nr_matr=excuse_student["nr_matr"],
+                                absence_date=absence_date,
+                                hours=requested_hours,
+                            )
+                            record, validated_pdf = build_document_record(
+                                student_rm_pg=student_found[3],
+                                direction="PARINTE_SCOALA",
+                                category="MOTIVARE_PARINTE",
+                                document_type="MOTIVARE_ABSENTE_PARINTE",
+                                original_filename=f"Scutire_Motivare_Absente_{absence_date.isoformat()}.pdf",
+                                mime_type="application/pdf",
+                                content=final_pdf,
+                                school_year="2026-2027",
+                                sender_role="PARINTE_REPREZENTANT",
+                                recipient_role="DIRIGINTE",
+                            )
+                            existing_record = find_parent_excuse_document(
+                                student_found[3], "2026-2027", record["sha256"]
+                            )
+                            if existing_record is None:
+                                store_new_document(record, validated_pdf)
+                            else:
+                                record = existing_record
+                            register_transmitted_parent_excuse(
+                                student_rm_pg=student_found[3],
+                                school_year="2026-2027",
+                                absence_date=absence_date.isoformat(),
+                                hours=requested_hours,
+                                document_id=record["id"],
+                                parent_name=selected_parent[0],
+                            )
+                            st.session_state.pop("excuse_preview_pdf", None)
+                            st.success(
+                                "✅ Cererea a fost transmisă cu succes dirigintelui și este considerată depusă. "
+                                "Nu este necesar să prezentați la școală aceeași cerere în format tipărit."
+                            )
+                        except (ValueError, DocumentStorageError) as ex:
+                            st.error(f"❌ Cererea nu este considerată transmisă: {ex}")
+                        except Exception:
+                            st.error("❌ Eroare neașteptată. Cererea nu este considerată transmisă.")
+            except (ValueError, DocumentStorageError) as ex:
+                st.error(f"Formularul de motivare nu poate fi încărcat: {ex}")
 
     if not os.path.exists(excel_path):
         st.error(f"Fișierul catalog '{excel_path}' nu a fost găsit.")
