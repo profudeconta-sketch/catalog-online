@@ -21,6 +21,16 @@ import io
 import shutil
 import copy
 from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document, store_new_document
+from leave_pass_storage import (
+    STATUS_APPROVED as LEAVE_STATUS_APPROVED,
+    STATUS_EXPIRED as LEAVE_STATUS_EXPIRED,
+    STATUS_PENDING as LEAVE_STATUS_PENDING,
+    STATUS_REFUSED as LEAVE_STATUS_REFUSED,
+    approve_leave_request,
+    get_leave_request_for_day,
+    read_approved_leave_pass,
+    refuse_leave_request,
+)
 from openpyxl.formula.translate import Translator
 
 
@@ -3063,6 +3073,134 @@ with tab8:
     st.info(
         f"Elev selectat: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**."
     )
+
+    st.markdown("#### 🚪 Bilet de voie — solicitarea părintelui")
+    try:
+        leave_request = get_leave_request_for_day(doc_student[3])
+        if not leave_request:
+            st.info("Nu există o solicitare de învoire pentru elevul selectat în ziua curentă.")
+        else:
+            leave_status = leave_request.get("status")
+            leave_status_labels = {
+                LEAVE_STATUS_PENDING: "⏳ ÎN AȘTEPTARE",
+                LEAVE_STATUS_REFUSED: "❌ REFUZATĂ",
+                LEAVE_STATUS_EXPIRED: "❌ EXPIRATĂ — CONSIDERATĂ REFUZATĂ",
+                LEAVE_STATUS_APPROVED: "✅ APROBATĂ",
+            }
+            st.markdown(f"**Stare:** {leave_status_labels.get(leave_status, leave_status)}")
+            st.markdown(
+                f"**Părinte/Reprezentant legal:** {leave_request.get('parent_name')}  \\n"
+                f"**Data:** {leave_request.get('request_date')}  \\n"
+                f"**Ora solicitată pentru plecare:** {leave_request.get('departure_time')}  \\n"
+                f"**Motiv:** {leave_request.get('reason_label')}  \\n"
+                f"**Revizia solicitării:** {leave_request.get('revision')}"
+            )
+            transmitted_raw = str(leave_request.get("transmitted_at_utc") or "")
+            if transmitted_raw:
+                try:
+                    transmitted_dt = datetime.datetime.fromisoformat(transmitted_raw.replace("Z", "+00:00"))
+                    if transmitted_dt.tzinfo is None:
+                        transmitted_dt = transmitted_dt.replace(tzinfo=datetime.timezone.utc)
+                    transmitted_display = transmitted_dt.astimezone(
+                        ZoneInfo("Europe/Bucharest")
+                    ).strftime("%d.%m.%Y, ora %H:%M")
+                except (ValueError, TypeError):
+                    transmitted_display = transmitted_raw
+                st.caption(f"Ultima formulare transmisă: {transmitted_display}")
+
+            st.info(
+                "Biletul de voie permite exclusiv părăsirea unității la data și ora aprobate. "
+                "Nu reprezintă motivare/scutire și nu modifică automat absențele."
+            )
+
+            if leave_status == LEAVE_STATUS_PENDING:
+                col_leave_approve, col_leave_refuse = st.columns(2)
+                if col_leave_approve.button(
+                    "✅ Aprobă învoirea",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"approve_leave_{leave_request['id']}_{leave_request['revision']}",
+                ):
+                    try:
+                        result = approve_leave_request(
+                            student_rm_pg=doc_student[3],
+                            request_id=leave_request["id"],
+                            expected_revision=leave_request["revision"],
+                        )
+                        if result.get("status") == LEAVE_STATUS_APPROVED:
+                            st.success("Învoirea a fost aprobată și biletul de voie a fost generat.")
+                        elif result.get("status") == LEAVE_STATUS_EXPIRED:
+                            st.error(
+                                "Ora solicitată a fost atinsă sau depășită. Solicitarea este "
+                                "considerată refuzată și nu a fost generat niciun bilet de voie."
+                            )
+                        st.rerun()
+                    except (DocumentStorageError, ValueError) as ex:
+                        st.error(f"Învoirea nu a putut fi aprobată: {ex}")
+
+                if col_leave_refuse.button(
+                    "❌ Refuză învoirea",
+                    use_container_width=True,
+                    key=f"refuse_leave_{leave_request['id']}_{leave_request['revision']}",
+                ):
+                    try:
+                        result = refuse_leave_request(
+                            student_rm_pg=doc_student[3],
+                            request_id=leave_request["id"],
+                            expected_revision=leave_request["revision"],
+                        )
+                        if result.get("status") == LEAVE_STATUS_EXPIRED:
+                            st.error(
+                                "Ora solicitată a fost atinsă sau depășită; solicitarea este "
+                                "considerată refuzată prin expirare."
+                            )
+                        else:
+                            st.success("Solicitarea de învoire a fost refuzată.")
+                        st.rerun()
+                    except (DocumentStorageError, ValueError) as ex:
+                        st.error(f"Refuzul nu a putut fi înregistrat: {ex}")
+
+            elif leave_status == LEAVE_STATUS_REFUSED:
+                st.warning(
+                    "Solicitarea a fost refuzată. Părintele o poate reformula în aceeași zi "
+                    "pentru o oră viitoare."
+                )
+            elif leave_status == LEAVE_STATUS_EXPIRED:
+                st.warning(
+                    "Solicitarea nu a fost aprobată înainte de ora solicitată și este considerată "
+                    "refuzată. Nu poate fi aprobată retroactiv."
+                )
+            elif leave_status == LEAVE_STATUS_APPROVED:
+                approved_raw = str(leave_request.get("approved_at_utc") or "")
+                if approved_raw:
+                    try:
+                        approved_dt = datetime.datetime.fromisoformat(approved_raw.replace("Z", "+00:00"))
+                        if approved_dt.tzinfo is None:
+                            approved_dt = approved_dt.replace(tzinfo=datetime.timezone.utc)
+                        approved_display = approved_dt.astimezone(
+                            ZoneInfo("Europe/Bucharest")
+                        ).strftime("%d.%m.%Y, ora %H:%M")
+                    except (ValueError, TypeError):
+                        approved_display = approved_raw
+                    st.success(f"✅ Învoire aprobată — {approved_display}")
+                try:
+                    _, leave_pdf = read_approved_leave_pass(
+                        doc_student[3], leave_request["id"]
+                    )
+                    st.download_button(
+                        "📥 Descarcă biletul de voie aprobat",
+                        data=leave_pdf,
+                        file_name=f"Bilet_de_voie_{leave_request['request_date']}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key=f"teacher_leave_download_{leave_request['id']}",
+                    )
+                except DocumentStorageError as ex:
+                    st.error(f"Biletul de voie nu poate fi deschis în siguranță: {ex}")
+    except (DocumentStorageError, ValueError) as ex:
+        st.error(f"Solicitarea de învoire nu poate fi încărcată în siguranță: {ex}")
+
+    st.divider()
 
     st.markdown("#### 📤 Trimite document către părinte/reprezentant legal")
     st.caption(
