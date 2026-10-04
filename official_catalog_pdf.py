@@ -254,6 +254,55 @@ def extract_grade_entries(wb, student: StudentIdentity, source_key: str) -> tupl
     return tuple(entries)
 
 
+@dataclass(frozen=True)
+class PhysicalSubjectData:
+    label: str | None
+    source_key: str | None
+    grades: tuple[GradeEntry, ...]
+
+
+def extract_physical_subject_data(
+    wb,
+    student: StudentIdentity,
+    physical_slots: Sequence[str | None],
+    source_keys: Sequence[str | None],
+) -> tuple[PhysicalSubjectData, ...]:
+    """Leagă fiecare rubrică fizică de datele ei, fără a desena sau modifica sursa."""
+    if len(physical_slots) != len(source_keys):
+        raise OfficialCatalogError("Harta fizică și sursele nu au aceeași lungime.")
+
+    result: list[PhysicalSubjectData] = []
+    for label, source_key in zip(physical_slots, source_keys):
+        if label is None or source_key is None:
+            if label is not None or source_key is not None:
+                raise OfficialCatalogError("Rubrică fizică/sursă incomplet mapată.")
+            result.append(PhysicalSubjectData(None, None, ()))
+            continue
+
+        if OFFICIAL_SUBJECT_NAMES.get(source_key) != label:
+            raise OfficialCatalogError(
+                f"Rubrica {label!r} nu corespunde sursei validate {source_key!r}."
+            )
+        result.append(
+            PhysicalSubjectData(
+                label=label,
+                source_key=source_key,
+                grades=extract_grade_entries(wb, student, source_key),
+            )
+        )
+    return tuple(result)
+
+
+def extract_student_spread_grade_data(
+    wb, student: StudentIdentity
+) -> tuple[tuple[PhysicalSubjectData, ...], tuple[PhysicalSubjectData, ...]]:
+    """Returnează P3 și P4 în ordinea fizică exactă a tipizatului."""
+    return (
+        extract_physical_subject_data(wb, student, CATALOG_P3_SLOTS, CATALOG_P3_SOURCE_KEYS),
+        extract_physical_subject_data(wb, student, CATALOG_P4_SLOTS, CATALOG_P4_SOURCE_KEYS),
+    )
+
+
 PDF_FONT = "OfficialCatalogNoto"
 PDF_FONT_BOLD = "OfficialCatalogNotoBold"
 
