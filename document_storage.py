@@ -23,6 +23,8 @@ PRIVATE_REPO = "profudeconta-sketch/catalog-online-date-private"
 DOCUMENT_ROOT = "documente_scolare"
 REGISTRY_PATH = f"{DOCUMENT_ROOT}/registru_documente.json"
 PENDING_ROOT = f"{DOCUMENT_ROOT}/operatii_in_asteptare"
+PARENT_EXCUSE_REGISTRY_PATH = f"{DOCUMENT_ROOT}/registru_motivari_parinte.json"
+PARENT_EXCUSE_ANNUAL_LIMIT = 40
 MAX_DOCUMENT_BYTES = 15 * 1024 * 1024
 
 ALLOWED_DOCUMENT_TYPES = {
@@ -274,6 +276,103 @@ def build_document_record(
         "first_accessed_at_utc": None,
     }
     return record, data
+
+
+def load_parent_excuse_registry():
+    raw, sha = private_read(PARENT_EXCUSE_REGISTRY_PATH)
+    if raw is None:
+        return {"schema_version": 1, "requests": []}, None
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except Exception as ex:
+        raise DocumentStorageError("Registrul motivarilor parintelui este invalid.") from ex
+    if not isinstance(data, dict) or not isinstance(data.get("requests"), list):
+        raise DocumentStorageError("Structura registrului motivarilor parintelui este invalida.")
+    return data, sha
+
+
+def save_parent_excuse_registry(registry, expected_sha):
+    if not isinstance(registry, dict) or not isinstance(registry.get("requests"), list):
+        raise DocumentStorageError("Registrul motivarilor parintelui nu poate fi salvat.")
+    raw = json.dumps(registry, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    return private_write(
+        PARENT_EXCUSE_REGISTRY_PATH,
+        raw,
+        expected_sha=expected_sha,
+        message="Actualizare registru motivari parinte",
+    )
+
+
+def parent_excuse_usage(student_rm_pg, school_year):
+    student_key = normalize_student_key(student_rm_pg)
+    registry, _ = load_parent_excuse_registry()
+    used = 0
+    for item in registry["requests"]:
+        if item.get("student_key") != student_key:
+            continue
+        if str(item.get("school_year")) != str(school_year):
+            continue
+        if item.get("status") != "TRANSMIS":
+            continue
+        try:
+            used += int(item.get("hours", 0))
+        except (TypeError, ValueError):
+            raise DocumentStorageError("Registrul motivarilor contine un numar de ore invalid.")
+    if used < 0 or used > PARENT_EXCUSE_ANNUAL_LIMIT:
+        raise DocumentStorageError("Contorul anual al motivarilor este inconsistent.")
+    return {
+        "used_hours": used,
+        "remaining_hours": PARENT_EXCUSE_ANNUAL_LIMIT - used,
+        "annual_limit": PARENT_EXCUSE_ANNUAL_LIMIT,
+    }
+
+
+def validate_parent_excuse_hours(student_rm_pg, school_year, requested_hours):
+    try:
+        hours = int(requested_hours)
+    except (TypeError, ValueError) as ex:
+        raise ValueError("Numarul de ore solicitat nu este valid.") from ex
+    if hours < 1:
+        raise ValueError("Cererea trebuie sa contina cel putin o ora.")
+    usage = parent_excuse_usage(student_rm_pg, school_year)
+    if hours > usage["remaining_hours"]:
+        raise ValueError(
+            f"Limita anuala de {PARENT_EXCUSE_ANNUAL_LIMIT} de ore ar fi depasita. "
+            f"Mai sunt disponibile {usage['remaining_hours']} ore."
+        )
+    return usage
+
+
+def register_transmitted_parent_excuse(
+    *,
+    student_rm_pg,
+    school_year,
+    absence_date,
+    hours,
+    document_id,
+    parent_name,
+):
+    validate_parent_excuse_hours(student_rm_pg, school_year, hours)
+    student_key = normalize_student_key(student_rm_pg)
+    registry, registry_sha = load_parent_excuse_registry()
+    if any(item.get("document_id") == document_id for item in registry["requests"]):
+        raise DocumentConflictError("Cererea de motivare este deja inregistrata.")
+
+    record = {
+        "id": uuid.uuid4().hex,
+        "schema_version": 1,
+        "student_key": student_key,
+        "school_year": str(school_year),
+        "absence_date": str(absence_date),
+        "hours": int(hours),
+        "document_id": str(document_id),
+        "parent_name": str(parent_name or "").strip(),
+        "status": "TRANSMIS",
+        "transmitted_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+    }
+    registry["requests"].append(record)
+    save_parent_excuse_registry(registry, registry_sha)
+    return record
 
 
 def list_student_documents(student_rm_pg, direction=None):
