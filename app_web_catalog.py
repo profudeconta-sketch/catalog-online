@@ -441,6 +441,91 @@ def prepare_student_addition(file_path, gest_data, new_name, new_nr_matr, new_rm
         raise
 
 
+
+def prepare_last_student_cancellation(file_path, gest_data, student_index):
+    """Anulează local numai ultimul elev adăugat, dacă nu are activitate școlară."""
+    backup_file = file_path + ".student-cancel.bak"
+    wb = None
+    try:
+        if not gest_data or student_index != len(gest_data) - 1:
+            raise RuntimeError("Poate fi anulată numai ultima înregistrare de elev.")
+        student = gest_data[student_index]
+        if str(student.get("status_scolar", "ACTIV")).upper() != "ACTIV":
+            raise RuntimeError("Un elev transferat/retras nu poate fi șters; istoricul lui trebuie păstrat.")
+
+        shutil.copy2(file_path, backup_file)
+        wb = openpyxl.load_workbook(file_path, data_only=False)
+        validate_student_identity_consistency(wb, gest_data)
+        elev_info = (
+            student.get("id"), student.get("nume_complet", ""), student.get("rand_excel", ""),
+            student.get("matricol", ""), str(student.get("pin", ""))
+        )
+        row = resolve_student_row(wb, elev_info)
+        if row != 8 + len(gest_data):
+            raise RuntimeError("Elevul selectat nu este pe ultimul rând structural al catalogului.")
+
+        # Note/absențe: formulele sunt structurale; orice valoare neidentitară introdusă manual blochează anularea.
+        for sheet_name in ("Cultură Generală", "Module Tehnologice"):
+            ws = wb[sheet_name]
+            for col in range(5, ws.max_column + 1):
+                value = ws.cell(row, col).value
+                if value not in (None, "") and not (isinstance(value, str) and value.startswith("=")):
+                    raise RuntimeError(f"Elevul are deja date școlare în {sheet_name}; anularea este interzisă.")
+
+        ws_abs = wb["Absențe & Purtare"]
+        for col in range(5, ws_abs.max_column + 1):
+            value = ws_abs.cell(row, col).value
+            if value not in (None, "") and not (isinstance(value, str) and value.startswith("=")):
+                raise RuntimeError("Elevul are deja date în Absențe & Purtare; anularea este interzisă.")
+
+        total_row = row + 1
+        if str(ws_abs.cell(total_row, 1).value or "").strip().upper() != "TOTAL ABSENȚE CLASĂ":
+            raise RuntimeError("Rândul TOTAL ABSENȚE CLASĂ nu este în poziția așteptată.")
+
+        # Curăță ultimul rând din foile fără TOTAL; nu deplasează elevii existenți.
+        for sheet_name in ("Cultură Generală", "Module Tehnologice", "Centralizator Medii"):
+            ws = wb[sheet_name]
+            for col in range(1, ws.max_column + 1):
+                ws.cell(row, col).value = None
+
+        # În Absențe, mută TOTAL înapoi pe rândul eliberat și curăță vechiul total.
+        merge_total = None
+        for merged in list(ws_abs.merged_cells.ranges):
+            if merged.min_row == total_row and merged.max_row == total_row and merged.min_col == 1 and merged.max_col == 4:
+                merge_total = str(merged)
+                break
+        if merge_total:
+            ws_abs.unmerge_cells(merge_total)
+
+        total_values = [ws_abs.cell(total_row, c).value for c in range(1, ws_abs.max_column + 1)]
+        total_styles = [copy.copy(ws_abs.cell(total_row, c)._style) for c in range(1, ws_abs.max_column + 1)]
+        for c in range(1, ws_abs.max_column + 1):
+            ws_abs.cell(row, c)._style = total_styles[c - 1]
+            ws_abs.cell(row, c).value = total_values[c - 1]
+            ws_abs.cell(total_row, c).value = None
+        ws_abs.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+        ws_abs.cell(row, 1).value = "TOTAL ABSENȚE CLASĂ"
+        previous_student_row = row - 1
+        for c in (5, 6, 7):
+            letter = get_column_letter(c)
+            ws_abs.cell(row, c).value = f"=SUM({letter}9:{letter}{previous_student_row})"
+
+        wb.save(file_path)
+        wb.close()
+        wb = None
+        _validate_excel_catalog(file_path)
+        return backup_file
+    except Exception:
+        try:
+            if wb is not None:
+                wb.close()
+        except Exception:
+            pass
+        if os.path.exists(backup_file):
+            shutil.copy2(backup_file, file_path)
+        raise
+
+
 def parse_cnp(cnp_str):
     cnp = str(cnp_str).strip()
     if len(cnp) == 13 and cnp.isdigit():
