@@ -195,7 +195,8 @@ def get_current_elevi_parinti():
                             nume_full,
                             d.get("rand_excel", 12 + d["id"]),
                             d["matricol"],
-                            str(d.get("pin", "1234"))
+                            str(d.get("pin", "1234")),
+                            str(d.get("status_scolar", "ACTIV")).upper()
                         ))
                     return elevi_list
         except Exception:
@@ -305,6 +306,13 @@ elif not student_found:
 elif not pin_correct:
     st.error("❌ Cod PIN incorect pentru acest elev! Vă rugăm să verificați biletul confidențial primit de la diriginte.")
 else:
+    status_scolar = str(student_found[5] if len(student_found) > 5 else "ACTIV").upper()
+    if status_scolar in ("TRANSFERAT", "RETRAS"):
+        st.warning(
+            f"ℹ️ Elev {status_scolar}. Situația școlară afișată este păstrată pentru consultarea "
+            "istoricului existent."
+        )
+
     col_hdr1, col_hdr2 = st.columns([3, 1])
     with col_hdr1:
        st.success(

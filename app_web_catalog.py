@@ -441,6 +441,91 @@ def prepare_student_addition(file_path, gest_data, new_name, new_nr_matr, new_rm
         raise
 
 
+
+def prepare_last_student_cancellation(file_path, gest_data, student_index):
+    """Anulează local numai ultimul elev adăugat, dacă nu are activitate școlară."""
+    backup_file = file_path + ".student-cancel.bak"
+    wb = None
+    try:
+        if not gest_data or student_index != len(gest_data) - 1:
+            raise RuntimeError("Poate fi anulată numai ultima înregistrare de elev.")
+        student = gest_data[student_index]
+        if str(student.get("status_scolar", "ACTIV")).upper() != "ACTIV":
+            raise RuntimeError("Un elev transferat/retras nu poate fi șters; istoricul lui trebuie păstrat.")
+
+        shutil.copy2(file_path, backup_file)
+        wb = openpyxl.load_workbook(file_path, data_only=False)
+        validate_student_identity_consistency(wb, gest_data)
+        elev_info = (
+            student.get("id"), student.get("nume_complet", ""), student.get("rand_excel", ""),
+            student.get("matricol", ""), str(student.get("pin", ""))
+        )
+        row = resolve_student_row(wb, elev_info)
+        if row != 8 + len(gest_data):
+            raise RuntimeError("Elevul selectat nu este pe ultimul rând structural al catalogului.")
+
+        # Note/absențe: formulele sunt structurale; orice valoare neidentitară introdusă manual blochează anularea.
+        for sheet_name in ("Cultură Generală", "Module Tehnologice"):
+            ws = wb[sheet_name]
+            for col in range(5, ws.max_column + 1):
+                value = ws.cell(row, col).value
+                if value not in (None, "") and not (isinstance(value, str) and value.startswith("=")):
+                    raise RuntimeError(f"Elevul are deja date școlare în {sheet_name}; anularea este interzisă.")
+
+        ws_abs = wb["Absențe & Purtare"]
+        for col in range(5, ws_abs.max_column + 1):
+            value = ws_abs.cell(row, col).value
+            if value not in (None, "") and not (isinstance(value, str) and value.startswith("=")):
+                raise RuntimeError("Elevul are deja date în Absențe & Purtare; anularea este interzisă.")
+
+        total_row = row + 1
+        if str(ws_abs.cell(total_row, 1).value or "").strip().upper() != "TOTAL ABSENȚE CLASĂ":
+            raise RuntimeError("Rândul TOTAL ABSENȚE CLASĂ nu este în poziția așteptată.")
+
+        # Curăță ultimul rând din foile fără TOTAL; nu deplasează elevii existenți.
+        for sheet_name in ("Cultură Generală", "Module Tehnologice", "Centralizator Medii"):
+            ws = wb[sheet_name]
+            for col in range(1, ws.max_column + 1):
+                ws.cell(row, col).value = None
+
+        # În Absențe, mută TOTAL înapoi pe rândul eliberat și curăță vechiul total.
+        merge_total = None
+        for merged in list(ws_abs.merged_cells.ranges):
+            if merged.min_row == total_row and merged.max_row == total_row and merged.min_col == 1 and merged.max_col == 4:
+                merge_total = str(merged)
+                break
+        if merge_total:
+            ws_abs.unmerge_cells(merge_total)
+
+        total_values = [ws_abs.cell(total_row, c).value for c in range(1, ws_abs.max_column + 1)]
+        total_styles = [copy.copy(ws_abs.cell(total_row, c)._style) for c in range(1, ws_abs.max_column + 1)]
+        for c in range(1, ws_abs.max_column + 1):
+            ws_abs.cell(row, c)._style = total_styles[c - 1]
+            ws_abs.cell(row, c).value = total_values[c - 1]
+            ws_abs.cell(total_row, c).value = None
+        ws_abs.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+        ws_abs.cell(row, 1).value = "TOTAL ABSENȚE CLASĂ"
+        previous_student_row = row - 1
+        for c in (5, 6, 7):
+            letter = get_column_letter(c)
+            ws_abs.cell(row, c).value = f"=SUM({letter}9:{letter}{previous_student_row})"
+
+        wb.save(file_path)
+        wb.close()
+        wb = None
+        _validate_excel_catalog(file_path)
+        return backup_file
+    except Exception:
+        try:
+            if wb is not None:
+                wb.close()
+        except Exception:
+            pass
+        if os.path.exists(backup_file):
+            shutil.copy2(backup_file, file_path)
+        raise
+
+
 def parse_cnp(cnp_str):
     cnp = str(cnp_str).strip()
     if len(cnp) == 13 and cnp.isdigit():
@@ -2498,7 +2583,7 @@ with tab7:
     
     op_gest = st.radio(
         "Alegeți operațiunea dorită:",
-        ["✏️ Modificare Date Elev Existent", "➕ Adăugare Elev Nou în Clasă", "🗑️ Ștergere Elev din Clasă"],
+        ["✏️ Modificare Date Elev Existent", "➕ Adăugare Elev Nou în Clasă", "🔄 Transfer/Retragere Elev", "↩️ Anulare adăugare greșită"],
         horizontal=True,
         key="radio_op_gest"
     )
@@ -2510,7 +2595,7 @@ with tab7:
             sel_st_idx = st.selectbox(
                 "Selectează Elevul de Modificat:",
                 range(len(gest_data)),
-                format_func=lambda i: f"{i+1}. {gest_data[i].get('nume_complet', '')} (Matr. {gest_data[i].get('matricol', '')})",
+                format_func=lambda i: f"{i+1}. {gest_data[i].get('nume_complet', '')} [{gest_data[i].get('status_scolar', 'ACTIV')}] (RM/PG {gest_data[i].get('matricol', '')})",
                 key="sel_st_mod"
             )
             st_curr = gest_data[sel_st_idx]
@@ -2689,7 +2774,8 @@ with tab7:
                         "orfan": False,
                         "plasament": False,
                         "bursa_medicala": False,
-                        "bursa_venit": False
+                        "bursa_venit": False,
+                        "status_scolar": "ACTIV"
                     }
                     excel_backup = None
                     try:
@@ -2728,23 +2814,102 @@ with tab7:
                                     "Gestiunea elevilor va fi blocată la următoarea verificare de consistență."
                                 )
 
-    elif op_gest == "🗑️ Ștergere Elev din Clasă":
+    elif op_gest == "🔄 Transfer/Retragere Elev":
         if gest_data:
-            sel_del_idx = st.selectbox(
-                "Selectează Elevul de Șters:",
+            sel_status_idx = st.selectbox(
+                "Selectează elevul:",
                 range(len(gest_data)),
-                format_func=lambda i: f"{i+1}. {gest_data[i].get('nume_complet', '')} (Matr. {gest_data[i].get('matricol', '')})",
-                key="sel_st_del"
+                format_func=lambda i: (
+                    f"{i+1}. {gest_data[i].get('nume_complet', '')} "
+                    f"[{gest_data[i].get('status_scolar', 'ACTIV')}] "
+                    f"(RM/PG {gest_data[i].get('matricol', '')})"
+                ),
+                key="sel_st_status"
             )
-            del_item = gest_data[sel_del_idx]
-            st.warning(f"⚠️ Sunteți sigur că doriți să ștergeți elevul **{del_item.get('nume_complet')}** din baza de date?")
-            if st.button("🗑️ Confirmă Ștergerea Elevului", type="primary", use_container_width=True):
-                removed = gest_data.pop(sel_del_idx)
+            status_item = gest_data[sel_status_idx]
+            status_curent = str(status_item.get("status_scolar", "ACTIV")).upper()
+            status_options = ["ACTIV", "TRANSFERAT", "RETRAS"]
+            status_index = status_options.index(status_curent) if status_curent in status_options else 0
+            status_nou = st.selectbox(
+                "Stare școlară:",
+                status_options,
+                index=status_index,
+                key="status_scolar_nou"
+            )
+            st.info(
+                "Schimbarea stării nu șterge elevul și nu modifică notele, mediile, "
+                "absențele, NR. MATR. sau RM/PG."
+            )
+            if st.button("💾 Salvează starea școlară", type="primary", use_container_width=True):
+                status_vechi = status_item.get("status_scolar")
+                status_item["status_scolar"] = status_nou
                 if save_gestiune_data(gest_data):
-                    st.success(f"✅ Elevul {removed.get('nume_complet')} a fost șters și modificarea a fost sincronizată.")
+                    st.success(
+                        f"✅ Starea elevului {status_item.get('nume_complet')} a fost actualizată la {status_nou}. "
+                        "Istoricul școlar a rămas neschimbat."
+                    )
                     st.rerun()
                 else:
-                    st.warning("⚠️ Ștergerea nu a fost confirmată în repository-ul privat. Aplicația nu va reîncărca datele automat.")
+                    if status_vechi is None:
+                        status_item.pop("status_scolar", None)
+                    else:
+                        status_item["status_scolar"] = status_vechi
+                    st.warning(
+                        "⚠️ Modificarea stării nu a fost confirmată în repository-ul privat. "
+                        "Datele încărcate în sesiunea curentă au fost restaurate."
+                    )
+
+    elif op_gest == "↩️ Anulare adăugare greșită":
+        if gest_data:
+            last_index = len(gest_data) - 1
+            last_item = gest_data[last_index]
+            st.warning(
+                "Această operație este destinată exclusiv anulării ultimei înregistrări introduse din greșeală. "
+                "Este refuzată dacă elevul are deja note, absențe sau alte date școlare."
+            )
+            st.write(
+                f"Ultima înregistrare: **{last_item.get('nume_complet', '')}** "
+                f"(NR. MATR. {last_item.get('rand_excel', '')}, RM/PG {last_item.get('matricol', '')})"
+            )
+            confirm_cancel = st.checkbox(
+                "Confirm că această înregistrare a fost introdusă din greșeală și trebuie anulată.",
+                key="confirm_cancel_last_student"
+            )
+            if st.button(
+                "↩️ Anulează ultima adăugare",
+                type="primary",
+                use_container_width=True,
+                disabled=not confirm_cancel
+            ):
+                try:
+                    excel_backup = prepare_last_student_cancellation(selected_file, gest_data, last_index)
+                except Exception as ex:
+                    st.error(f"Anularea a fost oprită fără modificări: {ex}")
+                else:
+                    if not push_to_github(selected_file):
+                        shutil.copy2(excel_backup, selected_file)
+                        st.warning(
+                            "⚠️ Excel nu a fost sincronizat. Copia originală a fost restaurată, "
+                            "iar JSON nu a fost modificat."
+                        )
+                    else:
+                        removed = gest_data.pop()
+                        if save_gestiune_data(gest_data):
+                            try:
+                                os.remove(excel_backup)
+                            except Exception:
+                                pass
+                            st.success(
+                                f"✅ Adăugarea greșită pentru {removed.get('nume_complet', '')} a fost anulată "
+                                "în catalog și în gestiune."
+                            )
+                            st.rerun()
+                        else:
+                            gest_data.append(removed)
+                            st.error(
+                                "⚠️ Excel a fost sincronizat, dar JSON nu a fost confirmat. "
+                                "Gestiunea elevilor va fi blocată la următoarea verificare de consistență."
+                            )
 
     st.divider()
     st.markdown("#### 📊 Export Registru & Statistică Clasă (Excel)")
