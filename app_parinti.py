@@ -298,7 +298,7 @@ with col_auth1:
     nr_matricol_input = st.text_input(
         "🔑 Introduceți Numărul Matricol:",
         value="",
-        placeholder="Introduceți numărul matricol"
+        placeholder="Introduceți numărul matricol",
         help="Numărul matricol se găsește pe carnetul de elev sau adeverința de înscriere."
     ).strip()
 
@@ -307,7 +307,7 @@ with col_auth2:
         "🔒 Introduceți Codul PIN Confidențial (4 cifre):",
         value="",
         type="password",
-        placeholder="Introduceți codul PIN"
+        placeholder="Introduceți codul PIN",
         help="Codul PIN confidențial individual eliberat de către diriginte."
     ).strip()
 
