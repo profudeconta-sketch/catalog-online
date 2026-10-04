@@ -2445,7 +2445,7 @@ with tab6:
                 st.error(f"Eroare la generare Excel: {ex}")
             
             st.divider()
-            st.markdown("#### 🏆 Clasament Complet Elevi în Funcție de Absențe (32 Elevi)")
+            st.markdown(f"#### 🏆 Clasament Complet Elevi în Funcție de Absențe ({len(ELEVI)} Elevi)")
             
             sort_criterion = st.radio("Criteriu Sortare Clasament Absențe:", ["După Total Absențe (Descrescător)", "După Absențe Nemotivate (Descrescător)"], horizontal=True, key="sort_crit_abs")
             
