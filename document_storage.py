@@ -204,6 +204,15 @@ def validate_upload(filename, mime_type, content):
         raise ValueError("Fisierul este gol.")
     if len(data) > MAX_DOCUMENT_BYTES:
         raise ValueError("Fisierul depaseste limita de 15 MB.")
+    extension = os.path.splitext(name)[1].lower()
+    if mime in {"", "application/octet-stream"}:
+        if extension == ".pdf":
+            mime = "application/pdf"
+        elif extension in {".jpg", ".jpeg"}:
+            mime = "image/jpeg"
+        elif extension == ".png":
+            mime = "image/png"
+
     extensions = ALLOWED_DOCUMENT_TYPES.get(mime)
     if not extensions or not name.lower().endswith(extensions):
         raise ValueError("Sunt acceptate numai fisiere PDF, JPG/JPEG si PNG.")
