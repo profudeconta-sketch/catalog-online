@@ -19,6 +19,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
+from school_document_receipt_pdf import generate_school_document_receipt_pdf
+
 PRIVATE_REPO = "profudeconta-sketch/catalog-online-date-private"
 DOCUMENT_ROOT = "documente_scolare"
 REGISTRY_PATH = f"{DOCUMENT_ROOT}/registru_documente.json"
@@ -451,24 +453,16 @@ def read_registered_document(student_rm_pg, document_id):
     return dict(record), content
 
 
-def register_first_school_document_access(
-    *,
-    student_rm_pg,
-    document_id,
-    confirmation_content,
-    confirmation_filename,
-):
-    """Înregistrează idempotent prima accesare și confirmarea aferentă."""
+def register_first_school_document_access(*, student_rm_pg, student_name, document_id):
+    """Înregistrează idempotent prima accesare și generează confirmarea aferentă."""
     student_key = normalize_student_key(student_rm_pg)
+    student_name = str(student_name or "").strip()
     source_id = str(document_id or "").strip().lower()
+    if not student_name:
+        raise DocumentStorageError("Numele elevului lipsește.")
     if not re.fullmatch(r"[0-9a-f]{32}", source_id):
         raise DocumentStorageError("Identificatorul documentului sursă este invalid.")
 
-    confirmation_name, confirmation_mime, confirmation_data = validate_upload(
-        confirmation_filename,
-        "application/pdf",
-        confirmation_content,
-    )
     confirmation_id = hashlib.sha256(
         ("confirmare-acces|" + source_id).encode("utf-8")
     ).hexdigest()[:32]
@@ -513,6 +507,18 @@ def register_first_school_document_access(
             )
 
         accessed_at = dt.datetime.now(dt.timezone.utc).isoformat()
+        confirmation_filename = f"Confirmare_primire_{source_id}.pdf"
+        confirmation_data = generate_school_document_receipt_pdf(
+            student_name=student_name,
+            source_document_name=source.get("original_filename") or "Document transmis de școală",
+            accessed_at_utc=accessed_at,
+            source_document_id=source_id,
+        )
+        confirmation_name, confirmation_mime, confirmation_data = validate_upload(
+            confirmation_filename,
+            "application/pdf",
+            confirmation_data,
+        )
         stored_path = (
             f"{DOCUMENT_ROOT}/{source.get('school_year')}/{student_key}/"
             f"{confirmation_id}.pdf"
@@ -548,10 +554,11 @@ def register_first_school_document_access(
             )
         except DocumentConflictError:
             existing_content, _ = private_read(stored_path)
-            if existing_content is None or hashlib.sha256(existing_content).hexdigest() != confirmation["sha256"]:
-                raise DocumentConflictError(
-                    "Fișierul confirmării există deja, dar integritatea lui nu corespunde."
-                )
+            if existing_content is None:
+                raise
+            # Un fișier rămas dintr-o încercare concurentă/anterioară este acceptat
+            # numai după ce registrul confirmă legătura lui. Nu îl suprascriem.
+            continue
 
         source["status"] = "CITIT"
         source["first_accessed_at_utc"] = accessed_at
@@ -587,7 +594,7 @@ def register_first_school_document_access(
                 "created": False,
             }
     raise DocumentConflictError(
-        "Prima accesare nu a putut fi confirmată din cauza unor actualizări concurente. Reîncercați."
+        "Prima accesare nu a putut fi confirmată în siguranță. Reîncercați."
     )
 
 
