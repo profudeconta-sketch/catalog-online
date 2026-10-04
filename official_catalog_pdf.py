@@ -14,6 +14,7 @@ vizuală și funcțională a prototipului.
 from __future__ import annotations
 
 import io
+from datetime import date, datetime
 from dataclasses import dataclass
 from typing import Iterable, Mapping, Sequence
 
@@ -231,6 +232,53 @@ class StudentIdentity:
 class GradeEntry:
     grade: object
     date: object
+
+
+ROMAN_MONTHS = (
+    "",
+    "I", "II", "III", "IV", "V", "VI",
+    "VII", "VIII", "IX", "X", "XI", "XII",
+)
+
+
+def _coerce_catalog_date(value: object) -> date:
+    """Interpretează o dată fără a modifica valoarea din workbook."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = _norm(value)
+    for fmt in ("%d.%m.%Y", "%d/%m/%Y", "%Y-%m-%d", "%d.%m.%y", "%d/%m/%y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            pass
+    raise OfficialCatalogError(f"Data {text!r} nu poate fi reprezentată sigur în catalog.")
+
+
+def format_catalog_grade(entry: GradeEntry) -> str:
+    """Ex.: nota 10 din 07.10.2026 -> 10/07.X."""
+    if entry.date is None or not _norm(entry.date):
+        raise OfficialCatalogError("O notă fără dată nu poate fi tipărită în catalogul oficial.")
+    d = _coerce_catalog_date(entry.date)
+    grade = _norm(entry.grade)
+    if not grade:
+        raise OfficialCatalogError("Nota este goală.")
+    return f"{grade}/{d.day:02d}.{ROMAN_MONTHS[d.month]}"
+
+
+def format_catalog_absence_dates(values: Sequence[object]) -> tuple[str, ...]:
+    """Grupează datele absențelor pe luni: X:05,09,15."""
+    grouped: dict[int, list[int]] = {}
+    for value in values:
+        d = _coerce_catalog_date(value)
+        grouped.setdefault(d.month, []).append(d.day)
+
+    result: list[str] = []
+    for month in sorted(grouped):
+        days = ",".join(f"{day:02d}" for day in sorted(grouped[month]))
+        result.append(f"{ROMAN_MONTHS[month]}:{days}")
+    return tuple(result)
 
 
 def _source_location(source_key: str) -> tuple[str, int]:
