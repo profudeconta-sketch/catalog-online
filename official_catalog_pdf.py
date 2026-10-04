@@ -392,7 +392,7 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
     width, height = A4
     left, right = 18, width - 16
     top, bottom = height - 47, 47
-    header_h = 43
+    header_h = 48
     gap = 5
     usable_h = top - bottom - header_h - 2 * gap
     block_h = usable_h / 3
@@ -410,33 +410,33 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
         c.setFont(PDF_FONT_BOLD, 13)
         c.drawCentredString(left + identity_w / 2, top - 28, "ELEVII")
         c.rect(grid_left, top - header_h, right - grid_left, header_h)
-        c.setFont(PDF_FONT_BOLD, 8.5)
+        c.setFont(PDF_FONT_BOLD, 7.8)
         c.drawRightString(right - 4, top - 10, "DISCIPLINELE/MODULELE***  DE")
-        c.line(grid_left, top - 25, right, top - 25)
+        c.line(grid_left, top - 27, right, top - 27)
         for j in range(len(slots)):
             gx = grid_left + j * pair_w
-            c.line(gx, top - header_h, gx, top - 25)
-            c.line(gx + pair_w / 2, top - header_h, gx + pair_w / 2, top - 25)
+            c.line(gx, top - header_h, gx, top - 27)
+            c.line(gx + pair_w / 2, top - header_h, gx + pair_w / 2, top - 27)
             c.setFont(PDF_FONT, 2.8)
             c.drawCentredString(gx + pair_w * .25, top - 38, "Absențe")
             c.drawCentredString(gx + pair_w * .75, top - 38, "Note")
-        c.line(right, top - header_h, right, top - 25)
+        c.line(right, top - header_h, right, top - 27)
     else:
         slots = CATALOG_P4_SLOTS
-        terminal_w = 66
+        terminal_w = 76
         grid_right = right - terminal_w
         pair_w = (grid_right - left) / len(slots)
 
         c.rect(left, top - header_h, right - left, header_h)
-        c.setFont(PDF_FONT_BOLD, 8.5)
-        c.drawString(left + 22, top - 10, "ÎNVĂȚĂMÂNT")
-        c.setFont(PDF_FONT_BOLD, 5.5)
-        c.drawCentredString(grid_right + terminal_w * .70, top - 10, "Absențe")
-        c.line(left, top - 25, grid_right, top - 25)
+        c.setFont(PDF_FONT_BOLD, 7.8)
+        c.drawString(left + 16, top - 10, "ÎNVĂȚĂMÂNT")
+        c.setFont(PDF_FONT_BOLD, 5.0)
+        c.drawCentredString(grid_right + terminal_w * .72, top - 10, "ABSENȚE")
+        c.line(left, top - 25, grid_right, top - 27)
         for j in range(len(slots)):
             gx = left + j * pair_w
-            c.line(gx, top - header_h, gx, top - 25)
-            c.line(gx + pair_w / 2, top - header_h, gx + pair_w / 2, top - 25)
+            c.line(gx, top - header_h, gx, top - 27)
+            c.line(gx + pair_w / 2, top - header_h, gx + pair_w / 2, top - 27)
             c.setFont(PDF_FONT, 2.8)
             c.drawCentredString(gx + pair_w * .25, top - 38, "Absențe")
             c.drawCentredString(gx + pair_w * .75, top - 38, "Note")
@@ -516,7 +516,7 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
             c.drawRightString(label_x, y_bottom + 2, "Media anuală")
         else:
             slots = CATALOG_P4_SLOTS
-            terminal_w = 66
+            terminal_w = 76
             grid_right = right - terminal_w
             pair_w = (grid_right - left) / len(slots)
             c.rect(left, y_bottom, right - left, block_h)
@@ -536,8 +536,8 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
                     c.restoreState()
             c.line(grid_right, y_bottom, grid_right, y_top)
 
-            conduct_w = 28
-            total_w = 19
+            conduct_w = 32
+            total_w = 22
             unmotiv_w = terminal_w - conduct_w - total_w
             x_conduct = grid_right
             x_total = x_conduct + conduct_w
@@ -547,12 +547,14 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
 
             # Geometria specială a tipizatului: Consiliere/orientare sus, Purtare jos,
             # diagonală în corpul coloanei și celula de medie barată cu X.
-            c.line(x_conduct, y_top - 22, x_total, y_top - 22)
-            c.setFont(PDF_FONT, 3.1)
-            c.drawCentredString((x_conduct + x_total) / 2, y_top - 8, "Consiliere")
-            c.drawCentredString((x_conduct + x_total) / 2, y_top - 14, "și orientare")
-            c.drawCentredString((x_conduct + x_total) / 2, y_top - 34, "Purtare")
-            c.line(x_conduct, y_bottom + mean_h, x_total, y_top - 22)
+            conduct_split_y = y_top - 26
+            c.line(x_conduct, conduct_split_y, x_total, conduct_split_y)
+            c.setFont(PDF_FONT, 3.2)
+            c.drawCentredString((x_conduct + x_total) / 2, y_top - 9, "Consiliere")
+            c.drawCentredString((x_conduct + x_total) / 2, y_top - 16, "și orientare")
+            c.setFont(PDF_FONT_BOLD, 3.6)
+            c.drawCentredString((x_conduct + x_total) / 2, y_top - 38, "PURTARE")
+            c.line(x_conduct, y_bottom + mean_h, x_total, conduct_split_y)
 
             c.saveState()
             c.translate(x_total + total_w * .55, y_top - 38)
