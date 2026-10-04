@@ -426,16 +426,32 @@ PDF_FONT = "OfficialCatalogNoto"
 PDF_FONT_BOLD = "OfficialCatalogNotoBold"
 
 
+ROMANIAN_DIACRITICS_TEST = "ĂÂÎȘȚ ăâîșț"
+
+
 def _register_unicode_fonts() -> None:
-    """Înregistrează fonturi Unicode; oprește generarea dacă lipsesc."""
+    """Înregistrează și validează fonturile Unicode pentru limba română."""
     try:
         font_path = str(fontpkg.path("Noto Sans"))
         if PDF_FONT not in pdfmetrics.getRegisteredFontNames():
             pdfmetrics.registerFont(TTFont(PDF_FONT, font_path))
         if PDF_FONT_BOLD not in pdfmetrics.getRegisteredFontNames():
             pdfmetrics.registerFont(TTFont(PDF_FONT_BOLD, font_path))
+
+        # Fail-closed: fontul trebuie să poată măsura explicit toate
+        # diacriticele românești folosite în catalog, inclusiv Ș/Ț cu virgulă.
+        for font_name in (PDF_FONT, PDF_FONT_BOLD):
+            width = pdfmetrics.stringWidth(ROMANIAN_DIACRITICS_TEST, font_name, 10)
+            if width <= 0:
+                raise OfficialCatalogError(
+                    f"Fontul {font_name!r} nu poate reda diacriticele românești."
+                )
+    except OfficialCatalogError:
+        raise
     except Exception as ex:
-        raise OfficialCatalogError("Fontul Unicode necesar catalogului nu este disponibil.") from ex
+        raise OfficialCatalogError(
+            "Fontul Unicode necesar catalogului și diacriticelor românești nu este disponibil."
+        ) from ex
 
 
 class OfficialCatalogError(RuntimeError):
