@@ -3088,7 +3088,7 @@ with tab8:
 
     if teacher_upload is not None:
         st.info(
-            f"Destinatar: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**  \\n"
+            f"Destinatar: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**  \n"
             f"Fișier: **{teacher_upload.name}**"
         )
         if st.button(
