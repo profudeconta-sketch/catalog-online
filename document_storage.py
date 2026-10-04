@@ -267,6 +267,38 @@ def build_document_record(
     return record, data
 
 
+def list_student_documents(student_rm_pg, direction=None):
+    student_key = normalize_student_key(student_rm_pg)
+    registry, _ = load_registry()
+    documents = []
+    for item in registry["documents"]:
+        if item.get("student_key") != student_key:
+            continue
+        if direction is not None and item.get("direction") != direction:
+            continue
+        documents.append(dict(item))
+    return sorted(documents, key=lambda item: item.get("created_at_utc", ""), reverse=True)
+
+
+def read_registered_document(student_rm_pg, document_id):
+    student_key = normalize_student_key(student_rm_pg)
+    registry, _ = load_registry()
+    matches = [
+        item for item in registry["documents"]
+        if item.get("id") == document_id and item.get("student_key") == student_key
+    ]
+    if len(matches) != 1:
+        raise DocumentStorageError("Documentul nu exista pentru elevul selectat.")
+
+    record = matches[0]
+    content, _ = private_read(record.get("stored_path"))
+    if content is None:
+        raise DocumentStorageError("Fisierul documentului nu a fost gasit in zona privata.")
+    if hashlib.sha256(content).hexdigest() != record.get("sha256"):
+        raise DocumentStorageError("Integritatea documentului nu a putut fi confirmata.")
+    return dict(record), content
+
+
 def _pending_path(document_id):
     value = str(document_id or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{32}", value):
