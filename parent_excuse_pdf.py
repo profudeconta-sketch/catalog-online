@@ -2,8 +2,7 @@
 from __future__ import annotations
 import datetime as dt
 import io
-import os
-import reportlab
+import fontpkg
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -18,22 +17,18 @@ SCHOOL_PHONE = "telefon: 0264/312637; 0728 972264"
 SCHOOL_FAX = "fax: 0264/317051"
 SCHOOL_EMAIL = "email: emilnegrutiu@gmail.com"
 
-FONT_REGULAR = "ParentExcuseVera"
-FONT_BOLD = "ParentExcuseVeraBold"
+FONT_REGULAR = "ParentExcuseNoto"
+FONT_BOLD = "ParentExcuseNotoBold"
 
 
 def _register_unicode_fonts():
-    fonts_dir = os.path.join(os.path.dirname(reportlab.__file__), "fonts")
-    regular_path = os.path.join(fonts_dir, "Vera.ttf")
-    bold_path = os.path.join(fonts_dir, "VeraBd.ttf")
-    if not os.path.isfile(regular_path) or not os.path.isfile(bold_path):
-        raise RuntimeError("Fonturile Unicode necesare pentru PDF nu sunt disponibile.")
+    font_path = str(fontpkg.path("Noto Sans"))
     if FONT_REGULAR not in pdfmetrics.getRegisteredFontNames():
-        pdfmetrics.registerFont(TTFont(FONT_REGULAR, regular_path))
+        pdfmetrics.registerFont(TTFont(FONT_REGULAR, font_path))
     if FONT_BOLD not in pdfmetrics.getRegisteredFontNames():
-        pdfmetrics.registerFont(TTFont(FONT_BOLD, bold_path))
+        pdfmetrics.registerFont(TTFont(FONT_BOLD, font_path))
     pdfmetrics.registerFontFamily(
-        "ParentExcuseVera",
+        "ParentExcuseNoto",
         normal=FONT_REGULAR,
         bold=FONT_BOLD,
         italic=FONT_REGULAR,
