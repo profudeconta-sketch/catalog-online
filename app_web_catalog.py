@@ -19,7 +19,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 import io
 import shutil
 import copy
-from document_storage import DocumentStorageError, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document
+from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document, store_new_document
 from openpyxl.formula.translate import Translator
 
 
@@ -3062,6 +3062,147 @@ with tab8:
     st.info(
         f"Elev selectat: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**."
     )
+
+    st.markdown("#### 📤 Trimite document către părinte/reprezentant legal")
+    st.caption(
+        "Documentul va fi transmis în contul autentificat aferent elevului selectat. "
+        "După prima accesare de către părinte/reprezentant legal, sistemul va putea "
+        "înregistra confirmarea de primire și luare la cunoștință."
+    )
+    teacher_document_type_label = st.selectbox(
+        "Tip document transmis:",
+        ["Înștiințare", "Document transmis de școală"],
+        key="teacher_school_document_type",
+    )
+    teacher_document_type = (
+        "INSTIINTARE"
+        if teacher_document_type_label == "Înștiințare"
+        else "DOCUMENT_SCOALA"
+    )
+    teacher_upload = st.file_uploader(
+        "Încarcă documentul (PDF, JPG/JPEG sau PNG, maximum 15 MB):",
+        type=["pdf", "jpg", "jpeg", "png"],
+        key=f"teacher_school_document_upload_{doc_student[0]}",
+    )
+
+    if teacher_upload is not None:
+        st.info(
+            f"Destinatar: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**  \\n"
+            f"Fișier: **{teacher_upload.name}**"
+        )
+        if st.button(
+            "📤 Trimite către părinte",
+            type="primary",
+            use_container_width=True,
+            key=f"teacher_send_school_document_{doc_student[0]}",
+        ):
+            try:
+                upload_content = teacher_upload.getvalue()
+                record, validated_content = build_document_record(
+                    student_rm_pg=doc_student[3],
+                    direction="SCOALA_PARINTE",
+                    category="SCOALA_CATRE_PARINTE",
+                    document_type=teacher_document_type,
+                    original_filename=teacher_upload.name,
+                    mime_type=teacher_upload.type,
+                    content=upload_content,
+                    school_year="2026-2027",
+                    sender_role="SCOALA",
+                    recipient_role="PARINTE",
+                )
+                store_new_document(record, validated_content)
+                st.success(
+                    "Documentul a fost transmis și înregistrat în siguranță pentru "
+                    "părintele/reprezentantul legal al elevului selectat."
+                )
+                st.rerun()
+            except (DocumentStorageError, ValueError) as ex:
+                st.error(f"Documentul nu a fost transmis: {ex}")
+
+    st.divider()
+
+    try:
+        sent_documents = list_student_documents(
+            doc_student[3],
+            direction="SCOALA_PARINTE",
+        )
+        st.markdown("#### 📬 Documente trimise către părinte/reprezentant legal")
+        if not sent_documents:
+            st.info("Nu există documente transmise de școală pentru elevul selectat.")
+        else:
+            sent_labels = {
+                "INSTIINTARE": "Înștiințare",
+                "DOCUMENT_SCOALA": "Document transmis de școală",
+            }
+            selected_sent_id = st.selectbox(
+                "Document trimis:",
+                [item["id"] for item in sent_documents],
+                format_func=lambda doc_id: next(
+                    (
+                        f"{sent_labels.get(item.get('document_type'), item.get('document_type'))} — "
+                        f"{item.get('original_filename')} — "
+                        f"{item.get('created_at_utc', '')[:10]}"
+                    )
+                    for item in sent_documents
+                    if item["id"] == doc_id
+                ),
+                key="teacher_sent_document",
+            )
+            selected_sent = next(
+                item for item in sent_documents if item["id"] == selected_sent_id
+            )
+            first_accessed = str(selected_sent.get("first_accessed_at_utc") or "")
+            if first_accessed:
+                try:
+                    accessed_display = datetime.datetime.fromisoformat(first_accessed).strftime("%d.%m.%Y %H:%M")
+                except ValueError:
+                    accessed_display = first_accessed
+                st.success(f"✅ Accesat de părinte — {accessed_display} UTC")
+            else:
+                st.warning("🔔 Neaccesat de părinte")
+
+            st.caption(
+                f"Tip: {sent_labels.get(selected_sent.get('document_type'), selected_sent.get('document_type'))} | "
+                f"An școlar: {selected_sent.get('school_year')} | "
+                f"Dimensiune: {selected_sent.get('size_bytes', 0)} bytes"
+            )
+            try:
+                sent_meta, sent_content = read_registered_document(
+                    doc_student[3],
+                    selected_sent_id,
+                )
+                st.download_button(
+                    "📥 Descarcă documentul trimis",
+                    data=sent_content,
+                    file_name=sent_meta.get("original_filename", "document"),
+                    mime=sent_meta.get("mime_type", "application/octet-stream"),
+                    use_container_width=True,
+                    key="teacher_download_sent_document",
+                )
+            except DocumentStorageError as ex:
+                st.error(f"Documentul trimis nu poate fi deschis în siguranță: {ex}")
+
+            confirmation_id = selected_sent.get("confirmation_document_id")
+            if confirmation_id:
+                try:
+                    confirmation_meta, confirmation_content = read_registered_document(
+                        doc_student[3],
+                        confirmation_id,
+                    )
+                    st.download_button(
+                        "📄 Descarcă confirmarea de primire",
+                        data=confirmation_content,
+                        file_name=confirmation_meta.get("original_filename", "confirmare_primire.pdf"),
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="teacher_download_receipt",
+                    )
+                except DocumentStorageError as ex:
+                    st.error(f"Confirmarea de primire nu poate fi deschisă în siguranță: {ex}")
+    except DocumentStorageError as ex:
+        st.error(f"Documentele trimise nu pot fi încărcate în siguranță: {ex}")
+
+    st.divider()
 
     try:
         received_documents = list_student_documents(
