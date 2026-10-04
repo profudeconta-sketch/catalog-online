@@ -448,7 +448,6 @@ else:
                     animation: schoolNoticePulse 1.8s infinite;
                 }
                 </style>
-                <span class="school-notice-marker"></span>
                 """,
                 unsafe_allow_html=True,
             )
@@ -459,6 +458,11 @@ else:
             else "🔔 Înștiințări de la școală"
         )
         with st.expander(notice_title, expanded=bool(unread_school_documents)):
+            if unread_school_documents:
+                st.markdown(
+                    '<span class="school-notice-marker"></span>',
+                    unsafe_allow_html=True,
+                )
             if not school_documents:
                 st.info("Nu există înștiințări sau documente transmise de școală.")
             else:
@@ -504,12 +508,14 @@ else:
                     key=f"open_{access_key}",
                 ):
                     try:
+                        access_was_new = False
                         if not selected_school_document.get("first_accessed_at_utc"):
-                            register_first_school_document_access(
+                            access_result = register_first_school_document_access(
                                 student_rm_pg=student_found[3],
                                 student_name=student_found[1],
                                 document_id=selected_school_document_id,
                             )
+                            access_was_new = bool(access_result.get("created"))
                         verified_meta, verified_content = read_registered_document(
                             student_found[3],
                             selected_school_document_id,
@@ -520,10 +526,15 @@ else:
                             "mime_type": verified_meta.get("mime_type", "application/octet-stream"),
                             "content": verified_content,
                         }
-                        if not selected_school_document.get("first_accessed_at_utc"):
+                        if access_was_new:
                             st.success(
                                 "✅ Documentul a fost accesat. Confirmarea de primire și luare "
                                 "la cunoștință a fost înregistrată automat."
+                            )
+                        elif not selected_school_document.get("first_accessed_at_utc"):
+                            st.info(
+                                "ℹ️ Prima accesare era deja înregistrată în sistem. "
+                                "Documentul poate fi consultat în continuare."
                             )
                     except DocumentStorageError as ex:
                         st.session_state.pop(access_key, None)
