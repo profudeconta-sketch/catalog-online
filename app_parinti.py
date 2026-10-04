@@ -461,7 +461,29 @@ else:
             use_container_width=True,
             key="doc_send_preview",
         )
-        st.info("ℹ️ Următorul pas conectează acest buton la salvarea privată validată.")
+        if send_document and uploaded_document is None:
+            st.warning("Selectați mai întâi documentul care trebuie transmis.")
+        elif send_document:
+            try:
+                record, validated_bytes = build_document_record(
+                    student_rm_pg=student_found[3],
+                    direction="PARINTE_SCOALA",
+                    category=category,
+                    document_type=document_type,
+                    original_filename=uploaded_document.name,
+                    mime_type=uploaded_document.type,
+                    content=uploaded_document.getvalue(),
+                    school_year="2026-2027",
+                    scholarship_type=scholarship_type,
+                    sender_role="PARINTE_REPREZENTANT",
+                    recipient_role="DIRIGINTE",
+                )
+                store_new_document(record, validated_bytes)
+                st.success("✅ Documentul a fost salvat și înregistrat. Transmiterea a fost confirmată.")
+            except (ValueError, DocumentStorageError) as ex:
+                st.error(f"❌ Documentul nu a fost transmis: {ex}")
+            except Exception:
+                st.error("❌ Eroare neașteptată. Documentul nu este considerat transmis.")
 
     if not os.path.exists(excel_path):
         st.error(f"Fișierul catalog '{excel_path}' nu a fost găsit.")
