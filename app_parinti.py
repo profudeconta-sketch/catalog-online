@@ -441,21 +441,22 @@ else:
             key="doc_type_preview",
         )
 
+        scholarship_type = None
         if category == "DOSAR_BURSA":
-            st.selectbox(
+            scholarship_type = st.selectbox(
                 "Tipul bursei",
                 sorted(SCHOLARSHIP_TYPES),
                 format_func=lambda value: scholarship_labels.get(value, value),
                 key="doc_scholarship_preview",
             )
 
-        st.file_uploader(
+        uploaded_document = st.file_uploader(
             "Selectează documentul (PDF, JPG/JPEG sau PNG)",
             type=["pdf", "jpg", "jpeg", "png"],
             accept_multiple_files=False,
             key="doc_upload_preview",
         )
-        st.button(
+        send_document = st.button(
             "📤 Salvează și trimite",
             use_container_width=True,
             key="doc_send_preview",
