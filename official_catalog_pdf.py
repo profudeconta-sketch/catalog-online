@@ -129,6 +129,66 @@ CATALOG_P4_SLOTS = (
 )
 
 
+# Maparea de citire este separată de harta fizică. Cheile de mai jos sunt
+# denumirile EXISTENTE în aplicație/Excel; None înseamnă că poziția fizică
+# rămâne goală și nu se încearcă nicio citire.
+CATALOG_P3_SOURCE_KEYS = (
+    "Limba și literatura română",
+    None,
+    "Limba engleză (L1)",
+    "Limba franceză (L2)",
+    None,
+    "Matematică",
+    "Fizică",
+    "Chimie",
+    "Biologie",
+    "Istorie",
+    "Geografie",
+)
+
+CATALOG_P4_SOURCE_KEYS = (
+    "Logică, argumentare și comunicare",
+    "Religie",
+    "Arte vizuale și educație plastică",
+    "Educație fizică",
+    "Informatică / TIC",
+    "M1: Bazele contabilității",
+    "M2: Etică și comunicare",
+    "M3: Structuri de primire turistică",
+    "M4: Procese și calitate în HoReCa",
+    "M5: CDEOȘ (IP) - Instruire Practică",
+    "M6: Curriculum de aprofundare și inserție profesională",
+    None,
+    None,
+    None,
+)
+
+
+def _validate_physical_source_mapping() -> None:
+    """Oprește generarea dacă harta fizică și sursele Excel se desincronizează."""
+    for physical, sources, page in (
+        (CATALOG_P3_SLOTS, CATALOG_P3_SOURCE_KEYS, "P3"),
+        (CATALOG_P4_SLOTS, CATALOG_P4_SOURCE_KEYS, "P4"),
+    ):
+        if len(physical) != len(sources):
+            raise OfficialCatalogError(f"Harta fizică și maparea surselor diferă ca lungime pe {page}.")
+        for label, source_key in zip(physical, sources):
+            if source_key is None:
+                if label is not None:
+                    raise OfficialCatalogError(
+                        f"Rubrica {label!r} de pe {page} nu are o sursă Excel validată."
+                    )
+                continue
+            if source_key not in OFFICIAL_SUBJECT_NAMES:
+                raise OfficialCatalogError(
+                    f"Sursa Excel {source_key!r} de pe {page} nu are denumire oficială mapată."
+                )
+            if OFFICIAL_SUBJECT_NAMES[source_key] != label:
+                raise OfficialCatalogError(
+                    f"Maparea {source_key!r} nu corespunde rubricii fizice {label!r} de pe {page}."
+                )
+
+
 @dataclass(frozen=True)
 class StudentIdentity:
     name: str
