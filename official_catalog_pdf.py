@@ -95,6 +95,40 @@ PROFESSORS = {
 }
 
 
+# Harta fizică de lucru a tipizatului. None = rubrică existentă, dar necompletată.
+# Geometria NU se comprimă atunci când o rubrică este goală.
+CATALOG_P3_SLOTS = (
+    "Limba și literatura română",
+    None,  # Limba și literatura maternă – rubrică fizică neutilizată la IX TH
+    "Limba modernă 1 – Limba engleză",
+    "Limba modernă 2 – Limba franceză",
+    None,  # Limba modernă 3 – rubrică fizică neutilizată la IX TH
+    "Matematică",
+    "Fizică",
+    "Chimie",
+    "Biologie",
+    "Istorie",
+    "Geografie",
+)
+
+CATALOG_P4_SLOTS = (
+    "Logică, argumentare și comunicare",
+    "Religie",
+    "Educație vizuală",
+    "Educație fizică și sport",
+    "Tehnologia informației și a comunicațiilor (TIC)",
+    "M1 – Bazele contabilității",
+    "M2 – Etică și comunicare",
+    "M3 – Structuri de primire turistică",
+    "M4 – Procese și calitate în HoReCa",
+    "M5 – CDEOȘ – Stagii de pregătire practică",
+    "M6 – Curriculum pentru aprofundare și inserție profesională",
+    None,
+    None,
+    None,
+)
+
+
 @dataclass(frozen=True)
 class StudentIdentity:
     name: str
@@ -389,7 +423,8 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
             c.drawString(x, y_top - 98, "Mențiuni: ..........................................")
 
             grid_left = left + identity_w
-            pair_count = 10
+            slots = CATALOG_P3_SLOTS
+            pair_count = len(slots)
             pair_w = (right - grid_left) / pair_count
             for j in range(pair_count + 1):
                 gx = grid_left + j * pair_w
@@ -399,6 +434,13 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
                     c.setFont(PDF_FONT, 3.2)
                     c.drawCentredString(gx + pair_w * .25, y_top - 10, "Abs.")
                     c.drawCentredString(gx + pair_w * .75, y_top - 10, "Note")
+                    if idx == 0 and slots[j]:
+                        c.saveState()
+                        c.translate(gx + pair_w * .5, y_bottom + 42)
+                        c.rotate(90)
+                        c.setFont(PDF_FONT, 3.2)
+                        c.drawString(0, 0, slots[j])
+                        c.restoreState()
             for k, label in enumerate(("Media", "Media la ex. de corig.", "Media anuală")):
                 yy = y_bottom + (k + 1) * (28 / 3)
                 c.line(grid_left, yy, right, yy)
@@ -407,7 +449,8 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
         else:
             terminal_w = 72
             grid_right = right - terminal_w
-            pair_count = 13
+            slots = CATALOG_P4_SLOTS
+            pair_count = len(slots)
             pair_w = (grid_right - left) / pair_count
             for j in range(pair_count + 1):
                 gx = left + j * pair_w
@@ -417,6 +460,13 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
                     c.setFont(PDF_FONT, 3.2)
                     c.drawCentredString(gx + pair_w * .25, y_top - 10, "Abs.")
                     c.drawCentredString(gx + pair_w * .75, y_top - 10, "Note")
+                    if idx == 0 and slots[j]:
+                        c.saveState()
+                        c.translate(gx + pair_w * .5, y_bottom + 42)
+                        c.rotate(90)
+                        c.setFont(PDF_FONT, 3.0)
+                        c.drawString(0, 0, slots[j])
+                        c.restoreState()
             c.line(grid_right, y_bottom, grid_right, y_top)
             c.line(grid_right + 30, y_bottom, grid_right + 30, y_top)
             c.line(grid_right + 48, y_bottom, grid_right + 48, y_top)
