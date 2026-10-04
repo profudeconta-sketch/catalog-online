@@ -556,9 +556,14 @@ def register_first_school_document_access(*, student_rm_pg, student_name, docume
             existing_content, _ = private_read(stored_path)
             if existing_content is None:
                 raise
-            # Un fișier rămas dintr-o încercare concurentă/anterioară este acceptat
-            # numai după ce registrul confirmă legătura lui. Nu îl suprascriem.
-            continue
+            # Dacă o încercare anterioară a scris PDF-ul dar nu a reușit încă
+            # actualizarea registrului, îl reutilizăm numai dacă este exact
+            # același PDF determinist pentru același timestamp.
+            if hashlib.sha256(existing_content).hexdigest() != confirmation["sha256"]:
+                raise DocumentConflictError(
+                    "Există o confirmare privată neînregistrată cu un conținut diferit. "
+                    "Operația a fost oprită pentru verificare."
+                )
 
         source["status"] = "CITIT"
         source["first_accessed_at_utc"] = accessed_at
