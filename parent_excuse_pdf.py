@@ -36,7 +36,7 @@ def generate_parent_excuse_pdf(*, parent_name, parent_role, student_name, studen
     generated_date = generated_date or dt.date.today()
 
     output = io.BytesIO()
-    doc = SimpleDocTemplate(output, pagesize=A4, rightMargin=22*mm, leftMargin=22*mm, topMargin=18*mm, bottomMargin=18*mm, title="Scutire/Motivare Absente", author=SCHOOL_NAME)
+    doc = SimpleDocTemplate(output, pagesize=A4, rightMargin=22*mm, leftMargin=22*mm, topMargin=18*mm, bottomMargin=18*mm, title="Scutire/Motivare Absente", author=SCHOOL_NAME, invariant=1)
     styles = getSampleStyleSheet()
     header = ParagraphStyle("Header", parent=styles["Normal"], fontName="Helvetica", fontSize=10, leading=13, alignment=TA_LEFT)
     title = ParagraphStyle("TitleCustom", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=16, leading=20, alignment=TA_CENTER, spaceBefore=12, spaceAfter=16)
