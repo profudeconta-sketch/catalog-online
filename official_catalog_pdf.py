@@ -703,6 +703,21 @@ def _draw_admin_page(c: canvas.Canvas) -> None:
     c.drawString(34, 101, "*) denumirea curentă a ministerului")
     c.drawString(34, 92, "**) se completează pentru filierea tehnologică")
 
+def _gest_by_identity(gest_data: Sequence[Mapping], students: Sequence[StudentIdentity]) -> dict[str, Mapping]:
+    """Leagă datele personale numai prin RM/PG deja validat."""
+    by_rm: dict[str, Mapping] = {}
+    for row in gest_data:
+        rm_pg = _norm(row.get("matricol"))
+        if rm_pg:
+            if rm_pg in by_rm:
+                raise OfficialCatalogError(f"RM/PG duplicat în gestiune: {rm_pg!r}.")
+            by_rm[rm_pg] = row
+    for student in students:
+        if student.rm_pg not in by_rm:
+            raise OfficialCatalogError(f"Lipsesc datele de gestiune pentru RM/PG {student.rm_pg!r}.")
+    return by_rm
+
+
 def _draw_students_grid(c: canvas.Canvas, students: Sequence[StudentIdentity], page_no: int) -> None:
     width, height = A4
     left, right = 32, width - 32
