@@ -2643,7 +2643,8 @@ with tab7:
                 add_prenume = st.text_input("Prenume:")
             with a2:
                 next_id = max([d.get("id", 0) for d in gest_data] or [0]) + 1
-                add_matr = st.text_input("Număr Matricol:", value=f"128/{next_id}")
+                add_nr_matr = st.text_input("NR. MATR. (atribuit de școală):")
+                add_rm_pg = st.text_input("RM/PG (atribuit de școală):")
                 add_cnp = st.text_input("CNP (13 cifre):")
                 add_tel = st.text_input("Telefon Elev:")
             with a3:
@@ -2653,14 +2654,14 @@ with tab7:
                 
             btn_add = st.form_submit_button("➕ Adaugă Elev în Clasă", type="primary", use_container_width=True)
             if btn_add:
-                if not add_nume.strip() or not add_prenume.strip():
-                    st.error("Vă rugăm să introduceți cel puțin numele și prenumele elevului!")
+                if not add_nume.strip() or not add_prenume.strip() or not add_nr_matr.strip() or not add_rm_pg.strip():
+                    st.error("Numele, prenumele, NR. MATR. și RM/PG sunt obligatorii!")
                 else:
                     n_full = f"{add_nume.strip()} {add_init.strip()} {add_prenume.strip()}".replace("  ", " ").strip()
                     new_item = {
                         "id": next_id,
-                        "rand_excel": 12 + next_id,
-                        "matricol": add_matr.strip(),
+                        "rand_excel": add_nr_matr.strip(),
+                        "matricol": add_rm_pg.strip(),
                         "pin": add_pin.strip(),
                         "nume": add_nume.strip(),
                         "initiala": add_init.strip(),
