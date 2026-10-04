@@ -2235,14 +2235,18 @@ def generate_parent_access_pdf(elev_idx, file_path):
         invariant=1,
     )
     try:
-        import fontpkg_noto_sans
-        noto_dir = os.path.dirname(fontpkg_noto_sans.__file__)
-        regular_font = os.path.join(noto_dir, "NotoSans-Regular.ttf")
-        bold_font = os.path.join(noto_dir, "NotoSans-Bold.ttf")
+        font_path = str(fontpkg.path("Noto Sans"))
         if "ParentAccessNoto" not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(TTFont("ParentAccessNoto", regular_font))
+            pdfmetrics.registerFont(TTFont("ParentAccessNoto", font_path))
         if "ParentAccessNotoBold" not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(TTFont("ParentAccessNotoBold", bold_font))
+            pdfmetrics.registerFont(TTFont("ParentAccessNotoBold", font_path))
+        pdfmetrics.registerFontFamily(
+            "ParentAccessNoto",
+            normal="ParentAccessNoto",
+            bold="ParentAccessNotoBold",
+            italic="ParentAccessNoto",
+            boldItalic="ParentAccessNotoBold",
+        )
     except Exception as ex:
         raise RuntimeError("Fontul Unicode necesar pentru fișa de acces nu este disponibil.") from ex
 
