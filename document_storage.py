@@ -22,6 +22,7 @@ import uuid
 PRIVATE_REPO = "profudeconta-sketch/catalog-online-date-private"
 DOCUMENT_ROOT = "documente_scolare"
 REGISTRY_PATH = f"{DOCUMENT_ROOT}/registru_documente.json"
+PENDING_ROOT = f"{DOCUMENT_ROOT}/operatii_in_asteptare"
 MAX_DOCUMENT_BYTES = 15 * 1024 * 1024
 
 ALLOWED_DOCUMENT_TYPES = {
@@ -266,6 +267,31 @@ def build_document_record(
     return record, data
 
 
+def _pending_path(document_id):
+    value = str(document_id or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{32}", value):
+        raise DocumentStorageError("Identificator de document invalid.")
+    return f"{PENDING_ROOT}/{value}.json"
+
+
+def _save_pending_record(record, reason):
+    pending = {
+        "schema_version": 1,
+        "document": record,
+        "reason": str(reason)[:500],
+        "created_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+    }
+    raw = json.dumps(pending, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    path = _pending_path(record.get("id"))
+    _, sha = private_read(path)
+    return private_write(
+        path,
+        raw,
+        expected_sha=sha,
+        message="Salvare operatie document in asteptare",
+    )
+
+
 def store_new_document(record, content):
     path = record.get("stored_path")
     if not path:
@@ -276,16 +302,23 @@ def store_new_document(record, content):
 
     private_write(path, bytes(content), expected_sha=None, message="Adaugare document scolar")
 
-    registry, registry_sha = load_registry()
-    if any(item.get("id") == record.get("id") for item in registry["documents"]):
-        raise DocumentConflictError("Documentul exista deja in registru.")
-
-    registry["documents"].append(record)
     try:
+        registry, registry_sha = load_registry()
+        if any(item.get("id") == record.get("id") for item in registry["documents"]):
+            raise DocumentConflictError("Documentul exista deja in registru.")
+        registry["documents"].append(record)
         save_registry(registry, registry_sha)
-    except Exception:
-        # Fisierul ramane in zona privata, dar nu este pierdut. Reconcilierea
-        # registrului poate fi facuta ulterior pe baza caii si hash-ului.
-        raise
+    except Exception as ex:
+        try:
+            _save_pending_record(record, ex)
+        except Exception as pending_ex:
+            raise DocumentStorageError(
+                "Fisierul a fost salvat privat, dar registrul si jurnalul de recuperare "
+                "nu au putut fi confirmate. Operatia NU trebuie considerata transmisa."
+            ) from pending_ex
+        raise DocumentStorageError(
+            "Fisierul a fost salvat privat, dar registrul principal nu a fost confirmat. "
+            "Operatia a fost marcata pentru recuperare si NU este considerata transmisa."
+        ) from ex
 
     return record["id"]
