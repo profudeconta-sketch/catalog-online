@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+from zoneinfo import ZoneInfo
 
 import fontpkg
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
@@ -54,6 +55,7 @@ def generate_school_document_receipt_pdf(*, student_name, source_document_name, 
         raise ValueError("Date obligatorii lipsă pentru generarea confirmării.")
 
     accessed = _as_utc_datetime(accessed_at_utc)
+    accessed_local = accessed.astimezone(ZoneInfo("Europe/Bucharest"))
     _register_unicode_fonts()
     output = io.BytesIO()
     doc = SimpleDocTemplate(output, pagesize=A4, rightMargin=22*mm, leftMargin=22*mm, topMargin=18*mm, bottomMargin=18*mm, title="Confirmare de primire și luare la cunoștință", author=SCHOOL_NAME, invariant=1)
@@ -62,8 +64,8 @@ def generate_school_document_receipt_pdf(*, student_name, source_document_name, 
     title = ParagraphStyle("ReceiptTitle", parent=styles["Title"], fontName=FONT_BOLD, fontSize=16, leading=20, alignment=TA_CENTER, spaceBefore=12, spaceAfter=16)
     body = ParagraphStyle("ReceiptBody", parent=styles["BodyText"], fontName=FONT_REGULAR, fontSize=11, leading=17, alignment=TA_JUSTIFY, spaceAfter=10)
     note = ParagraphStyle("ReceiptNote", parent=styles["BodyText"], fontName=FONT_REGULAR, fontSize=9, leading=13, alignment=TA_JUSTIFY, spaceBefore=10)
-    date_text = accessed.strftime("%d.%m.%Y")
-    time_text = accessed.strftime("%H:%M UTC")
+    date_text = accessed_local.strftime("%d.%m.%Y")
+    time_text = accessed_local.strftime("%H:%M")
 
     story = [
         Paragraph(f"<b>{_safe(SCHOOL_NAME)}</b>", header),
