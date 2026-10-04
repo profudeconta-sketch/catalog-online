@@ -217,6 +217,9 @@ def refuse_leave_request(*, student_rm_pg, request_id, expected_revision):
 def _decide_nonapproval(*, student_rm_pg, request_id, expected_revision, target_status):
     student_key = normalize_student_key(student_rm_pg)
     now = _utc_now()
+    # Momentul aprobării rămâne identic pe toate retry-urile, astfel încât PDF-ul
+    # generat să fie determinist chiar dacă registrul are un conflict concurent.
+    approved_at = now.isoformat()
     for _ in range(3):
         registry, sha = load_leave_pass_registry()
         matches = [
@@ -282,7 +285,6 @@ def approve_leave_request(*, student_rm_pg, request_id, expected_revision):
             raise DocumentConflictError("Solicitarea a fost reformulată. Consultați forma actualizată.")
         _validate_current_day_future(record["request_date"], record["departure_time"], now)
 
-        approved_at = now.isoformat()
         pdf_data = generate_leave_pass_pdf(
             parent_name=record["parent_name"], student_name=record["student_name"],
             request_date=record["request_date"], departure_time=record["departure_time"],
