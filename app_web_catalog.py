@@ -1684,7 +1684,7 @@ with st.sidebar:
 if not os.path.exists(selected_file):
     st.warning(f"⚠️ Fișierul catalog '{selected_file}' nu a fost găsit în directorul curent.")
 
-tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "➕ Adăugare Notă", 
     "❌ Adăugare Absență", 
     "✅ Motivare Absență", 
@@ -1692,7 +1692,8 @@ tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7 = st.tabs([
     "📊 Fișă Elev",
     "📈 Centralizator Clasă",
     "📋 Raport Diriginte",
-    "👥 Gestiune Elevi"
+    "👥 Gestiune Elevi",
+    "📁 Documente Elevi"
 ])
 
 elev_options = [f"{e[0]}. {e[1]} (Matr. {e[3]})" for e in ELEVI]
@@ -2939,6 +2940,51 @@ with tab7:
             )
         except Exception as ex:
             st.error(f"Eroare la generare Statistică Excel: {ex}")
+
+
+# --- TAB 9: DOCUMENTE ELEVI — PREVIZUALIZARE ETAPA 4A ---
+with tab8:
+    st.subheader("📁 DOCUMENTE ELEVI — Centru documente")
+    st.caption(
+        "Structura pentru documentele transmise între familie și școală. "
+        "În Etapa 4A accesul la documentele efective rămâne dezactivat până la validarea fluxului complet."
+    )
+
+    doc_student_idx = st.selectbox(
+        "Selectează elevul:",
+        range(len(ELEVI)),
+        format_func=lambda i: elev_options[i],
+        key="doc_student_preview",
+    )
+    doc_student = ELEVI[doc_student_idx]
+
+    st.info(
+        f"Elev selectat: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**. "
+        "Identitatea stabilă RM/PG va lega documentele de elev fără mapare pozițională."
+    )
+
+    col_doc1, col_doc2, col_doc3 = st.columns(3)
+    col_doc1.metric("Documente de la părinte", "—")
+    col_doc2.metric("Documente către părinte", "—")
+    col_doc3.metric("Necitite / neconfirmate", "—")
+
+    st.markdown("#### Categorii pregătite")
+    st.markdown(
+        "- Dosar personal elev\n"
+        "- Scutiri / documente medicale\n"
+        "- Dosare de bursă\n"
+        "- Motivări de absențe generate de părinte\n"
+        "- Înștiințări și documente trimise de școală\n"
+        "- Confirmări de acces / luare la cunoștință"
+    )
+
+    st.button(
+        "📂 Deschide documentul selectat",
+        disabled=True,
+        use_container_width=True,
+        key="doc_teacher_open_preview",
+    )
+    st.info("ℹ️ Modul de previzualizare: nu se citește, nu se modifică și nu se salvează niciun document.")
 
 
 render_copyright_footer()
