@@ -344,9 +344,8 @@ def validate_parent_excuse_hours(student_rm_pg, school_year, requested_hours):
 
 
 
-def find_parent_excuse_document(student_rm_pg, school_year, absence_date, hours, parent_name):
+def find_parent_excuse_document(student_rm_pg, school_year, content_sha256):
     student_key = normalize_student_key(student_rm_pg)
-    expected_name = f"Scutire_Motivare_Absente_{str(absence_date)}.pdf"
     registry, _ = load_registry()
     matches = [
         item for item in registry["documents"]
@@ -355,12 +354,11 @@ def find_parent_excuse_document(student_rm_pg, school_year, absence_date, hours,
         and item.get("category") == "MOTIVARE_PARINTE"
         and item.get("document_type") == "MOTIVARE_ABSENTE_PARINTE"
         and item.get("direction") == "PARINTE_SCOALA"
-        and item.get("original_filename") == expected_name
+        and item.get("sha256") == str(content_sha256)
     ]
     if len(matches) > 1:
-        raise DocumentConflictError("Exista mai multe documente pentru aceeasi cerere.")
+        raise DocumentConflictError("Exista mai multe copii ale aceleiasi cereri.")
     return matches[0] if matches else None
-
 
 def register_transmitted_parent_excuse(
     *,
