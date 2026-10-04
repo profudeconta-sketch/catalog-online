@@ -216,7 +216,12 @@ def validate_and_resolve_students(wb, gest_data: Sequence[Mapping]) -> list[Stud
         resolved.append(StudentIdentity(name, nr_matr, rm_pg, rows[0]))
 
     # Catalogul oficial se prezintă alfabetic, fără a altera ordinea din Excel.
-    return sorted(resolved, key=lambda s: s.name.casefold())
+    ordered = sorted(resolved, key=lambda s: s.name.casefold())
+    if len(ordered) > 39:
+        raise OfficialCatalogError(
+            "Tipizatul P3–P28 are 39 de poziții; lista validată conține mai mult de 39 de elevi."
+        )
+    return ordered
 
 
 def _draw_page_frame(c: canvas.Canvas, page_no: int, title: str) -> None:
@@ -619,9 +624,12 @@ def generate_official_catalog_prototype(
         c.drawString(42, A4[1] - 85, "Pagina rezervată reproducerii fidele a normelor din tipizatul oficial.")
         c.showPage()
 
-        # P3–P28: 13 deschideri consecutive, câte 3 poziții de elevi/deschidere.
+        # P3–P28: 13 deschideri consecutive, exact 3 poziții fizice/deschidere.
+        # Felierea păstrează ordinea alfabetică validată; dacă o grupă are sub
+        # 3 elevi, _draw_marks_spread_placeholder() lasă pozițiile rămase goale.
         for spread_index in range(13):
-            group = students[spread_index * 3 : spread_index * 3 + 3]
+            start_pos = spread_index * 3
+            group = students[start_pos : start_pos + 3]
             left_page = 3 + spread_index * 2
             right_page = left_page + 1
 
