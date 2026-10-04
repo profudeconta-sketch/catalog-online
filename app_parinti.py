@@ -7,6 +7,8 @@ import urllib.parse
 import json
 import base64
 
+from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES
+
 st.set_page_config(
     page_title="Portal Părinți - Catalog IX TH",
     page_icon="👨‍👩‍👧‍👦",
@@ -386,6 +388,82 @@ else:
         st.rerun()
 
     st.divider()
+
+    with st.expander("📁 Centru documente — Etapa 4", expanded=False):
+        st.markdown("#### Documente către școală")
+        st.caption(
+            "Zona de documente este pregătită pentru elevul autentificat. "
+            "În această etapă trimiterea este intenționat dezactivată până la validarea fluxului complet."
+        )
+
+        category_labels = {
+            "DOSAR_PERSONAL": "Dosar personal elev",
+            "SCUTIRE_MEDICALA": "Scutire / document medical",
+            "DOSAR_BURSA": "Dosar bursă",
+        }
+        type_labels = {
+            "CARTE_IDENTITATE": "Carte de identitate",
+            "DOVADA_ADRESA": "Dovadă adresă",
+            "CERTIFICAT_NASTERE": "Certificat de naștere",
+            "DIVERSE": "Diverse",
+            "SCUTIRE_MEDICALA": "Document / scutire medicală",
+            "CERERE_BURSA": "Cerere bursă",
+            "ACORD_PRELUCRARE_DATE": "Acord prelucrare date",
+            "DECLARATIE_VENITURI_NETE_IMPOZABILE": "Declarație venituri nete impozabile",
+            "DOCUMENTE_MEDICALE": "Documente medicale",
+            "CI_PARINTE_TUTORE": "CI părinte / tutore",
+            "CERTIFICATE_NASTERE_FRATI_SURORI": "Certificate naștere frați / surori",
+            "CERTIFICAT_CASATORIE_PARINTI": "Certificat căsătorie părinți",
+            "HOTARARE_SENTINTA_DIVORT": "Hotărâre / sentință divorț",
+            "CERTIFICAT_DECES_PARINTE": "Certificat deces părinte",
+            "ALTE_DOCUMENTE_JUSTIFICATIVE": "Alte documente justificative",
+        }
+        scholarship_labels = {
+            "MERIT": "Bursă de merit",
+            "SOCIALA_VENIT": "Bursă socială — venit",
+            "SOCIALA_ORFAN": "Bursă socială — orfan",
+            "SOCIALA_MEDICALA": "Bursă socială — medicală",
+            "SOCIALA_MAME_MINORE": "Bursă socială — mame minore",
+            "CES": "Bursă CES",
+        }
+
+        category = st.selectbox(
+            "Categoria documentului",
+            list(category_labels),
+            format_func=lambda value: category_labels[value],
+            key="doc_category_preview",
+        )
+        document_types = sorted(DOCUMENT_CATEGORIES[category])
+        document_type = st.selectbox(
+            "Tipul documentului",
+            document_types,
+            format_func=lambda value: type_labels.get(value, value),
+            key="doc_type_preview",
+        )
+
+        if category == "DOSAR_BURSA":
+            st.selectbox(
+                "Tipul bursei",
+                sorted(SCHOLARSHIP_TYPES),
+                format_func=lambda value: scholarship_labels.get(value, value),
+                key="doc_scholarship_preview",
+            )
+
+        st.file_uploader(
+            "Selectează documentul (PDF, JPG/JPEG sau PNG)",
+            type=["pdf", "jpg", "jpeg", "png"],
+            accept_multiple_files=False,
+            disabled=True,
+            key="doc_upload_preview",
+            help="Încărcarea va fi activată după validarea Etapei 4A.",
+        )
+        st.button(
+            "📤 Salvează și trimite",
+            disabled=True,
+            use_container_width=True,
+            key="doc_send_preview",
+        )
+        st.info("ℹ️ Modul de previzualizare: niciun document nu poate fi trimis sau salvat încă.")
 
     if not os.path.exists(excel_path):
         st.error(f"Fișierul catalog '{excel_path}' nu a fost găsit.")
