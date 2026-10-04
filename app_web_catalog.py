@@ -2234,11 +2234,23 @@ def generate_parent_access_pdf(elev_idx, file_path):
         bottomMargin=32,
         invariant=1,
     )
+    try:
+        import fontpkg_noto_sans
+        noto_dir = os.path.dirname(fontpkg_noto_sans.__file__)
+        regular_font = os.path.join(noto_dir, "NotoSans-Regular.ttf")
+        bold_font = os.path.join(noto_dir, "NotoSans-Bold.ttf")
+        if "ParentAccessNoto" not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont("ParentAccessNoto", regular_font))
+        if "ParentAccessNotoBold" not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont("ParentAccessNotoBold", bold_font))
+    except Exception as ex:
+        raise RuntimeError("Fontul Unicode necesar pentru fișa de acces nu este disponibil.") from ex
+
     styles = getSampleStyleSheet()
     body = ParagraphStyle(
         "AccessBody",
         parent=styles["BodyText"],
-        fontName="Helvetica",
+        fontName="ParentAccessNoto",
         fontSize=10,
         leading=14,
         spaceAfter=8,
@@ -2246,7 +2258,7 @@ def generate_parent_access_pdf(elev_idx, file_path):
     title = ParagraphStyle(
         "AccessTitle",
         parent=styles["Heading2"],
-        fontName="Helvetica-Bold",
+        fontName="ParentAccessNotoBold",
         fontSize=14,
         leading=18,
         alignment=1,
