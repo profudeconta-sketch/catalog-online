@@ -371,12 +371,22 @@ def extract_grade_entries(wb, student: StudentIdentity, source_key: str) -> tupl
     return tuple(entries)
 
 
+def extract_existing_average(wb, student: StudentIdentity, source_key: str) -> object | None:
+    """Citește media existentă la +20; nu o calculează și nu o modifică."""
+    sheet_name, start_col = _source_location(source_key)
+    value = wb[sheet_name].cell(row=student.row, column=start_col + 20).value
+    if value is None or not _norm(value):
+        return None
+    return value
+
+
 @dataclass(frozen=True)
 class PhysicalSubjectData:
     label: str | None
     source_key: str | None
     grades: tuple[GradeEntry, ...]
     absences: tuple[AbsenceEntry, ...]
+    average: object | None
 
 
 def extract_physical_subject_data(
@@ -394,7 +404,7 @@ def extract_physical_subject_data(
         if label is None or source_key is None:
             if label is not None or source_key is not None:
                 raise OfficialCatalogError("Rubrică fizică/sursă incomplet mapată.")
-            result.append(PhysicalSubjectData(None, None, (), ()))
+            result.append(PhysicalSubjectData(None, None, (), (), None))
             continue
 
         if OFFICIAL_SUBJECT_NAMES.get(source_key) != label:
@@ -407,6 +417,7 @@ def extract_physical_subject_data(
                 source_key=source_key,
                 grades=extract_grade_entries(wb, student, source_key),
                 absences=extract_absence_entries(wb, student, source_key),
+                average=extract_existing_average(wb, student, source_key),
             )
         )
     return tuple(result)
