@@ -384,9 +384,9 @@ def register_transmitted_parent_excuse(
         and item.get("status") == "TRANSMIS"
         for item in registry["requests"]
     ):
-        raise DocumentConflictError("Aceasta cerere de motivare este deja transmisa.")
+        raise DocumentConflictError("Această cerere de motivare este deja transmisă.")
     if any(item.get("document_id") == document_id for item in registry["requests"]):
-        raise DocumentConflictError("Cererea de motivare este deja inregistrata.")
+        raise DocumentConflictError("Cererea de motivare este deja înregistrată.")
 
     record = {
         "id": uuid.uuid4().hex,
