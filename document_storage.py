@@ -362,6 +362,12 @@ def register_transmitted_parent_excuse(
         ).encode("utf-8")
     ).hexdigest()
     registry, registry_sha = load_parent_excuse_registry()
+    if any(
+        item.get("request_fingerprint") == request_fingerprint
+        and item.get("status") == "TRANSMIS"
+        for item in registry["requests"]
+    ):
+        raise DocumentConflictError("Aceasta cerere de motivare este deja transmisa.")
     if any(item.get("document_id") == document_id for item in registry["requests"]):
         raise DocumentConflictError("Cererea de motivare este deja inregistrata.")
 
