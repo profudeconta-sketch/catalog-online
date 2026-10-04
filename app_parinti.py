@@ -210,6 +210,39 @@ def get_current_elevi_parinti():
     st.stop()
 
 
+def get_authenticated_student_details(student_rm_pg):
+    target = str(student_rm_pg or "").strip().casefold()
+    if not target:
+        raise ValueError("RM/PG lipseste pentru elevul autentificat.")
+    if not os.path.exists(GESTIUNE_FILE):
+        raise ValueError("Datele administrative ale elevului nu sunt disponibile.")
+    with open(GESTIUNE_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    matches = [
+        d for d in data
+        if str(d.get("matricol", "")).strip().casefold() == target
+    ]
+    if len(matches) != 1:
+        raise ValueError("Datele administrative ale elevului nu pot fi identificate unic.")
+    d = matches[0]
+    address_parts = [
+        d.get("strada", ""),
+        d.get("numar_strada", ""),
+        d.get("bloc", ""),
+        d.get("apartament", ""),
+        d.get("localitate", ""),
+        d.get("judet", ""),
+    ]
+    return {
+        "nume_complet": str(d.get("nume_complet", "")).strip(),
+        "nr_matr": str(d.get("rand_excel", "")).strip(),
+        "rm_pg": str(d.get("matricol", "")).strip(),
+        "nume_mama": str(d.get("nume_mama", "")).strip(),
+        "nume_tata": str(d.get("nume_tata", "")).strip(),
+        "adresa": ", ".join(str(value).strip() for value in address_parts if str(value).strip()),
+    }
+
+
 # Lista celor 32 de elevi (ID, Nume, RM/PG, Nr. Matr., PIN)
 
 
