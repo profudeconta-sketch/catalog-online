@@ -451,6 +451,146 @@ def read_registered_document(student_rm_pg, document_id):
     return dict(record), content
 
 
+def register_first_school_document_access(
+    *,
+    student_rm_pg,
+    document_id,
+    confirmation_content,
+    confirmation_filename,
+):
+    """Înregistrează idempotent prima accesare și confirmarea aferentă."""
+    student_key = normalize_student_key(student_rm_pg)
+    source_id = str(document_id or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{32}", source_id):
+        raise DocumentStorageError("Identificatorul documentului sursă este invalid.")
+
+    confirmation_name, confirmation_mime, confirmation_data = validate_upload(
+        confirmation_filename,
+        "application/pdf",
+        confirmation_content,
+    )
+    confirmation_id = hashlib.sha256(
+        ("confirmare-acces|" + source_id).encode("utf-8")
+    ).hexdigest()[:32]
+
+    for _attempt in range(3):
+        registry, registry_sha = load_registry()
+        source_matches = [
+            item for item in registry["documents"]
+            if item.get("id") == source_id and item.get("student_key") == student_key
+        ]
+        if len(source_matches) != 1:
+            raise DocumentStorageError("Documentul transmis de școală nu există pentru elevul autentificat.")
+
+        source = source_matches[0]
+        if source.get("direction") != "SCOALA_PARINTE":
+            raise DocumentStorageError("Prima accesare poate fi înregistrată numai pentru documente Școală → Părinte.")
+
+        existing = [
+            item for item in registry["documents"]
+            if item.get("id") == confirmation_id
+            or (
+                item.get("category") == "CONFIRMARE_PRIMIRE"
+                and item.get("source_document_id") == source_id
+            )
+        ]
+        if len(existing) > 1:
+            raise DocumentConflictError("Există mai multe confirmări pentru același document.")
+        if existing:
+            confirmation = existing[0]
+            if confirmation.get("student_key") != student_key:
+                raise DocumentConflictError("Confirmarea existentă nu aparține elevului autentificat.")
+            return {
+                "source_document": dict(source),
+                "confirmation_document": dict(confirmation),
+                "created": False,
+            }
+
+        if source.get("first_accessed_at_utc"):
+            raise DocumentConflictError(
+                "Documentul este marcat ca accesat, dar confirmarea aferentă lipsește. "
+                "Operația a fost oprită pentru verificare."
+            )
+
+        accessed_at = dt.datetime.now(dt.timezone.utc).isoformat()
+        stored_path = (
+            f"{DOCUMENT_ROOT}/{source.get('school_year')}/{student_key}/"
+            f"{confirmation_id}.pdf"
+        )
+        confirmation = {
+            "id": confirmation_id,
+            "schema_version": 1,
+            "student_key": student_key,
+            "school_year": str(source.get("school_year") or ""),
+            "direction": "SISTEM",
+            "category": "CONFIRMARE_PRIMIRE",
+            "document_type": "CONFIRMARE_ACCES_DOCUMENT",
+            "scholarship_type": None,
+            "original_filename": confirmation_name,
+            "stored_path": stored_path,
+            "mime_type": confirmation_mime,
+            "size_bytes": len(confirmation_data),
+            "sha256": hashlib.sha256(confirmation_data).hexdigest(),
+            "sender_role": "SISTEM",
+            "recipient_role": "SCOALA",
+            "created_at_utc": accessed_at,
+            "status": "GENERAT",
+            "first_accessed_at_utc": None,
+            "source_document_id": source_id,
+        }
+
+        try:
+            private_write(
+                stored_path,
+                confirmation_data,
+                expected_sha=None,
+                message="Generare confirmare prima accesare document",
+            )
+        except DocumentConflictError:
+            existing_content, _ = private_read(stored_path)
+            if existing_content is None or hashlib.sha256(existing_content).hexdigest() != confirmation["sha256"]:
+                raise DocumentConflictError(
+                    "Fișierul confirmării există deja, dar integritatea lui nu corespunde."
+                )
+
+        source["status"] = "CITIT"
+        source["first_accessed_at_utc"] = accessed_at
+        source["confirmation_document_id"] = confirmation_id
+        registry["documents"].append(confirmation)
+
+        try:
+            save_registry(registry, registry_sha)
+            return {
+                "source_document": dict(source),
+                "confirmation_document": dict(confirmation),
+                "created": True,
+            }
+        except DocumentConflictError:
+            continue
+
+    registry, _ = load_registry()
+    existing = [
+        item for item in registry["documents"]
+        if item.get("id") == confirmation_id
+        and item.get("student_key") == student_key
+        and item.get("source_document_id") == source_id
+    ]
+    if len(existing) == 1:
+        source_matches = [
+            item for item in registry["documents"]
+            if item.get("id") == source_id and item.get("student_key") == student_key
+        ]
+        if len(source_matches) == 1:
+            return {
+                "source_document": dict(source_matches[0]),
+                "confirmation_document": dict(existing[0]),
+                "created": False,
+            }
+    raise DocumentConflictError(
+        "Prima accesare nu a putut fi confirmată din cauza unor actualizări concurente. Reîncercați."
+    )
+
+
 def _pending_path(document_id):
     value = str(document_id or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{32}", value):
