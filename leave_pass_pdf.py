@@ -29,12 +29,18 @@ def _safe(value):
 
 
 def _register_fonts():
-    regular = fontpkg.path("NotoSans-Regular.ttf")
-    bold = fontpkg.path("NotoSans-Bold.ttf")
+    font_path = str(fontpkg.path("Noto Sans"))
     if FONT_REGULAR not in pdfmetrics.getRegisteredFontNames():
-        pdfmetrics.registerFont(TTFont(FONT_REGULAR, regular))
+        pdfmetrics.registerFont(TTFont(FONT_REGULAR, font_path))
     if FONT_BOLD not in pdfmetrics.getRegisteredFontNames():
-        pdfmetrics.registerFont(TTFont(FONT_BOLD, bold))
+        pdfmetrics.registerFont(TTFont(FONT_BOLD, font_path))
+    pdfmetrics.registerFontFamily(
+        FONT_REGULAR,
+        normal=FONT_REGULAR,
+        bold=FONT_BOLD,
+        italic=FONT_REGULAR,
+        boldItalic=FONT_BOLD,
+    )
 
 
 def _local_display(value):
