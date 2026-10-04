@@ -354,6 +354,13 @@ def register_transmitted_parent_excuse(
 ):
     validate_parent_excuse_hours(student_rm_pg, school_year, hours)
     student_key = normalize_student_key(student_rm_pg)
+    request_fingerprint = hashlib.sha256(
+        (
+            student_key + "|" + str(school_year).strip() + "|" +
+            str(absence_date).strip() + "|" + str(int(hours)) + "|" +
+            str(parent_name or "").strip().casefold()
+        ).encode("utf-8")
+    ).hexdigest()
     registry, registry_sha = load_parent_excuse_registry()
     if any(item.get("document_id") == document_id for item in registry["requests"]):
         raise DocumentConflictError("Cererea de motivare este deja inregistrata.")
