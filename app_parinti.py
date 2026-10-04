@@ -453,17 +453,14 @@ else:
             "Selectează documentul (PDF, JPG/JPEG sau PNG)",
             type=["pdf", "jpg", "jpeg", "png"],
             accept_multiple_files=False,
-            disabled=True,
             key="doc_upload_preview",
-            help="Încărcarea va fi activată după validarea Etapei 4A.",
         )
         st.button(
             "📤 Salvează și trimite",
-            disabled=True,
             use_container_width=True,
             key="doc_send_preview",
         )
-        st.info("ℹ️ Modul de previzualizare: niciun document nu poate fi trimis sau salvat încă.")
+        st.info("ℹ️ Următorul pas conectează acest buton la salvarea privată validată.")
 
     if not os.path.exists(excel_path):
         st.error(f"Fișierul catalog '{excel_path}' nu a fost găsit.")
