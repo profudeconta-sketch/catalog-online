@@ -8,6 +8,7 @@ import urllib.request
 import urllib.parse
 import json
 import base64
+import fontpkg
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
