@@ -7,7 +7,7 @@ import urllib.parse
 import json
 import base64
 
-from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentStorageError, build_document_record, store_new_document, parent_excuse_usage, validate_parent_excuse_hours, register_transmitted_parent_excuse, find_parent_excuse_document
+from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentStorageError, build_document_record, store_new_document, parent_excuse_usage, validate_parent_excuse_hours, register_transmitted_parent_excuse, find_parent_excuse_document, list_student_documents, read_registered_document, register_first_school_document_access
 from parent_excuse_pdf import generate_parent_excuse_pdf
 
 st.set_page_config(
@@ -420,6 +420,143 @@ else:
       ):
         sync_excel_from_github()
         st.rerun()
+
+    st.divider()
+
+    try:
+        school_documents = list_student_documents(
+            student_found[3],
+            direction="SCOALA_PARINTE",
+        )
+        unread_school_documents = [
+            item for item in school_documents
+            if not item.get("first_accessed_at_utc")
+        ]
+
+        if unread_school_documents:
+            st.markdown(
+                """
+                <style>
+                @keyframes schoolNoticePulse {
+                    0% { box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.55); }
+                    70% { box-shadow: 0 0 0 12px rgba(255, 75, 75, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(255, 75, 75, 0); }
+                }
+                div[data-testid="stExpander"]:has(.school-notice-marker) {
+                    border: 2px solid #ff4b4b;
+                    border-radius: 0.5rem;
+                    animation: schoolNoticePulse 1.8s infinite;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        notice_title = (
+            f"🔔 Înștiințări de la școală — {len(unread_school_documents)} document(e) nou(i)"
+            if unread_school_documents
+            else "🔔 Înștiințări de la școală"
+        )
+        with st.expander(notice_title, expanded=bool(unread_school_documents)):
+            if unread_school_documents:
+                st.markdown(
+                    '<span class="school-notice-marker"></span>',
+                    unsafe_allow_html=True,
+                )
+            if not school_documents:
+                st.info("Nu există înștiințări sau documente transmise de școală.")
+            else:
+                school_type_labels = {
+                    "INSTIINTARE": "Înștiințare",
+                    "DOCUMENT_SCOALA": "Document transmis de școală",
+                }
+                selected_school_document_id = st.selectbox(
+                    "Selectați documentul:",
+                    [item["id"] for item in school_documents],
+                    format_func=lambda doc_id: next(
+                        (
+                            f"{'🔔 NOU — ' if not item.get('first_accessed_at_utc') else '✅ '}"
+                            f"{school_type_labels.get(item.get('document_type'), item.get('document_type'))} — "
+                            f"{item.get('original_filename')}"
+                        )
+                        for item in school_documents
+                        if item["id"] == doc_id
+                    ),
+                    key="parent_school_document_select",
+                )
+                selected_school_document = next(
+                    item for item in school_documents
+                    if item["id"] == selected_school_document_id
+                )
+
+                if selected_school_document.get("first_accessed_at_utc"):
+                    st.success(
+                        "✅ Acest document a fost deja accesat prin contul autentificat "
+                        "aferent elevului."
+                    )
+                else:
+                    st.warning(
+                        "🔔 Document nou de la școală. Confirmarea de primire și luare la "
+                        "cunoștință va fi înregistrată numai când apăsați butonul de mai jos."
+                    )
+
+                access_key = f"school_document_access_{student_found[3]}_{selected_school_document_id}"
+                if st.button(
+                    "📄 Deschide documentul și confirmă luarea la cunoștință",
+                    type="primary" if not selected_school_document.get("first_accessed_at_utc") else "secondary",
+                    use_container_width=True,
+                    key=f"open_{access_key}",
+                ):
+                    try:
+                        access_was_new = False
+                        if not selected_school_document.get("first_accessed_at_utc"):
+                            access_result = register_first_school_document_access(
+                                student_rm_pg=student_found[3],
+                                student_name=student_found[1],
+                                document_id=selected_school_document_id,
+                            )
+                            access_was_new = bool(access_result.get("created"))
+                        verified_meta, verified_content = read_registered_document(
+                            student_found[3],
+                            selected_school_document_id,
+                        )
+                        st.session_state[access_key] = {
+                            "document_id": selected_school_document_id,
+                            "filename": verified_meta.get("original_filename", "document"),
+                            "mime_type": verified_meta.get("mime_type", "application/octet-stream"),
+                            "content": verified_content,
+                        }
+                        if access_was_new:
+                            st.success(
+                                "✅ Documentul a fost accesat. Confirmarea de primire și luare "
+                                "la cunoștință a fost înregistrată automat."
+                            )
+                        elif not selected_school_document.get("first_accessed_at_utc"):
+                            st.info(
+                                "ℹ️ Prima accesare era deja înregistrată în sistem. "
+                                "Documentul poate fi consultat în continuare."
+                            )
+                    except DocumentStorageError as ex:
+                        st.session_state.pop(access_key, None)
+                        st.error(
+                            f"Documentul nu poate fi accesat sau confirmat în siguranță: {ex}"
+                        )
+
+                opened_document = st.session_state.get(access_key)
+                if (
+                    opened_document
+                    and opened_document.get("document_id") == selected_school_document_id
+                ):
+                    st.download_button(
+                        "📥 Descarcă documentul de la școală",
+                        data=opened_document["content"],
+                        file_name=opened_document["filename"],
+                        mime=opened_document["mime_type"],
+                        use_container_width=True,
+                        key=f"download_{access_key}",
+                    )
+    except DocumentStorageError as ex:
+        st.error(f"Înștiințările de la școală nu pot fi încărcate în siguranță: {ex}")
 
     st.divider()
 
