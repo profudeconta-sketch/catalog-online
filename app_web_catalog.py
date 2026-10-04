@@ -18,7 +18,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 import io
 import shutil
 import copy
-from document_storage import DocumentStorageError, get_parent_excuse_for_document, list_student_documents, read_registered_document
+from document_storage import DocumentStorageError, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document
 from openpyxl.formula.translate import Translator
 
 
@@ -2969,6 +2969,16 @@ with tab8:
             "Documente primite în anul curent",
             sum(1 for item in received_documents if item.get("school_year") == "2026-2027"),
         )
+
+        try:
+            excuse_usage = parent_excuse_usage(doc_student[3], "2026-2027")
+            st.markdown("#### 📝 Scutiri / Motivări întocmite de părinte — anul școlar 2026–2027")
+            col_exc1, col_exc2, col_exc3 = st.columns(3)
+            col_exc1.metric("Ore utilizate", excuse_usage["used_hours"])
+            col_exc2.metric("Ore rămase", excuse_usage["remaining_hours"])
+            col_exc3.metric("Limită anuală", excuse_usage["annual_limit"])
+        except DocumentStorageError as ex:
+            st.error(f"Contorul anual al motivărilor nu poate fi încărcat în siguranță: {ex}")
 
         if not received_documents:
             st.info("Nu există documente transmise de părinte pentru elevul selectat.")
