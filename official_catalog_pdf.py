@@ -486,16 +486,20 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
                     c.restoreState()
             c.line(right, y_bottom, right, y_top)
 
-            label_w = pair_w
-            label_x = grid_left - label_w
+            # Cele trei rânduri de medii traversează rubricile disciplinelor,
+            # fără subdiviziunea verticală Absențe/Note.
+            mean_row_h = mean_h / 3
             for k in range(1, 3):
-                c.line(label_x, y_bottom + k * mean_h / 3, right, y_bottom + k * mean_h / 3)
+                yy = y_bottom + k * mean_row_h
+                c.line(grid_left, yy, right, yy)
+
+            # Etichetele apar în zona de situație școlară, nu într-o
+            # pseudo-coloană de disciplină.
             c.setFont(PDF_FONT, 3.5)
-            c.drawString(label_x + 2, y_bottom + mean_h * 2 / 3 + 2, "Media")
-            c.drawString(label_x + 2, y_bottom + mean_h / 3 + 2, "Media la")
-            c.drawString(label_x + 2, y_bottom + mean_h / 3 - 4, "ex. de corig.")
-            c.drawString(label_x + 2, y_bottom + 2, "Media")
-            c.drawString(label_x + 2, y_bottom - 4 + mean_h / 6, "anuală")
+            label_x = left + identity_w - 48
+            c.drawRightString(label_x, y_bottom + 2 * mean_row_h + 2, "Media")
+            c.drawRightString(label_x, y_bottom + mean_row_h + 2, "Media la ex. de corig.")
+            c.drawRightString(label_x, y_bottom + 2, "Media anuală")
         else:
             slots = CATALOG_P4_SLOTS
             terminal_w = 66
@@ -549,12 +553,17 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
             c.drawString(0, 0, "din care nemotivate")
             c.restoreState()
 
+            # Rândurile de medii continuă prin cele 14 rubrici; blocul
+            # terminal își păstrează propria geometrie oficială.
+            mean_row_h = mean_h / 3
             for k in range(1, 3):
-                yy = y_bottom + k * mean_h / 3
-                c.line(left, yy, right, yy)
-            # X-ul tipărit în celula de medie a rubricii Purtare.
+                yy = y_bottom + k * mean_row_h
+                c.line(left, yy, grid_right, yy)
+                c.line(x_conduct, yy, right, yy)
+
+            # X-ul tipărit în celula mediană a rubricii Purtare.
             x1, x2 = x_conduct, x_total
-            yy1, yy2 = y_bottom + mean_h / 3, y_bottom + 2 * mean_h / 3
+            yy1, yy2 = y_bottom + mean_row_h, y_bottom + 2 * mean_row_h
             c.line(x1, yy1, x2, yy2)
             c.line(x1, yy2, x2, yy1)
 
