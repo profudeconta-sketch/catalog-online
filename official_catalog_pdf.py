@@ -18,8 +18,11 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping, Sequence
 
 import openpyxl
+import fontpkg
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 
 REQUIRED_SHEETS = (
@@ -100,6 +103,22 @@ class StudentIdentity:
     row: int
 
 
+PDF_FONT = "OfficialCatalogNoto"
+PDF_FONT_BOLD = "OfficialCatalogNotoBold"
+
+
+def _register_unicode_fonts() -> None:
+    """Înregistrează fonturi Unicode; oprește generarea dacă lipsesc."""
+    try:
+        font_path = str(fontpkg.path("Noto Sans"))
+        if PDF_FONT not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont(PDF_FONT, font_path))
+        if PDF_FONT_BOLD not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont(PDF_FONT_BOLD, font_path))
+    except Exception as ex:
+        raise OfficialCatalogError("Fontul Unicode necesar catalogului nu este disponibil.") from ex
+
+
 class OfficialCatalogError(RuntimeError):
     """Eroare fail-closed a generatorului catalogului oficial."""
 
@@ -170,24 +189,24 @@ def _draw_page_frame(c: canvas.Canvas, page_no: int, title: str) -> None:
     width, height = A4
     c.setLineWidth(0.6)
     c.rect(24, 24, width - 48, height - 48)
-    c.setFont("Helvetica-Bold", 10)
+    c.setFont(PDF_FONT_BOLD, 10)
     c.drawCentredString(width / 2, height - 42, title)
-    c.setFont("Helvetica", 7)
+    c.setFont(PDF_FONT, 7)
     c.drawRightString(width - 30, 30, f"Pagina {page_no}")
 
 
 def _draw_prototype_notice(c: canvas.Canvas) -> None:
-    c.setFont("Helvetica-Bold", 7)
+    c.setFont(PDF_FONT_BOLD, 7)
     c.drawString(30, 30, "PROTOTIP ETAPA 5.5 – NU REPREZINTĂ CATALOG ÎNCHEIAT")
 
 
 def _draw_admin_page(c: canvas.Canvas) -> None:
     width, height = A4
     y = height - 78
-    c.setFont("Helvetica-Bold", 12)
+    c.setFont(PDF_FONT_BOLD, 12)
     c.drawCentredString(width / 2, y, "CATALOG – ÎNVĂȚĂMÂNT LICEAL")
     y -= 30
-    c.setFont("Helvetica", 9)
+    c.setFont(PDF_FONT, 9)
     for label, key in (
         ("Unitatea de învățământ", "unitate"),
         ("Clasa", "clasa"),
@@ -204,11 +223,11 @@ def _draw_admin_page(c: canvas.Canvas) -> None:
         y -= 17
 
     y -= 10
-    c.setFont("Helvetica-Bold", 8)
+    c.setFont(PDF_FONT_BOLD, 8)
     c.drawString(42, y, "DISCIPLINĂ / MODUL")
     c.drawString(340, y, "CADRU DIDACTIC")
     y -= 13
-    c.setFont("Helvetica", 6.5)
+    c.setFont(PDF_FONT, 6.5)
     for subject, professor in PROFESSORS.items():
         c.drawString(42, y, subject[:75])
         c.drawString(340, y, professor)
@@ -223,7 +242,7 @@ def _draw_students_grid(c: canvas.Canvas, students: Sequence[StudentIdentity], p
     row_h = (top - bottom) / (rows + 1)
     cols = [left, left + 24, left + 245, left + 315, right]
 
-    c.setFont("Helvetica-Bold", 6.5)
+    c.setFont(PDF_FONT_BOLD, 6.5)
     headers = ("Nr.", "Numele și prenumele", "Nr. matr.", "RM/PG")
     for i, text in enumerate(headers):
         c.drawCentredString((cols[i] + cols[i + 1]) / 2, top - row_h + 4, text)
@@ -235,7 +254,7 @@ def _draw_students_grid(c: canvas.Canvas, students: Sequence[StudentIdentity], p
         y = top - r * row_h
         c.line(left, y, right, y)
 
-    c.setFont("Helvetica", 6.2)
+    c.setFont(PDF_FONT, 6.2)
     for idx in range(rows):
         y = top - (idx + 2) * row_h + 4
         c.drawCentredString((cols[0] + cols[1]) / 2, y, str(idx + 1))
@@ -255,7 +274,7 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
     width, height = A4
     left, right = 28, width - 28
     top, bottom = height - 70, 55
-    c.setFont("Helvetica-Bold", 7)
+    c.setFont(PDF_FONT_BOLD, 7)
     c.drawString(left, top + 8, f"Corp catalog – jumătatea {side}")
     c.setLineWidth(0.35)
     c.rect(left, bottom, right - left, top - bottom)
@@ -265,7 +284,7 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
     subset = subject_names[:half] if side == "stângă" else subject_names[half:]
     col_w = (right - left - 125) / max(1, len(subset))
     c.line(left + 125, bottom, left + 125, top)
-    c.setFont("Helvetica", 5)
+    c.setFont(PDF_FONT, 5)
     for i, subject in enumerate(subset):
         x = left + 125 + i * col_w
         c.line(x, bottom, x, top)
@@ -279,7 +298,7 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
     usable_top = top - 120
     row_h = (usable_top - bottom) / max(35, 1)
     c.line(left, usable_top, right, usable_top)
-    c.setFont("Helvetica", 5.5)
+    c.setFont(PDF_FONT, 5.5)
     for idx in range(35):
         y = usable_top - idx * row_h
         c.line(left, y, right, y)
@@ -295,7 +314,7 @@ def generate_official_catalog_prototype(
 
     Nu apelează save(), nu scrie fișiere și nu sincronizează repository-uri.
     """
-    wb = openpyxl.load_workbook(excel_path, data_only=True, read_only=True)
+    _register_unicode_fonts()\n    wb = openpyxl.load_workbook(excel_path, data_only=True, read_only=True)
     try:
         students = validate_and_resolve_students(wb, gest_data)
 
@@ -304,7 +323,7 @@ def generate_official_catalog_prototype(
 
         _draw_page_frame(c, 1, "Instrucțiuni / norme – structură prototip")
         _draw_prototype_notice(c)
-        c.setFont("Helvetica", 8)
+        c.setFont(PDF_FONT, 8)
         c.drawString(42, A4[1] - 85, "Conținutul normativ exact va fi reprodus numai după validarea finală a tipizatului.")
         c.showPage()
 
@@ -325,7 +344,7 @@ def generate_official_catalog_prototype(
 
         _draw_page_frame(c, 5, "Situația generală a clasei – structură prototip")
         _draw_prototype_notice(c)
-        c.setFont("Helvetica", 8)
+        c.setFont(PDF_FONT, 8)
         c.drawString(42, A4[1] - 85, "Rubricile administrative finale nu sunt deduse automat în prototip.")
         c.showPage()
 
@@ -336,13 +355,13 @@ def generate_official_catalog_prototype(
 
         _draw_page_frame(c, 7, "Mențiuni / încheiere – structură prototip")
         _draw_prototype_notice(c)
-        c.setFont("Helvetica", 8)
+        c.setFont(PDF_FONT, 8)
         c.drawString(42, A4[1] - 85, "Semnăturile și constatările administrative nu sunt generate automat.")
         c.showPage()
 
         _draw_page_frame(c, 8, "Pagină tehnică – rezervată validării tipizatului")
         _draw_prototype_notice(c)
-        c.setFont("Helvetica", 8)
+        c.setFont(PDF_FONT, 8)
         c.drawString(42, A4[1] - 85, "Această pagină rămâne intenționat neutră până la verificarea finală a structurii PDF oficial.")
         c.showPage()
 
