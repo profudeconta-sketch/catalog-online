@@ -620,12 +620,11 @@ else:
                         "din plafonul anual."
                     )
 
-                st.button(
+                send_excuse = st.button(
                     "📨 Generează, salvează și trimite",
-                    disabled=True,
                     use_container_width=True,
+                    type="primary",
                     key="excuse_send_preview",
-                    help="Transmiterea va fi activată numai după verificarea PDF-ului.",
                 )
         except (ValueError, DocumentStorageError) as ex:
             st.error(f"Formularul de motivare nu poate fi încărcat: {ex}")
