@@ -52,13 +52,13 @@ def load_elevi_local():
     elevi = []
     seen_ids, seen_matricol = set(), set()
     for d in data:
-        if not isinstance(d, dict) or not {"id", "matricol"}.issubset(d):
+        if not isinstance(d, dict) or not {"id", "rand_excel", "matricol"}.issubset(d):
             raise RuntimeError("Structură invalidă în fișierul de gestiune.")
         if d["id"] in seen_ids or d["matricol"] in seen_matricol:
             raise RuntimeError("Identificatori de elev duplicați în fișierul de gestiune.")
         seen_ids.add(d["id"]); seen_matricol.add(d["matricol"])
         nume = d.get("nume_complet", f"{d.get('nume','')} {d.get('initiala','')} {d.get('prenume','')}").strip()
-        elevi.append((d["id"], " ".join(nume.split()), d.get("rand_excel", 12 + d["id"]), d["matricol"]))
+        elevi.append((d["id"], " ".join(nume.split()), d["rand_excel"], d["matricol"]))
     return elevi
 
 

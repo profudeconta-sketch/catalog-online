@@ -50,7 +50,7 @@ def _validate_gestiune(path):
     if not isinstance(data, list) or not data:
         raise ValueError("Fișierul de gestiune este gol sau invalid.")
     for row in data:
-        if not isinstance(row, dict) or not {"id", "matricol", "pin"}.issubset(row):
+        if not isinstance(row, dict) or not {"id", "rand_excel", "matricol", "pin"}.issubset(row):
             raise ValueError("Structură invalidă în fișierul de gestiune.")
 
 # --- FUNCTIE DE SINCRONIZARE SI DESCARCARE AUTOMATA EXCEL DIN GITHUB ---
@@ -193,7 +193,7 @@ def get_current_elevi_parinti():
                         elevi_list.append((
                             d["id"],
                             nume_full,
-                            d.get("rand_excel", 12 + d["id"]),
+                            d["rand_excel"],
                             d["matricol"],
                             str(d.get("pin", "1234")),
                             str(d.get("status_scolar", "ACTIV")).upper()
@@ -452,7 +452,7 @@ else:
                 all_mgs.append((idx_e, mg_val))
                 all_abs.append((idx_e, tot_abs_val, t_nem))
                 
-                if e_item[0] == student_found[0]:
+                if str(e_item[3]).strip().lower() == str(student_found[3]).strip().lower():
                     purtare_val = max(1, 10 - int(t_nem / 20))
                     student_specific_data = {
                         'mcg': mcg_val,

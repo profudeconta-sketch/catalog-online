@@ -30,7 +30,7 @@ def _validate_gestiune_data(data):
         raise ValueError("Fișierul de gestiune este gol sau invalid.")
 
     for row in data:
-        if not isinstance(row, dict) or not {"id", "matricol", "pin"}.issubset(row):
+        if not isinstance(row, dict) or not {"id", "rand_excel", "matricol", "pin"}.issubset(row):
             raise ValueError("Structură invalidă în fișierul de gestiune.")
 
 
@@ -173,7 +173,7 @@ def get_current_elevi_and_pins():
         elevi_list.append((
             d["id"],
             nume_full,
-            d.get("rand_excel", 12 + d["id"]),
+            d["rand_excel"],
             d["matricol"],
             pin_str
         ))
