@@ -2498,7 +2498,7 @@ with tab7:
     
     op_gest = st.radio(
         "Alegeți operațiunea dorită:",
-        ["✏️ Modificare Date Elev Existent", "➕ Adăugare Elev Nou în Clasă", "🗑️ Ștergere Elev din Clasă"],
+        ["✏️ Modificare Date Elev Existent", "➕ Adăugare Elev Nou în Clasă", "🔄 Transfer/Retragere Elev"],
         horizontal=True,
         key="radio_op_gest"
     )
@@ -2510,7 +2510,7 @@ with tab7:
             sel_st_idx = st.selectbox(
                 "Selectează Elevul de Modificat:",
                 range(len(gest_data)),
-                format_func=lambda i: f"{i+1}. {gest_data[i].get('nume_complet', '')} (Matr. {gest_data[i].get('matricol', '')})",
+                format_func=lambda i: f"{i+1}. {gest_data[i].get('nume_complet', '')} [{gest_data[i].get('status_scolar', 'ACTIV')}] (RM/PG {gest_data[i].get('matricol', '')})",
                 key="sel_st_mod"
             )
             st_curr = gest_data[sel_st_idx]
@@ -2689,7 +2689,8 @@ with tab7:
                         "orfan": False,
                         "plasament": False,
                         "bursa_medicala": False,
-                        "bursa_venit": False
+                        "bursa_venit": False,
+                        "status_scolar": "ACTIV"
                     }
                     excel_backup = None
                     try:
@@ -2728,23 +2729,50 @@ with tab7:
                                     "Gestiunea elevilor va fi blocată la următoarea verificare de consistență."
                                 )
 
-    elif op_gest == "🗑️ Ștergere Elev din Clasă":
+    elif op_gest == "🔄 Transfer/Retragere Elev":
         if gest_data:
-            sel_del_idx = st.selectbox(
-                "Selectează Elevul de Șters:",
+            sel_status_idx = st.selectbox(
+                "Selectează elevul:",
                 range(len(gest_data)),
-                format_func=lambda i: f"{i+1}. {gest_data[i].get('nume_complet', '')} (Matr. {gest_data[i].get('matricol', '')})",
-                key="sel_st_del"
+                format_func=lambda i: (
+                    f"{i+1}. {gest_data[i].get('nume_complet', '')} "
+                    f"[{gest_data[i].get('status_scolar', 'ACTIV')}] "
+                    f"(RM/PG {gest_data[i].get('matricol', '')})"
+                ),
+                key="sel_st_status"
             )
-            del_item = gest_data[sel_del_idx]
-            st.warning(f"⚠️ Sunteți sigur că doriți să ștergeți elevul **{del_item.get('nume_complet')}** din baza de date?")
-            if st.button("🗑️ Confirmă Ștergerea Elevului", type="primary", use_container_width=True):
-                removed = gest_data.pop(sel_del_idx)
+            status_item = gest_data[sel_status_idx]
+            status_curent = str(status_item.get("status_scolar", "ACTIV")).upper()
+            status_options = ["ACTIV", "TRANSFERAT", "RETRAS"]
+            status_index = status_options.index(status_curent) if status_curent in status_options else 0
+            status_nou = st.selectbox(
+                "Stare școlară:",
+                status_options,
+                index=status_index,
+                key="status_scolar_nou"
+            )
+            st.info(
+                "Schimbarea stării nu șterge elevul și nu modifică notele, mediile, "
+                "absențele, NR. MATR. sau RM/PG."
+            )
+            if st.button("💾 Salvează starea școlară", type="primary", use_container_width=True):
+                status_vechi = status_item.get("status_scolar")
+                status_item["status_scolar"] = status_nou
                 if save_gestiune_data(gest_data):
-                    st.success(f"✅ Elevul {removed.get('nume_complet')} a fost șters și modificarea a fost sincronizată.")
+                    st.success(
+                        f"✅ Starea elevului {status_item.get('nume_complet')} a fost actualizată la {status_nou}. "
+                        "Istoricul școlar a rămas neschimbat."
+                    )
                     st.rerun()
                 else:
-                    st.warning("⚠️ Ștergerea nu a fost confirmată în repository-ul privat. Aplicația nu va reîncărca datele automat.")
+                    if status_vechi is None:
+                        status_item.pop("status_scolar", None)
+                    else:
+                        status_item["status_scolar"] = status_vechi
+                    st.warning(
+                        "⚠️ Modificarea stării nu a fost confirmată în repository-ul privat. "
+                        "Datele încărcate în sesiunea curentă au fost restaurate."
+                    )
 
     st.divider()
     st.markdown("#### 📊 Export Registru & Statistică Clasă (Excel)")
