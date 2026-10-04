@@ -664,7 +664,9 @@ def generate_official_catalog_prototype(
 
     Nu apelează save(), nu scrie fișiere și nu sincronizează repository-uri.
     """
-    _register_unicode_fonts()\n    wb = openpyxl.load_workbook(excel_path, data_only=True, read_only=True)
+    _register_unicode_fonts()
+    _validate_physical_source_mapping()
+    wb = openpyxl.load_workbook(excel_path, data_only=True, read_only=True)
     try:
         students = validate_and_resolve_students(wb, gest_data)
 
