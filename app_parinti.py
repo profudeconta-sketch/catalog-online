@@ -7,7 +7,7 @@ import urllib.parse
 import json
 import base64
 
-from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES
+from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentStorageError, build_document_record, store_new_document
 
 st.set_page_config(
     page_title="Portal Părinți - Catalog IX TH",
