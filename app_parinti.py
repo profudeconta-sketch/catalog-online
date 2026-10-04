@@ -626,6 +626,50 @@ else:
                     type="primary",
                     key="excuse_send_preview",
                 )
+                if send_excuse:
+                    try:
+                        absence_date = st.session_state["excuse_absence_date"]
+                        requested_hours = st.session_state["excuse_hours"]
+                        validate_parent_excuse_hours(student_found[3], "2026-2027", requested_hours)
+                        final_pdf = generate_parent_excuse_pdf(
+                            parent_name=selected_parent[0],
+                            parent_role=selected_parent[1],
+                            student_name=excuse_student["nume_complet"] or student_found[1],
+                            student_address=excuse_student["adresa"],
+                            nr_matr=excuse_student["nr_matr"],
+                            absence_date=absence_date,
+                            hours=requested_hours,
+                        )
+                        record, validated_pdf = build_document_record(
+                            student_rm_pg=student_found[3],
+                            direction="PARINTE_SCOALA",
+                            category="MOTIVARE_PARINTE",
+                            document_type="MOTIVARE_ABSENTE_PARINTE",
+                            original_filename=f"Scutire_Motivare_Absente_{absence_date.isoformat()}.pdf",
+                            mime_type="application/pdf",
+                            content=final_pdf,
+                            school_year="2026-2027",
+                            sender_role="PARINTE_REPREZENTANT",
+                            recipient_role="DIRIGINTE",
+                        )
+                        store_new_document(record, validated_pdf)
+                        register_transmitted_parent_excuse(
+                            student_rm_pg=student_found[3],
+                            school_year="2026-2027",
+                            absence_date=absence_date.isoformat(),
+                            hours=requested_hours,
+                            document_id=record["id"],
+                            parent_name=selected_parent[0],
+                        )
+                        st.session_state.pop("excuse_preview_pdf", None)
+                        st.success(
+                            "✅ Cererea a fost transmisă cu succes dirigintelui și este considerată depusă. "
+                            "Nu este necesar să prezentați la școală aceeași cerere în format tipărit."
+                        )
+                    except (ValueError, DocumentStorageError) as ex:
+                        st.error(f"❌ Cererea nu este considerată transmisă: {ex}")
+                    except Exception:
+                        st.error("❌ Eroare neașteptată. Cererea nu este considerată transmisă.")
         except (ValueError, DocumentStorageError) as ex:
             st.error(f"Formularul de motivare nu poate fi încărcat: {ex}")
 
