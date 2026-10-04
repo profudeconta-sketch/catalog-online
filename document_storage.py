@@ -495,6 +495,10 @@ def register_first_school_document_access(*, student_rm_pg, student_name, docume
             confirmation = existing[0]
             if confirmation.get("student_key") != student_key:
                 raise DocumentConflictError("Confirmarea existentă nu aparține elevului autentificat.")
+            if confirmation.get("source_document_id") != source_id:
+                raise DocumentConflictError("Confirmarea existentă nu corespunde documentului accesat.")
+            if source.get("confirmation_document_id") not in {None, confirmation.get("id")}:
+                raise DocumentConflictError("Documentul sursă indică o altă confirmare.")
             return {
                 "source_document": dict(source),
                 "confirmation_document": dict(confirmation),
