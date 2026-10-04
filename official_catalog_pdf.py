@@ -895,6 +895,20 @@ def _draw_marks_spread_placeholder(
                 yy = y_bottom + k * mean_row_h
                 c.line(grid_left, yy, right, yy)
 
+            if student is not None:
+                p3_data = extract_physical_subject_data(
+                    wb, student, CATALOG_P3_SLOTS, CATALOG_P3_SOURCE_KEYS
+                )
+                c.setFont(PDF_FONT_BOLD, 4.0)
+                for j, subject in enumerate(p3_data):
+                    if subject.average is not None:
+                        gx = grid_left + j * pair_w
+                        c.drawCentredString(
+                            gx + pair_w / 2,
+                            y_bottom + 2 * mean_row_h + 2,
+                            _norm(subject.average),
+                        )
+
             # Etichetele apar în zona de situație școlară, nu într-o
             # pseudo-coloană de disciplină.
             c.setFont(PDF_FONT, 3.5)
@@ -974,6 +988,20 @@ def _draw_marks_spread_placeholder(
                 yy = y_bottom + k * mean_row_h
                 c.line(left, yy, grid_right, yy)
                 c.line(x_conduct, yy, right, yy)
+
+            if student is not None:
+                p4_data = extract_physical_subject_data(
+                    wb, student, CATALOG_P4_SLOTS, CATALOG_P4_SOURCE_KEYS
+                )
+                c.setFont(PDF_FONT_BOLD, 4.0)
+                for j, subject in enumerate(p4_data):
+                    if subject.average is not None:
+                        gx = left + j * pair_w
+                        c.drawCentredString(
+                            gx + pair_w / 2,
+                            y_bottom + 2 * mean_row_h + 2,
+                            _norm(subject.average),
+                        )
 
             # X-ul tipărit în celula mediană a rubricii Purtare.
             x1, x2 = x_conduct, x_total
