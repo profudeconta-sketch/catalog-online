@@ -384,7 +384,7 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
     c.line(right, bottom, right, top)
 
     usable_top = top - 120
-    row_h = (usable_top - bottom) / max(35, 1)
+    row_h = (usable_top - bottom) / 3
     c.line(left, usable_top, right, usable_top)
     c.setFont(PDF_FONT, 5.5)
     for idx in range(35):
@@ -409,48 +409,56 @@ def generate_official_catalog_prototype(
         out = io.BytesIO()
         c = canvas.Canvas(out, pagesize=A4, pageCompression=1, invariant=1)
 
-        _draw_page_frame(c, 1, "Instrucțiuni / norme – structură prototip")
-        _draw_prototype_notice(c)
-        c.setFont(PDF_FONT, 8)
-        c.drawString(42, A4[1] - 85, "Conținutul normativ exact va fi reprodus numai după validarea finală a tipizatului.")
-        c.showPage()
-
-        _draw_page_frame(c, 2, "Date de identificare și cadre didactice")
+        # P1: datele clasei/unității și cadrele didactice.
+        _draw_page_frame(c, 1, "Date de identificare și cadre didactice")
         _draw_admin_page(c)
         _draw_prototype_notice(c)
         c.showPage()
 
-        _draw_page_frame(c, 3, "Situația școlară – corp catalog")
-        _draw_marks_spread_placeholder(c, students, "stângă")
-        _draw_prototype_notice(c)
-        c.showPage()
-
-        _draw_page_frame(c, 4, "Situația școlară – corp catalog")
-        _draw_marks_spread_placeholder(c, students, "dreaptă")
-        _draw_prototype_notice(c)
-        c.showPage()
-
-        _draw_page_frame(c, 5, "Situația generală a clasei – structură prototip")
+        # P2: normele din tipizatul oficial.
+        _draw_page_frame(c, 2, "NORME pentru completarea și utilizarea catalogului clasei")
         _draw_prototype_notice(c)
         c.setFont(PDF_FONT, 8)
-        c.drawString(42, A4[1] - 85, "Rubricile administrative finale nu sunt deduse automat în prototip.")
+        c.drawString(42, A4[1] - 85, "Pagina rezervată reproducerii fidele a normelor din tipizatul oficial.")
         c.showPage()
 
-        _draw_page_frame(c, 6, "Date personale ale elevilor")
-        _draw_students_grid(c, students, 6)
+        # P3–P28: 13 deschideri consecutive, câte 3 poziții de elevi/deschidere.
+        for spread_index in range(13):
+            group = students[spread_index * 3 : spread_index * 3 + 3]
+            left_page = 3 + spread_index * 2
+            right_page = left_page + 1
+
+            _draw_page_frame(c, left_page, "Situația școlară – corp catalog")
+            _draw_marks_spread_placeholder(c, group, "stângă")
+            _draw_prototype_notice(c)
+            c.showPage()
+
+            _draw_page_frame(c, right_page, "Situația școlară – corp catalog")
+            _draw_marks_spread_placeholder(c, group, "dreaptă")
+            _draw_prototype_notice(c)
+            c.showPage()
+
+        # P29: date personale – 35 poziții conform planșei oficiale.
+        _draw_page_frame(c, 29, "DATE PERSONALE ALE ELEVILOR")
+        _draw_students_grid(c, students, 29)
         _draw_prototype_notice(c)
         c.showPage()
 
-        _draw_page_frame(c, 7, "Mențiuni / încheiere – structură prototip")
+        # P30: statistica anuală; fără inferențe administrative.
+        _draw_page_frame(c, 30, "Situația generală asupra mișcării și frecvenței elevilor și a rezultatelor obținute")
         _draw_prototype_notice(c)
         c.setFont(PDF_FONT, 8)
-        c.drawString(42, A4[1] - 85, "Semnăturile și constatările administrative nu sunt generate automat.")
+        c.drawString(42, A4[1] - 85, "Rubricile statistice vor fi populate numai din surse validate.")
         c.showPage()
 
-        _draw_page_frame(c, 8, "Pagină tehnică – rezervată validării tipizatului")
+        # P31: ultima pagină utilizată – proces-verbal.
+        _draw_page_frame(c, 31, "PROCES-VERBAL")
         _draw_prototype_notice(c)
         c.setFont(PDF_FONT, 8)
-        c.drawString(42, A4[1] - 85, "Această pagină rămâne intenționat neutră până la verificarea finală a structurii PDF oficial.")
+        c.drawString(42, A4[1] - 85, "Semnăturile și constatările administrative rămân necompletate automat.")
+        c.showPage()
+
+        # P32: verso-ul ultimei file este intenționat complet alb.
         c.showPage()
 
         c.save()
