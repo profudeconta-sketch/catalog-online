@@ -9,6 +9,16 @@ import base64
 
 from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentStorageError, build_document_record, store_new_document, parent_excuse_usage, validate_parent_excuse_hours, register_transmitted_parent_excuse, find_parent_excuse_document, list_student_documents, read_registered_document, register_first_school_document_access
 from parent_excuse_pdf import generate_parent_excuse_pdf
+from leave_pass_storage import (
+    REASONS as LEAVE_PASS_REASONS,
+    STATUS_APPROVED as LEAVE_STATUS_APPROVED,
+    STATUS_EXPIRED as LEAVE_STATUS_EXPIRED,
+    STATUS_PENDING as LEAVE_STATUS_PENDING,
+    STATUS_REFUSED as LEAVE_STATUS_REFUSED,
+    get_leave_request_for_day,
+    read_approved_leave_pass,
+    submit_or_reformulate_leave_request,
+)
 
 st.set_page_config(
     page_title="Portal Părinți - Catalog IX TH",
@@ -557,6 +567,154 @@ else:
                     )
     except DocumentStorageError as ex:
         st.error(f"Înștiințările de la școală nu pot fi încărcate în siguranță: {ex}")
+
+    st.divider()
+
+    with st.expander("🚪 Bilet de voie — solicitare de învoire", expanded=False):
+        try:
+            leave_student = get_authenticated_student_details(student_found[3])
+            leave_parent_options = []
+            if leave_student["nume_mama"]:
+                leave_parent_options.append((leave_student["nume_mama"], "Părinte"))
+            if leave_student["nume_tata"]:
+                leave_parent_options.append((leave_student["nume_tata"], "Părinte"))
+
+            current_leave_request = get_leave_request_for_day(student_found[3])
+            leave_status = current_leave_request.get("status") if current_leave_request else None
+
+            if leave_status == LEAVE_STATUS_APPROVED:
+                st.success("✅ ÎNVOIRE APROBATĂ")
+                st.markdown(
+                    f"**Data:** {current_leave_request.get('request_date')}  \\n"
+                    f"**Ora plecării:** {current_leave_request.get('departure_time')}  \\n"
+                    f"**Motiv:** {current_leave_request.get('reason_label')}"
+                )
+                st.info(
+                    "Biletul de voie reprezintă acordul părintelui/reprezentantului legal și "
+                    "aprobarea dirigintelui pentru părăsirea unității. Nu reprezintă o "
+                    "motivare/scutire și nu modifică automat absențele."
+                )
+                try:
+                    _, leave_pdf = read_approved_leave_pass(
+                        student_found[3], current_leave_request["id"]
+                    )
+                    st.download_button(
+                        "📥 Descarcă biletul de voie aprobat",
+                        data=leave_pdf,
+                        file_name=f"Bilet_de_voie_{current_leave_request['request_date']}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="leave_pass_download",
+                    )
+                except DocumentStorageError as ex:
+                    st.error(f"Biletul aprobat nu poate fi descărcat în siguranță: {ex}")
+            else:
+                if leave_status == LEAVE_STATUS_PENDING:
+                    st.warning(
+                        "⏳ Solicitarea este în așteptarea aprobării dirigintelui. Elevul poate "
+                        "părăsi unitatea de învățământ numai după aprobarea solicitării și "
+                        "emiterea biletului de voie."
+                    )
+                elif leave_status == LEAVE_STATUS_REFUSED:
+                    st.error("❌ Solicitarea de învoire a fost refuzată de profesorul diriginte.")
+                    st.info("Puteți reformula solicitarea pentru astăzi, alegând o nouă oră viitoare și/sau motivul.")
+                elif leave_status == LEAVE_STATUS_EXPIRED:
+                    st.error(
+                        "❌ Solicitarea nu a fost aprobată până la ora de plecare solicitată și "
+                        "este considerată refuzată. Elevul nu poate părăsi unitatea de învățământ "
+                        "în baza acestei solicitări."
+                    )
+                    st.info("Puteți reformula solicitarea pentru astăzi, alegând o nouă oră viitoare.")
+
+                if not leave_parent_options:
+                    st.warning(
+                        "Nu există încă un părinte/reprezentant legal înregistrat pentru acest elev. "
+                        "Contactați dirigintele pentru actualizarea datelor."
+                    )
+                else:
+                    existing_parent = current_leave_request.get("parent_name") if current_leave_request else None
+                    parent_index = next(
+                        (idx for idx, item in enumerate(leave_parent_options) if item[0] == existing_parent), 0
+                    )
+                    selected_leave_parent = st.selectbox(
+                        "Persoana care transmite solicitarea:",
+                        leave_parent_options,
+                        index=parent_index,
+                        format_func=lambda item: f"{item[0]} — {item[1]}",
+                        key="leave_parent",
+                    )
+                    st.text_input(
+                        "Elev:",
+                        value=leave_student["nume_complet"] or student_found[1],
+                        disabled=True,
+                        key="leave_student_name",
+                    )
+                    st.date_input(
+                        "Data învoirii:",
+                        value=datetime.date.today(),
+                        min_value=datetime.date.today(),
+                        max_value=datetime.date.today(),
+                        disabled=True,
+                        key="leave_date",
+                    )
+                    default_time = (
+                        datetime.time.fromisoformat(current_leave_request["departure_time"])
+                        if current_leave_request and current_leave_request.get("departure_time")
+                        else (datetime.datetime.now() + datetime.timedelta(minutes=30)).time().replace(second=0, microsecond=0)
+                    )
+                    departure_time = st.time_input(
+                        "Ora solicitată pentru plecare:",
+                        value=default_time,
+                        step=300,
+                        key="leave_departure_time",
+                    )
+                    reason_codes = list(LEAVE_PASS_REASONS.keys())
+                    existing_reason = current_leave_request.get("reason_code") if current_leave_request else None
+                    reason_index = reason_codes.index(existing_reason) if existing_reason in reason_codes else 0
+                    reason_code = st.selectbox(
+                        "Motivul învoirii:",
+                        reason_codes,
+                        index=reason_index,
+                        format_func=lambda code: LEAVE_PASS_REASONS[code],
+                        key="leave_reason",
+                    )
+                    st.warning(
+                        "Biletul de voie nu reprezintă o motivare/scutire. Pentru absențele "
+                        "consemnate în catalog ca urmare a învoirii trebuie prezentată o "
+                        "motivare/scutire valabilă, conform procedurilor aplicabile."
+                    )
+                    st.caption(
+                        "Prin transmitere vă exprimați acordul pentru ca elevul să părăsească "
+                        "unitatea la ora solicitată. Solicitarea nu constituie însă permisiune "
+                        "de plecare până la aprobarea dirigintelui."
+                    )
+                    button_label = (
+                        "✏️ Reformulează și transmite solicitarea"
+                        if current_leave_request else "📨 Transmite solicitarea de învoire"
+                    )
+                    if st.button(button_label, type="primary", use_container_width=True, key="leave_submit"):
+                        try:
+                            submit_or_reformulate_leave_request(
+                                student_rm_pg=student_found[3],
+                                school_year="2026-2027",
+                                parent_name=selected_leave_parent[0],
+                                student_name=leave_student["nume_complet"] or student_found[1],
+                                departure_time=departure_time.strftime("%H:%M"),
+                                reason_code=reason_code,
+                                expected_revision=current_leave_request.get("revision") if current_leave_request else None,
+                            )
+                            st.success(
+                                "✅ Solicitarea a fost transmisă profesorului diriginte și este în "
+                                "așteptarea aprobării. Elevul poate părăsi unitatea de învățământ "
+                                "numai după aprobarea solicitării și emiterea biletului de voie."
+                            )
+                            st.rerun()
+                        except (ValueError, DocumentStorageError) as ex:
+                            st.error(f"❌ Solicitarea nu a fost transmisă: {ex}")
+                        except Exception:
+                            st.error("❌ Eroare neașteptată. Solicitarea nu este considerată transmisă.")
+        except (ValueError, DocumentStorageError) as ex:
+            st.error(f"Solicitarea de învoire nu poate fi încărcată în siguranță: {ex}")
 
     st.divider()
 
