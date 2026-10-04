@@ -474,6 +474,8 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
             for j, slot in enumerate(slots):
                 gx = grid_left + j * pair_w
                 c.line(gx, y_bottom, gx, y_top)
+                # Separarea Absențe/Note aparține numai corpului de înregistrare.
+                # Zona mediilor rămâne o singură celulă pe lățimea disciplinei.
                 c.line(gx + pair_w / 2, y_bottom + mean_h, gx + pair_w / 2, y_top)
                 if slot:
                     c.saveState()
@@ -504,6 +506,8 @@ def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentI
             for j, slot in enumerate(slots):
                 gx = left + j * pair_w
                 c.line(gx, y_bottom, gx, y_top)
+                # Separarea Absențe/Note aparține numai corpului de înregistrare.
+                # Zona mediilor rămâne o singură celulă pe lățimea disciplinei.
                 c.line(gx + pair_w / 2, y_bottom + mean_h, gx + pair_w / 2, y_top)
                 if slot:
                     c.saveState()
