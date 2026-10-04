@@ -433,6 +433,10 @@ else:
 
     st.divider()
 
+    parent_tab_school, parent_tab_leave, parent_tab_documents = st.tabs(
+        ["🔔 Școală", "🚪 Învoire", "📁 Documente"]
+    )
+
     try:
         school_documents = list_student_documents(
             student_found[3],
@@ -467,7 +471,7 @@ else:
             if unread_school_documents
             else "🔔 Înștiințări de la școală"
         )
-        with st.expander(notice_title, expanded=bool(unread_school_documents)):
+        with parent_tab_school:
             if unread_school_documents:
                 st.markdown(
                     '<span class="school-notice-marker"></span>',
@@ -568,9 +572,7 @@ else:
     except DocumentStorageError as ex:
         st.error(f"Înștiințările de la școală nu pot fi încărcate în siguranță: {ex}")
 
-    st.divider()
-
-    with st.expander("🚪 Bilet de voie — solicitare de învoire", expanded=False):
+    with parent_tab_leave:
         try:
             leave_student = get_authenticated_student_details(student_found[3])
             leave_parent_options = []
@@ -716,9 +718,7 @@ else:
         except (ValueError, DocumentStorageError) as ex:
             st.error(f"Solicitarea de învoire nu poate fi încărcată în siguranță: {ex}")
 
-    st.divider()
-
-    with st.expander("📁 Încarcă Documente și Solicitări Către Școală", expanded=False):
+    with parent_tab_documents:
         st.caption(
             "Selectați secțiunea corespunzătoare documentului sau solicitării pe care doriți "
             "să o transmiteți către școală pentru elevul autentificat."
