@@ -18,6 +18,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 import io
 import shutil
 import copy
+from document_storage import DocumentStorageError, list_student_documents, read_registered_document
 from openpyxl.formula.translate import Translator
 
 
@@ -2942,14 +2943,9 @@ with tab7:
             st.error(f"Eroare la generare Statistică Excel: {ex}")
 
 
-# --- TAB 9: DOCUMENTE ELEVI — PREVIZUALIZARE ETAPA 4A ---
+# --- TAB 9: DOCUMENTE ELEVI ---
 with tab8:
     st.subheader("📁 DOCUMENTE ELEVI — Centru documente")
-    st.caption(
-        "Structura pentru documentele transmise între familie și școală. "
-        "În Etapa 4A accesul la documentele efective rămâne dezactivat până la validarea fluxului complet."
-    )
-
     doc_student_idx = st.selectbox(
         "Selectează elevul:",
         range(len(ELEVI)),
@@ -2959,32 +2955,69 @@ with tab8:
     doc_student = ELEVI[doc_student_idx]
 
     st.info(
-        f"Elev selectat: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**. "
-        "Identitatea stabilă RM/PG va lega documentele de elev fără mapare pozițională."
+        f"Elev selectat: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**."
     )
 
-    col_doc1, col_doc2, col_doc3 = st.columns(3)
-    col_doc1.metric("Documente de la părinte", "—")
-    col_doc2.metric("Documente către părinte", "—")
-    col_doc3.metric("Necitite / neconfirmate", "—")
+    try:
+        received_documents = list_student_documents(
+            doc_student[3],
+            direction="PARINTE_SCOALA",
+        )
+        col_doc1, col_doc2 = st.columns(2)
+        col_doc1.metric("Documente de la părinte", len(received_documents))
+        col_doc2.metric(
+            "Documente primite în anul curent",
+            sum(1 for item in received_documents if item.get("school_year") == "2026-2027"),
+        )
 
-    st.markdown("#### Categorii pregătite")
-    st.markdown(
-        "- Dosar personal elev\n"
-        "- Scutiri / documente medicale\n"
-        "- Dosare de bursă\n"
-        "- Motivări de absențe generate de părinte\n"
-        "- Înștiințări și documente trimise de școală\n"
-        "- Confirmări de acces / luare la cunoștință"
-    )
+        if not received_documents:
+            st.info("Nu există documente transmise de părinte pentru elevul selectat.")
+        else:
+            labels = {
+                "DOSAR_PERSONAL": "Dosar personal",
+                "SCUTIRE_MEDICALA": "Scutire / document medical",
+                "DOSAR_BURSA": "Dosar bursă",
+            }
+            selected_doc_id = st.selectbox(
+                "Document primit:",
+                [item["id"] for item in received_documents],
+                format_func=lambda doc_id: next(
+                    (
+                        f"{labels.get(item.get('category'), item.get('category'))} — "
+                        f"{item.get('original_filename')} — "
+                        f"{item.get('created_at_utc', '')[:10]}"
+                    )
+                    for item in received_documents
+                    if item["id"] == doc_id
+                ),
+                key="teacher_received_document",
+            )
+            selected_meta = next(
+                item for item in received_documents if item["id"] == selected_doc_id
+            )
+            st.caption(
+                f"Tip: {selected_meta.get('document_type')} | "
+                f"An școlar: {selected_meta.get('school_year')} | "
+                f"Dimensiune: {selected_meta.get('size_bytes', 0)} bytes"
+            )
 
-    st.button(
-        "📂 Deschide documentul selectat",
-        disabled=True,
-        use_container_width=True,
-        key="doc_teacher_open_preview",
-    )
-    st.info("ℹ️ Modul de previzualizare: nu se citește, nu se modifică și nu se salvează niciun document.")
+            try:
+                verified_meta, verified_content = read_registered_document(
+                    doc_student[3],
+                    selected_doc_id,
+                )
+                st.download_button(
+                    "📥 Descarcă documentul selectat",
+                    data=verified_content,
+                    file_name=verified_meta.get("original_filename", "document"),
+                    mime=verified_meta.get("mime_type", "application/octet-stream"),
+                    use_container_width=True,
+                    key="teacher_download_received_document",
+                )
+            except DocumentStorageError as ex:
+                st.error(f"Documentul nu poate fi deschis în siguranță: {ex}")
+    except DocumentStorageError as ex:
+        st.error(f"Registrul documentelor nu poate fi încărcat în siguranță: {ex}")
 
 
 render_copyright_footer()
