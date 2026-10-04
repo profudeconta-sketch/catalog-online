@@ -2691,12 +2691,42 @@ with tab7:
                         "bursa_medicala": False,
                         "bursa_venit": False
                     }
-                    gest_data.append(new_item)
-                    if save_gestiune_data(gest_data):
-                        st.success(f"✅ Elevul {n_full} a fost adăugat și sincronizat cu succes!")
-                        st.rerun()
+                    excel_backup = None
+                    try:
+                        excel_backup, _new_row = prepare_student_addition(
+                            selected_file,
+                            gest_data,
+                            n_full,
+                            add_nr_matr,
+                            add_rm_pg,
+                        )
+                    except Exception as ex:
+                        st.error(f"Adăugarea a fost oprită înainte de salvare: {ex}")
                     else:
-                        st.warning("⚠️ Adăugarea nu a fost confirmată în repository-ul privat. Aplicația nu va reîncărca datele automat.")
+                        if not push_to_github(selected_file):
+                            shutil.copy2(excel_backup, selected_file)
+                            st.warning(
+                                "⚠️ Excel nu a fost sincronizat. Copia originală a fost restaurată, "
+                                "iar JSON nu a fost modificat."
+                            )
+                        else:
+                            gest_data.append(new_item)
+                            if save_gestiune_data(gest_data):
+                                try:
+                                    os.remove(excel_backup)
+                                except Exception:
+                                    pass
+                                st.success(
+                                    f"✅ Elevul {n_full} a fost adăugat în catalog și în gestiune "
+                                    "și sincronizarea a fost confirmată."
+                                )
+                                st.rerun()
+                            else:
+                                gest_data.pop()
+                                st.error(
+                                    "⚠️ Excel a fost sincronizat, dar JSON nu a fost confirmat. "
+                                    "Gestiunea elevilor va fi blocată la următoarea verificare de consistență."
+                                )
 
     elif op_gest == "🗑️ Ștergere Elev din Clasă":
         if gest_data:
