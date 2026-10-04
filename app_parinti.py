@@ -7,7 +7,7 @@ import urllib.parse
 import json
 import base64
 
-from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentStorageError, build_document_record, store_new_document
+from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentStorageError, build_document_record, store_new_document, parent_excuse_usage
 
 st.set_page_config(
     page_title="Portal Părinți - Catalog IX TH",
@@ -517,6 +517,83 @@ else:
                 st.error(f"❌ Documentul nu a fost transmis: {ex}")
             except Exception:
                 st.error("❌ Eroare neașteptată. Documentul nu este considerat transmis.")
+
+
+    with st.expander("📝 Scutire / Motivare absențe — Părinte", expanded=False):
+        try:
+            excuse_student = get_authenticated_student_details(student_found[3])
+            excuse_usage = parent_excuse_usage(student_found[3], "2026-2027")
+
+            st.metric(
+                "Ore disponibile pentru cereri în anul școlar 2026-2027",
+                f"{excuse_usage['remaining_hours']} / {excuse_usage['annual_limit']}",
+            )
+
+            parent_options = []
+            if excuse_student["nume_mama"]:
+                parent_options.append((excuse_student["nume_mama"], "Părinte"))
+            if excuse_student["nume_tata"]:
+                parent_options.append((excuse_student["nume_tata"], "Părinte"))
+
+            if not parent_options:
+                st.warning(
+                    "Nu există încă un părinte/reprezentant legal înregistrat pentru acest elev. "
+                    "Contactați dirigintele pentru actualizarea datelor."
+                )
+            else:
+                selected_parent = st.selectbox(
+                    "Persoana care transmite cererea:",
+                    parent_options,
+                    format_func=lambda item: f"{item[0]} — {item[1]}",
+                    key="excuse_parent",
+                )
+
+                st.text_input(
+                    "Elev:",
+                    value=excuse_student["nume_complet"] or student_found[1],
+                    disabled=True,
+                    key="excuse_student_name",
+                )
+                st.text_input(
+                    "Adresa elevului:",
+                    value=excuse_student["adresa"],
+                    disabled=True,
+                    key="excuse_address",
+                )
+                st.text_input(
+                    "NR. MATR.:",
+                    value=excuse_student["nr_matr"],
+                    disabled=True,
+                    key="excuse_nr_matr",
+                )
+                st.date_input(
+                    "Data absenței:",
+                    value=datetime.date.today(),
+                    max_value=datetime.date.today(),
+                    key="excuse_absence_date",
+                )
+                st.number_input(
+                    "Numărul de ore absente în ziua selectată:",
+                    min_value=1,
+                    max_value=max(1, excuse_usage["remaining_hours"]),
+                    value=1,
+                    step=1,
+                    key="excuse_hours",
+                )
+
+                st.caption(
+                    "Cererea va fi considerată depusă la diriginte numai după confirmarea "
+                    "generării, salvării și transmiterii documentului."
+                )
+                st.button(
+                    "📨 Generează, salvează și trimite",
+                    disabled=True,
+                    use_container_width=True,
+                    key="excuse_send_preview",
+                    help="Transmiterea va fi activată după validarea formularului și a PDF-ului.",
+                )
+        except (ValueError, DocumentStorageError) as ex:
+            st.error(f"Formularul de motivare nu poate fi încărcat: {ex}")
 
     if not os.path.exists(excel_path):
         st.error(f"Fișierul catalog '{excel_path}' nu a fost găsit.")
