@@ -404,6 +404,12 @@ def extract_existing_attendance_summary(wb, student: StudentIdentity) -> Existin
     )
 
 
+def extract_existing_general_average(wb, student: StudentIdentity) -> object | None:
+    """Citește media generală persistentă din Centralizator Medii, coloana 7."""
+    value = wb["Centralizator Medii"].cell(row=student.row, column=7).value
+    return None if value is None or not _norm(value) else value
+
+
 @dataclass(frozen=True)
 class PhysicalSubjectData:
     label: str | None
@@ -882,6 +888,11 @@ def _draw_marks_spread_placeholder(
             c.drawString(x, y_top - 112, "La încheierea cursurilor .........................")
             c.drawString(x, y_top - 125, "La sfârșitul anului școlar .......................")
             c.drawString(x, y_top - 140, "Media generală ......................................")
+            if student is not None:
+                general_average = extract_existing_general_average(wb, student)
+                if general_average is not None:
+                    c.setFont(PDF_FONT_BOLD, 4.5)
+                    c.drawRightString(identity_right, y_top - 140, _norm(general_average))
 
             c.line(left, y_top - 150, grid_left, y_top - 150)
             c.setFont(PDF_FONT, 4.0)
