@@ -267,18 +267,87 @@ def format_catalog_grade(entry: GradeEntry) -> str:
     return f"{grade}/{d.day:02d}.{ROMAN_MONTHS[d.month]}"
 
 
-def format_catalog_absence_dates(values: Sequence[object]) -> tuple[str, ...]:
-    """Grupează datele absențelor pe luni: X:05,09,15."""
-    grouped: dict[int, list[int]] = {}
-    for value in values:
-        d = _coerce_catalog_date(value)
-        grouped.setdefault(d.month, []).append(d.day)
+@dataclass(frozen=True)
+class AbsenceEntry:
+    date: date
+    motivated: bool
+
+
+def _parse_existing_absence(value: object) -> AbsenceEntry:
+    """Interpretează convenția existentă: sufixul m/M marchează motivarea."""
+    raw = _norm(value)
+    if not raw:
+        raise OfficialCatalogError("Absența este goală.")
+    motivated = raw.endswith(("m", "M"))
+    date_text = raw[:-1].strip() if motivated else raw
+    return AbsenceEntry(date=_coerce_catalog_date(date_text), motivated=motivated)
+
+
+def extract_absence_entries(wb, student: StudentIdentity, source_key: str) -> tuple[AbsenceEntry, ...]:
+    """Citește exclusiv cele 30 de celule de absențe ale disciplinei/modulului."""
+    sheet_name, start_col = _source_location(source_key)
+    ws = wb[sheet_name]
+    entries: list[AbsenceEntry] = []
+    for k in range(30):
+        value = ws.cell(row=student.row, column=start_col + 21 + k).value
+        if value is not None and _norm(value):
+            entries.append(_parse_existing_absence(value))
+    return tuple(entries)
+
+
+def format_catalog_absence_dates(values: Sequence[AbsenceEntry]) -> tuple[str, ...]:
+    """Formă textuală de control; randarea PDF va încercui zilele motivate."""
+    grouped: dict[int, list[AbsenceEntry]] = {}
+    for entry in values:
+        grouped.setdefault(entry.date.month, []).append(entry)
 
     result: list[str] = []
     for month in sorted(grouped):
-        days = ",".join(f"{day:02d}" for day in sorted(grouped[month]))
+        days = ",".join(f"{entry.date.day:02d}" for entry in sorted(grouped[month], key=lambda x: x.date.day))
         result.append(f"{ROMAN_MONTHS[month]}:{days}")
     return tuple(result)
+
+
+def draw_catalog_absence_line(
+    c: canvas.Canvas,
+    entries: Sequence[AbsenceEntry],
+    x: float,
+    y: float,
+    font_size: float = 5.2,
+) -> float:
+    """Desenează luna/zilele; ziua motivată primește oval grafic, nu simbol textual."""
+    if not entries:
+        return x
+    month = entries[0].date.month
+    if any(entry.date.month != month for entry in entries):
+        raise OfficialCatalogError("O linie de absențe poate conține o singură lună.")
+
+    c.setFont(PDF_FONT, font_size)
+    prefix = f"{ROMAN_MONTHS[month]}:"
+    c.drawString(x, y, prefix)
+    cursor = x + pdfmetrics.stringWidth(prefix, PDF_FONT, font_size)
+
+    for index, entry in enumerate(sorted(entries, key=lambda item: item.date.day)):
+        if index:
+            c.drawString(cursor, y, ",")
+            cursor += pdfmetrics.stringWidth(",", PDF_FONT, font_size)
+
+        day_text = f"{entry.date.day:02d}"
+        day_w = pdfmetrics.stringWidth(day_text, PDF_FONT, font_size)
+        c.drawString(cursor, y, day_text)
+        if entry.motivated:
+            pad_x = 1.1
+            pad_y = 1.2
+            c.ellipse(
+                cursor - pad_x,
+                y - pad_y,
+                cursor + day_w + pad_x,
+                y + font_size + pad_y,
+                stroke=1,
+                fill=0,
+            )
+        cursor += day_w
+    return cursor
 
 
 def _source_location(source_key: str) -> tuple[str, int]:
@@ -307,6 +376,7 @@ class PhysicalSubjectData:
     label: str | None
     source_key: str | None
     grades: tuple[GradeEntry, ...]
+    absences: tuple[AbsenceEntry, ...]
 
 
 def extract_physical_subject_data(
@@ -324,7 +394,7 @@ def extract_physical_subject_data(
         if label is None or source_key is None:
             if label is not None or source_key is not None:
                 raise OfficialCatalogError("Rubrică fizică/sursă incomplet mapată.")
-            result.append(PhysicalSubjectData(None, None, ()))
+            result.append(PhysicalSubjectData(None, None, (), ()))
             continue
 
         if OFFICIAL_SUBJECT_NAMES.get(source_key) != label:
@@ -336,6 +406,7 @@ def extract_physical_subject_data(
                 label=label,
                 source_key=source_key,
                 grades=extract_grade_entries(wb, student, source_key),
+                absences=extract_absence_entries(wb, student, source_key),
             )
         )
     return tuple(result)
