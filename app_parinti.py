@@ -8,6 +8,7 @@ import json
 import base64
 
 from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentStorageError, build_document_record, store_new_document, parent_excuse_usage
+from parent_excuse_pdf import generate_parent_excuse_pdf
 
 st.set_page_config(
     page_title="Portal Părinți - Catalog IX TH",
@@ -585,12 +586,46 @@ else:
                     "Cererea va fi considerată depusă la diriginte numai după confirmarea "
                     "generării, salvării și transmiterii documentului."
                 )
+                preview_excuse = st.button(
+                    "📄 Generează previzualizare PDF",
+                    use_container_width=True,
+                    key="excuse_generate_preview",
+                )
+                if preview_excuse:
+                    try:
+                        preview_pdf = generate_parent_excuse_pdf(
+                            parent_name=selected_parent[0],
+                            parent_role=selected_parent[1],
+                            student_name=excuse_student["nume_complet"] or student_found[1],
+                            student_address=excuse_student["adresa"],
+                            nr_matr=excuse_student["nr_matr"],
+                            absence_date=st.session_state["excuse_absence_date"],
+                            hours=st.session_state["excuse_hours"],
+                        )
+                        st.session_state["excuse_preview_pdf"] = preview_pdf
+                    except ValueError as ex:
+                        st.error(f"PDF-ul nu poate fi generat: {ex}")
+
+                if st.session_state.get("excuse_preview_pdf"):
+                    st.download_button(
+                        "📥 Descarcă previzualizarea PDF",
+                        data=st.session_state["excuse_preview_pdf"],
+                        file_name="Scutire_Motivare_Absente_PREVIZUALIZARE.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="excuse_download_preview",
+                    )
+                    st.info(
+                        "Previzualizarea nu este transmisă dirigintelui și nu consumă ore "
+                        "din plafonul anual."
+                    )
+
                 st.button(
                     "📨 Generează, salvează și trimite",
                     disabled=True,
                     use_container_width=True,
                     key="excuse_send_preview",
-                    help="Transmiterea va fi activată după validarea formularului și a PDF-ului.",
+                    help="Transmiterea va fi activată numai după verificarea PDF-ului.",
                 )
         except (ValueError, DocumentStorageError) as ex:
             st.error(f"Formularul de motivare nu poate fi încărcat: {ex}")
