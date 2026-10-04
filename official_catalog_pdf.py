@@ -354,45 +354,92 @@ def _draw_students_grid(c: canvas.Canvas, students: Sequence[StudentIdentity], p
 
 
 def _draw_marks_spread_placeholder(c: canvas.Canvas, students: Sequence[StudentIdentity], side: str) -> None:
-    """Schelet geometric pentru paginile 3–4.
+    """Geometrie prototip pentru o deschidere oficială de 3 elevi.
 
-    În 5.5 nu se inventează încă geometria finală a rubricilor Note/Absențe.
-    Scopul este validarea fluxului read-only și a continuității paginilor.
+    Rubricile sunt desenate după structura tipizatului; conectarea notelor,
+    absențelor și mediilor se face numai după validarea vizuală a geometriei.
     """
     width, height = A4
-    left, right = 28, width - 28
-    top, bottom = height - 70, 55
-    c.setFont(PDF_FONT_BOLD, 7)
-    c.drawString(left, top + 8, f"Corp catalog – jumătatea {side}")
-    c.setLineWidth(0.35)
-    c.rect(left, bottom, right - left, top - bottom)
+    left, right = 30, width - 20
+    top, bottom = height - 62, 54
+    block_h = (top - bottom) / 3
+    identity_w = 142
 
-    subject_names = list(PROFESSORS)
-    half = (len(subject_names) + 1) // 2
-    subset = subject_names[:half] if side == "stângă" else subject_names[half:]
-    col_w = (right - left - 125) / max(1, len(subset))
-    c.line(left + 125, bottom, left + 125, top)
-    c.setFont(PDF_FONT, 5)
-    for i, subject in enumerate(subset):
-        x = left + 125 + i * col_w
-        c.line(x, bottom, x, top)
-        c.saveState()
-        c.translate(x + col_w / 2, top - 4)
-        c.rotate(90)
-        c.drawRightString(0, 0, subject[:55])
-        c.restoreState()
-    c.line(right, bottom, right, top)
+    c.setLineWidth(0.55)
+    c.setFont(PDF_FONT_BOLD, 7.2)
+    c.drawString(left, top + 12, "SITUAȚIA ȘCOLARĂ – DESCHIDERE MODEL")
 
-    usable_top = top - 120
-    row_h = (usable_top - bottom) / 3
-    c.line(left, usable_top, right, usable_top)
-    c.setFont(PDF_FONT, 5.5)
-    for idx in range(35):
-        y = usable_top - idx * row_h
-        c.line(left, y, right, y)
-        if idx < len(students):
-            c.drawString(left + 3, y - row_h + 2, students[idx].name[:28])
+    for idx in range(3):
+        y_top = top - idx * block_h
+        y_bottom = y_top - block_h
+        c.rect(left, y_bottom, right - left, block_h)
 
+        if side == "stângă":
+            c.line(left + identity_w, y_bottom, left + identity_w, y_top)
+            student = students[idx] if idx < len(students) else None
+            x = left + 5
+            c.setFont(PDF_FONT_BOLD, 5.8)
+            c.drawString(x, y_top - 13, student.name if student else f"Elev {idx + 1}")
+            c.setFont(PDF_FONT, 4.8)
+            c.drawString(x, y_top - 27, f"Nr. matricol: {student.nr_matr if student else '........'}")
+            c.drawString(x, y_top - 39, f"Registrul matricol: {student.rm_pg if student else '........'}")
+            c.drawString(x, y_top - 57, "Situația la încheierea cursurilor: ................")
+            c.drawString(x, y_top - 69, "Situația la finalul anului școlar: .................")
+            c.drawString(x, y_top - 81, "Media generală: ....................................")
+            c.drawString(x, y_top - 98, "Mențiuni: ..........................................")
+
+            grid_left = left + identity_w
+            pair_count = 10
+            pair_w = (right - grid_left) / pair_count
+            for j in range(pair_count + 1):
+                gx = grid_left + j * pair_w
+                c.line(gx, y_bottom, gx, y_top)
+                if j < pair_count:
+                    c.line(gx + pair_w / 2, y_bottom + 28, gx + pair_w / 2, y_top)
+                    c.setFont(PDF_FONT, 3.2)
+                    c.drawCentredString(gx + pair_w * .25, y_top - 10, "Abs.")
+                    c.drawCentredString(gx + pair_w * .75, y_top - 10, "Note")
+            for k, label in enumerate(("Media", "Media la ex. de corig.", "Media anuală")):
+                yy = y_bottom + (k + 1) * (28 / 3)
+                c.line(grid_left, yy, right, yy)
+                c.setFont(PDF_FONT, 3.1)
+                c.drawString(grid_left + 2, yy + 1, label)
+        else:
+            terminal_w = 72
+            grid_right = right - terminal_w
+            pair_count = 13
+            pair_w = (grid_right - left) / pair_count
+            for j in range(pair_count + 1):
+                gx = left + j * pair_w
+                c.line(gx, y_bottom, gx, y_top)
+                if j < pair_count:
+                    c.line(gx + pair_w / 2, y_bottom + 28, gx + pair_w / 2, y_top)
+                    c.setFont(PDF_FONT, 3.2)
+                    c.drawCentredString(gx + pair_w * .25, y_top - 10, "Abs.")
+                    c.drawCentredString(gx + pair_w * .75, y_top - 10, "Note")
+            c.line(grid_right, y_bottom, grid_right, y_top)
+            c.line(grid_right + 30, y_bottom, grid_right + 30, y_top)
+            c.line(grid_right + 48, y_bottom, grid_right + 48, y_top)
+            c.setFont(PDF_FONT, 3.8)
+            c.drawCentredString(grid_right + 15, y_top - 12, "Consiliere")
+            c.drawCentredString(grid_right + 15, y_top - 20, "și orientare")
+            c.drawCentredString(grid_right + 15, y_top - 32, "Purtare")
+            c.saveState()
+            c.translate(grid_right + 39, y_bottom + 12)
+            c.rotate(90)
+            c.drawString(0, 0, "TOTAL ABSENȚE")
+            c.restoreState()
+            c.saveState()
+            c.translate(grid_right + 58, y_bottom + 12)
+            c.rotate(90)
+            c.drawString(0, 0, "NEMOTIVATE")
+            c.restoreState()
+            for k in range(1, 4):
+                c.line(left, y_bottom + k * (28 / 3), right, y_bottom + k * (28 / 3))
+
+    if side == "stângă":
+        c.setFont(PDF_FONT, 4.5)
+        c.drawString(left, bottom - 10, "Disciplinele/modulele se înscriu cu denumirile complete, în ordinea planului-cadru.")
 
 def generate_official_catalog_prototype(
     excel_path: str,
