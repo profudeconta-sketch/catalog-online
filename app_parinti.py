@@ -652,7 +652,13 @@ else:
                             sender_role="PARINTE_REPREZENTANT",
                             recipient_role="DIRIGINTE",
                         )
-                        store_new_document(record, validated_pdf)
+                        existing_record = find_parent_excuse_document(
+                            student_found[3], "2026-2027", record["sha256"]
+                        )
+                        if existing_record is None:
+                            store_new_document(record, validated_pdf)
+                        else:
+                            record = existing_record
                         register_transmitted_parent_excuse(
                             student_rm_pg=student_found[3],
                             school_year="2026-2027",
