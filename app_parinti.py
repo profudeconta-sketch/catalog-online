@@ -296,9 +296,9 @@ col_auth1, col_auth2 = st.columns(2)
 
 with col_auth1:
     nr_matricol_input = st.text_input(
-        "🔑 Introduceți Numărul Matricol (ex: 126/76 sau 13):",
+        "🔑 Introduceți Numărul Matricol:",
         value="",
-        placeholder="Exemplu: 126/76",
+        placeholder="Introduceți numărul matricol"
         help="Numărul matricol se găsește pe carnetul de elev sau adeverința de înscriere."
     ).strip()
 
@@ -307,7 +307,7 @@ with col_auth2:
         "🔒 Introduceți Codul PIN Confidențial (4 cifre):",
         value="",
         type="password",
-        placeholder="Exemplu: 2951",
+        placeholder="Introduceți codul PIN"
         help="Codul PIN confidențial individual eliberat de către diriginte."
     ).strip()
 
@@ -423,7 +423,7 @@ else:
 
     st.divider()
 
-    with st.expander("📁 Centru documente — Etapa 4", expanded=False):
+    with st.expander("📁 Documente și solicitări către școală", expanded=False):
         st.markdown("#### Documente către școală")
         st.caption(
             "Documentele încărcate aici sunt transmise către școală pentru elevul autentificat "
