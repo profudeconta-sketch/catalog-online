@@ -259,6 +259,7 @@ def build_document_record(
         "id": doc_id,
         "schema_version": 1,
         "student_key": student_key,
+        "request_fingerprint": request_fingerprint,
         "school_year": str(school_year),
         "direction": direction,
         "category": category,
