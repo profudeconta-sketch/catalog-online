@@ -23,7 +23,8 @@ import copy
 from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document, store_new_document
 from conduct_storage import ConductStorageError, conduct_grades_for_student, load_conduct_registry, save_conduct_grade
 from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, IX_TH_2026_2027_CLASS_CDEOS_HOURS, build_annual_closure_snapshot, build_student_subject_inputs, preview_annual_closure
-from annual_closure_storage import AnnualClosureStorageError, persist_private_annual_closure_batch_once
+from annual_closure_storage import AnnualClosureStorageError, load_private_annual_closure_snapshots, persist_private_annual_closure_batch_once
+from official_catalog_pdf import OfficialCatalogError, generate_official_catalog_final, official_catalog_state_from_records
 from leave_pass_storage import (
     STATUS_APPROVED as LEAVE_STATUS_APPROVED,
     STATUS_EXPIRED as LEAVE_STATUS_EXPIRED,
@@ -3799,6 +3800,50 @@ with tab9:
                 "Închiderea situației școlare nu a fost finalizată în siguranță. "
                 f"Motiv: {ex}"
             )
+
+
+# PDF-ul de după închidere folosește exclusiv snapshoturile private validate pentru situația anuală.
+with tab9:
+    st.divider()
+    st.subheader("Catalog PDF după închiderea situației școlare")
+    try:
+        closed_snapshots = load_private_annual_closure_snapshots()
+        expected_keys = {str(elev[3]).strip() for elev in ELEVI}
+        if set(closed_snapshots) == expected_keys:
+            annual_states = {
+                key: official_catalog_state_from_records(snapshot)
+                for key, snapshot in closed_snapshots.items()
+            }
+            closed_catalog_pdf = generate_official_catalog_final(
+                selected_file,
+                load_gestiune_data(),
+                annual_states,
+            )
+            st.download_button(
+                "📘 Descarcă catalogul PDF din situația închisă",
+                data=closed_catalog_pdf,
+                file_name="catalog_situatie_inchisa.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="download_closed_official_catalog_pdf",
+            )
+            st.caption(
+                "Mediile anuale, purtarea și statutul școlar provin din snapshoturile "
+                "private verificate SHA-256; notele și absențele curente sunt citite "
+                "read-only pentru rubricile de evidență ale catalogului."
+            )
+        elif closed_snapshots:
+            st.info(
+                "Registrul privat conține numai o parte din elevii clasei. "
+                "Catalogul din situația închisă nu este generat până când setul nu este complet."
+            )
+        else:
+            st.info(
+                "Catalogul din situația închisă va deveni disponibil după înregistrarea "
+                "snapshoturilor pentru întreaga clasă."
+            )
+    except (AnnualClosureStorageError, OfficialCatalogError, RuntimeError, OSError, ValueError) as ex:
+        st.error(f"Catalogul PDF din situația închisă nu poate fi generat: {ex}")
 
 
 # Preview-ul anual rămâne read-only; este disponibil doar când registrul are toate cele 5 note.
