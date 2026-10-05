@@ -1853,6 +1853,13 @@ with tab_photo:
 
             if st.button("🔎 Analizează fotografiile pentru perioada selectată", type="primary", key="photo_analyze"):
                 allowed = [name for name, _ in DISCIPLINE_CG] + [name for name, _ in MODULE_TH]
+                archive_id = __import__("hashlib").sha256(photo_zip.getvalue()).hexdigest()
+                run_key = (archive_id, str(import_start), str(import_end), bool(has_cover))
+                if st.session_state.get("photo_import_run_key") != run_key:
+                    st.session_state["photo_import_run_key"] = run_key
+                    st.session_state["photo_import_pair_results"] = {}
+                    st.session_state.pop("photo_import_comparison", None)
+                pair_results = st.session_state.setdefault("photo_import_pair_results", {})
                 all_proposals = []
                 progress = st.progress(0.0, text="Analizez perechile fără a modifica Excelul...")
                 for pair_idx, (left_img, right_img) in enumerate(pairs):
@@ -1860,6 +1867,19 @@ with tab_photo:
                     if start_idx >= len(ELEVI):
                         break
                     names = [ELEVI[i][1] for i in range(start_idx, min(start_idx + 3, len(ELEVI)))]
+                    if pair_idx in pair_results:
+                        local = pair_results[pair_idx]
+                        progress.progress((pair_idx + 1) / len(pairs), text=f"Reutilizez perechea {pair_idx+1}/{len(pairs)} deja verificată...")
+                        for p in local:
+                            all_proposals.append(ImportProposal(
+                                student_index=start_idx + p.student_index,
+                                category=p.category, subject=p.subject, kind=p.kind,
+                                value=p.value, date=p.date, motivated=p.motivated,
+                                confidence=p.confidence, source_image=p.source_image,
+                                verifiable=p.verifiable, verification_reason=p.verification_reason,
+                            ))
+                        continue
+                    progress.progress(pair_idx / len(pairs), text=f"Analizez perechea {pair_idx+1}/{len(pairs)}...")
                     local = analyze_pair_with_vision(
                         left_img, right_img, names, import_start, import_end, allowed
                     )
@@ -1868,6 +1888,8 @@ with tab_photo:
                     local = recover_uncertain_proposals(
                         left_img, right_img, names, import_start, import_end, allowed, local
                     )
+                    pair_results[pair_idx] = local
+                    st.session_state["photo_import_pair_results"] = pair_results
                     for p in local:
                         all_proposals.append(ImportProposal(
                             student_index=start_idx + p.student_index,
@@ -1877,6 +1899,11 @@ with tab_photo:
                             verifiable=p.verifiable, verification_reason=p.verification_reason,
                         ))
                     progress.progress((pair_idx + 1) / len(pairs))
+                if len(pair_results) != len(pairs):
+                    raise PhotoImportError(
+                        f"Analiza este incompletă: {len(pair_results)}/{len(pairs)} perechi finalizate. "
+                        "Rezultatele finalizate sunt păstrate; apasă din nou Analizează pentru reluare."
+                    )
                 comparison = compare_with_workbook(
                     selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
                     resolve_student_row, all_proposals
