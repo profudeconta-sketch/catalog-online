@@ -1944,15 +1944,23 @@ def generate_official_catalog_final(
         _draw_admin_page(c)
         c.showPage()
 
-        # P4–P29 – 13 deschideri consecutive, câte 3 elevi pe deschidere.
+        # P4–P29 sunt compuse separat după finalizarea stratului ReportLab:
+        # șablonul vectorial V6 rămâne fundalul imuabil, iar datele sunt overlay.
+        body_pages: list[bytes] = []
         for spread_index in range(13):
             start_pos = spread_index * 3
             group = students[start_pos : start_pos + 3]
+            for side in ("stanga", "dreapta"):
+                try:
+                    template = build_body_template_half(side)
+                except CatalogBodyTemplateError as exc:
+                    raise OfficialCatalogError(str(exc)) from exc
+                overlay = _build_v6_overlay_page(wb, group, side, annual_states)
+                body_pages.append(_merge_body_template_with_overlay(template, overlay))
 
-            _draw_marks_spread_placeholder(c, wb, group, "stângă", annual_states)
-            c.showPage()
-
-            _draw_marks_spread_placeholder(c, wb, group, "dreaptă", annual_states)
+        # Rezervăm P4–P29 în fluxul ReportLab; după finalizare sunt înlocuite
+        # vectorial cu paginile V6 compuse mai sus.
+        for _ in body_pages:
             c.showPage()
 
         # P30 – date personale.
@@ -1989,7 +1997,24 @@ def generate_official_catalog_final(
         c.showPage()
 
         c.save()
-        return out.getvalue()
+
+        # Înlocuiește exclusiv P4–P29. Restul paginilor rămân exact cele
+        # produse de generatorul existent.
+        base_reader = PdfReader(io.BytesIO(out.getvalue()))
+        if len(base_reader.pages) != OFFICIAL_CATALOG_PAGE_COUNT:
+            raise OfficialCatalogError(
+                f"Generatorul intermediar are {len(base_reader.pages)} pagini, nu 32."
+            )
+        writer = PdfWriter()
+        for page_index, page in enumerate(base_reader.pages):
+            if 3 <= page_index <= 28:
+                body_reader = PdfReader(io.BytesIO(body_pages[page_index - 3]))
+                writer.add_page(body_reader.pages[0])
+            else:
+                writer.add_page(page)
+        final_out = io.BytesIO()
+        writer.write(final_out)
+        return final_out.getvalue()
     finally:
         wb.close()
 
