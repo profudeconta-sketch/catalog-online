@@ -1,5 +1,5 @@
 from __future__ import annotations
-import base64, datetime as dt, io, json, os, re, shutil, urllib.request, zipfile
+import base64, datetime as dt, io, json, os, random, re, shutil, time, urllib.error, urllib.request, zipfile
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 import openpyxl
@@ -151,6 +151,44 @@ def _api_key():
     if not value: raise PhotoImportError("Lipsește OPENAI_API_KEY din Streamlit Secrets.")
     return value
 
+def _openai_json_request(req, context, max_attempts=5):
+    """Apel OpenAI robust: retry numai pentru limitări temporare; erorile de cotă rămân fail-closed."""
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as ex:
+            raw = ex.read().decode("utf-8", "replace")
+            try:
+                err = json.loads(raw).get("error", {})
+            except Exception:
+                err = {}
+            code = str(err.get("code") or err.get("type") or "").strip()
+            message = str(err.get("message") or raw or ex).strip()
+            if ex.code != 429:
+                raise PhotoImportError(f"{context} a eșuat: HTTP {ex.code}: {message}") from ex
+            non_retryable = {"insufficient_quota", "billing_hard_limit_reached", "credit_balance_exhausted"}
+            if code in non_retryable or any(x in message.casefold() for x in ("quota", "billing", "credit balance")):
+                raise PhotoImportError(
+                    f"{context} a fost oprită de limita de credit/cotă OpenAI ({code or 'HTTP 429'}). "
+                    "Verifică Billing/Limits; nu se reia automat și nu se scrie nimic."
+                ) from ex
+            if attempt >= max_attempts:
+                raise PhotoImportError(
+                    f"{context} a întâlnit repetat limita temporară OpenAI (HTTP 429) după {max_attempts} încercări. "
+                    "Progresul analizei rămâne păstrat pentru reluare."
+                ) from ex
+            retry_after = ex.headers.get("Retry-After")
+            try:
+                delay = float(retry_after) if retry_after else min(60.0, 2.0 ** attempt)
+            except (TypeError, ValueError):
+                delay = min(60.0, 2.0 ** attempt)
+            time.sleep(max(1.0, delay) + random.uniform(0.0, 0.75))
+        except Exception as ex:
+            if isinstance(ex, PhotoImportError):
+                raise
+            raise PhotoImportError(f"{context} a eșuat: {type(ex).__name__}: {ex}") from ex
+
 def _data_url(name,data):
     mime={".png":"image/png",".webp":"image/webp"}.get(PurePosixPath(name).suffix.lower(),"image/jpeg")
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
@@ -201,9 +239,7 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
       *[{"type":"input_image","image_url":_data_url(n,d),"detail":"high"} for n,d in (_student_band_crops(left,len(student_names))+_student_band_crops(right,len(student_names)))]]}]}
     req=urllib.request.Request("https://api.openai.com/v1/responses",data=json.dumps(payload).encode(),
       headers={"Authorization":f"Bearer {_api_key()}","Content-Type":"application/json"},method="POST")
-    try:
-        with urllib.request.urlopen(req,timeout=120) as resp: body=json.loads(resp.read().decode())
-    except Exception as ex: raise PhotoImportError(f"Analiza imaginilor a eșuat: {type(ex).__name__}: {ex}") from ex
+    body=_openai_json_request(req, "Analiza imaginilor")
     txt=body.get("output_text","")
     if not txt:
         txt="\n".join(p.get("text","") for item in body.get("output",[]) for p in item.get("content",[]) if p.get("type")=="output_text")
@@ -250,11 +286,7 @@ def _vision_request(prompt,left,right,model=None,student_count=3):
     req=urllib.request.Request("https://api.openai.com/v1/responses",
         data=json.dumps(payload).encode(),
         headers={"Authorization":f"Bearer {_api_key()}","Content-Type":"application/json"},method="POST")
-    try:
-        with urllib.request.urlopen(req,timeout=120) as resp:
-            return json.loads(resp.read().decode())
-    except Exception as ex:
-        raise PhotoImportError(f"Verificarea vizuală a eșuat: {type(ex).__name__}: {ex}") from ex
+    return _openai_json_request(req, "Verificarea vizuală")
 
 def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subjects,items):
     """Până la trei citiri independente. Două citiri lizibile și semantic identice sunt
