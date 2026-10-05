@@ -1855,8 +1855,8 @@ with tab_photo:
                     local = analyze_pair_with_vision(
                         left_img, right_img, names, import_start, import_end, allowed
                     )
-                    # Cazurile slabe primesc automat o a doua citire independentă;
-                    # utilizatorul intervine numai dacă nici aceasta nu demonstrează informația.
+                    # A doua citire independentă verifică acoperirea completă a paginilor;
+                    # o a treia citire focalizată rulează automat doar pentru cazurile fără consens.
                     local = recover_uncertain_proposals(
                         left_img, right_img, names, import_start, import_end, allowed, local
                     )
