@@ -2071,18 +2071,28 @@ def _build_official_overlay(drawer) -> bytes:
 
 
 def _draw_official_cover_overlay(c: canvas.Canvas) -> None:
-    """Completează exclusiv câmpurile variabile de pe coperta oficială P1."""
+    """Completează câmpurile P1 pe liniile măsurate direct din tipizatul oficial."""
     h = OFFICIAL_CATALOG_PAGE_SIZE[1]
 
-    # Coordonate dedicate copertei; text mai vizibil și bold, fără a altera tipizatul.
-    c.setFont(PDF_FONT_BOLD, 11.0)
-    c.drawCentredString(496.0, h - 300.0, CATALOG_CONFIG["unitate"])
-    c.setFont(PDF_FONT_BOLD, 10.0)
-    c.drawCentredString(496.0, h - 350.0, "Turda, județul Cluj")
-    c.setFont(PDF_FONT_BOLD, 16.0)
-    c.drawCentredString(496.0, h - 510.0, CATALOG_CONFIG["clasa"])
-    c.setFont(PDF_FONT_BOLD, 13.0)
-    c.drawCentredString(496.0, h - 650.0, CATALOG_CONFIG["an_scolar"])
+    # Coordonatele sunt măsurate pe pagina oficială 992.52 x 1417.56 pt.
+    # Fiecare valoare este așezată în câmpul ei, nu într-o zonă aproximativă.
+    unitate_size = _fit_text(c, CATALOG_CONFIG["unitate"], 235.0, PDF_FONT_BOLD, 10.5, 8.0)
+    c.setFont(PDF_FONT_BOLD, unitate_size)
+    c.drawCentredString(515.0, h - 371.0, CATALOG_CONFIG["unitate"])
+
+    c.setFont(PDF_FONT_BOLD, 9.5)
+    c.drawString(365.0, h - 410.0, "Turda")
+    c.drawString(365.0, h - 434.0, "Cluj")
+
+    class_text = CATALOG_CONFIG["clasa"]
+    class_size = _fit_text(c, class_text, 82.0, PDF_FONT_BOLD, 12.0, 8.0)
+    c.setFont(PDF_FONT_BOLD, class_size)
+    c.drawCentredString(490.0, h - 487.0, class_text)
+
+    school_year = CATALOG_CONFIG["an_scolar"]
+    year_size = _fit_text(c, school_year, 102.0, PDF_FONT_BOLD, 10.5, 8.0)
+    c.setFont(PDF_FONT_BOLD, year_size)
+    c.drawCentredString(541.0, h - 515.0, school_year)
 
 
 def _draw_official_admin_overlay(c: canvas.Canvas) -> None:
@@ -2106,9 +2116,9 @@ def _draw_official_admin_overlay(c: canvas.Canvas) -> None:
     c.setFont(PDF_FONT_BOLD, 9.0)
     c.drawString(560.0, y(474, 9), "2026 - 2027")
 
-    c.setFont(PDF_FONT, 8.0)
-    c.drawString(85.0, y(600, 8), CATALOG_CONFIG["director"])
-    c.drawRightString(925.0, y(600, 8), CATALOG_CONFIG["diriginte"])
+    c.setFont(PDF_FONT_BOLD, 8.4)
+    c.drawString(85.0, y(600, 8.4), CATALOG_CONFIG["director"])
+    c.drawRightString(925.0, y(600, 8.4), CATALOG_CONFIG["diriginte"])
 
     entries = list(PROFESSORS.items())
     row_top = 718.0
@@ -2119,14 +2129,14 @@ def _draw_official_admin_overlay(c: canvas.Canvas) -> None:
         right_subject, right_prof = entries[row + 10]
 
         ls = _fit_text(c, left_subject, 128.0, PDF_FONT, 7.0, 5.0)
-        lp = _fit_text(c, left_prof, 112.0, PDF_FONT, 7.0, 5.0)
+        lp = _fit_text(c, left_prof, 112.0, PDF_FONT_BOLD, 7.2, 4.8)
         rs = _fit_text(c, right_subject, 155.0, PDF_FONT, 7.0, 4.8)
-        rp = _fit_text(c, right_prof, 120.0, PDF_FONT, 7.0, 5.0)
+        rp = _fit_text(c, right_prof, 120.0, PDF_FONT_BOLD, 7.2, 4.8)
 
         c.setFont(PDF_FONT, ls); c.drawCentredString(148.0, baseline, left_subject)
-        c.setFont(PDF_FONT, lp); c.drawCentredString(365.0, baseline, left_prof)
+        c.setFont(PDF_FONT_BOLD, lp); c.drawCentredString(365.0, baseline, left_prof)
         c.setFont(PDF_FONT, rs); c.drawCentredString(580.0, baseline, right_subject)
-        c.setFont(PDF_FONT, rp); c.drawCentredString(798.0, baseline, right_prof)
+        c.setFont(PDF_FONT_BOLD, rp); c.drawCentredString(798.0, baseline, right_prof)
 
 
 def _personal_row_text(row: Mapping, *keys: str) -> str:
@@ -2332,10 +2342,10 @@ def _draw_official_process_overlay(
 ) -> None:
     """Completeaza datele certe ale procesului-verbal; datele si semnaturile raman libere."""
     h = OFFICIAL_CATALOG_PAGE_SIZE[1]
-    c.setFont(PDF_FONT, 8.0)
-    c.drawString(174.0, h - 55.0 - 8.0, CATALOG_CONFIG["unitate"])
-    c.drawString(267.0, h - 151.0 - 8.0, CATALOG_CONFIG["diriginte"].replace("Prof. Ec. ", ""))
-    c.drawString(341.0, h - 192.0 - 8.0, CATALOG_CONFIG["director"])
+    c.setFont(PDF_FONT_BOLD, 8.4)
+    c.drawString(174.0, h - 55.0 - 8.4, CATALOG_CONFIG["unitate"])
+    c.drawString(267.0, h - 151.0 - 8.4, CATALOG_CONFIG["diriginte"].replace("Prof. Ec. ", ""))
+    c.drawString(341.0, h - 192.0 - 8.4, CATALOG_CONFIG["director"])
 
     total_positions = 39
     completed = len(students)
@@ -2352,13 +2362,13 @@ def _draw_official_process_overlay(
         baseline = h - top - 6.5
         c.setFont(PDF_FONT, 5.8)
         c.drawCentredString(232.5, baseline, str(idx))
-        prof_size = _fit_text(c, professor, 245.0, PDF_FONT, 5.8, 4.2)
+        prof_size = _fit_text(c, professor, 245.0, PDF_FONT_BOLD, 6.2, 4.2)
         subj_size = _fit_text(c, subject, 190.0, PDF_FONT, 5.4, 3.8)
-        c.setFont(PDF_FONT, prof_size); c.drawString(249.0, baseline, professor)
+        c.setFont(PDF_FONT_BOLD, prof_size); c.drawString(249.0, baseline, professor)
         c.setFont(PDF_FONT, subj_size); c.drawString(529.0, baseline, subject)
 
     # Numele dirigintelui, deasupra punctajului rubricii finale, conform variantei aprobate.
-    c.setFont(PDF_FONT, 8.0)
+    c.setFont(PDF_FONT_BOLD, 8.4)
     c.drawString(320.0, 168.0, CATALOG_CONFIG["diriginte"])
 
 
