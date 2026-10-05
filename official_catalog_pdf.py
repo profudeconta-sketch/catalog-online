@@ -284,6 +284,21 @@ def _coerce_catalog_date(value: object) -> date:
             return datetime.strptime(text, fmt).date()
         except ValueError:
             pass
+
+    # Catalogul existent folosește legitim și forma scurtă ZZ.LL / ZZ/LL.
+    # Anul este determinist în contextul anului școlar 2026-2027:
+    # septembrie-decembrie -> 2026, ianuarie-august -> 2027.
+    import re
+    short_match = re.fullmatch(r"\s*(\d{1,2})[./](\d{1,2})\s*", text)
+    if short_match:
+        day = int(short_match.group(1))
+        month = int(short_match.group(2))
+        year = 2026 if 9 <= month <= 12 else 2027
+        try:
+            return date(year, month, day)
+        except ValueError:
+            pass
+
     raise OfficialCatalogError(f"Data {text!r} nu poate fi reprezentată sigur în catalog.")
 
 
