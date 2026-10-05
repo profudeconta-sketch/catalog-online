@@ -21,10 +21,14 @@ from typing import Iterable, Mapping, Sequence
 
 import openpyxl
 import fontpkg
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+
+# Dimensiunea fizică a fiecărei pagini din tipizatul oficial: 350 × 500 mm.
+OFFICIAL_CATALOG_PAGE_SIZE = (350 * mm, 500 * mm)
+OFFICIAL_CATALOG_PAGE_COUNT = 32
 
 from annual_closure_engine import (
     AnnualClosureSnapshot,
@@ -884,7 +888,7 @@ def validate_and_resolve_students(wb, gest_data: Sequence[Mapping]) -> list[Stud
 
 
 def _draw_page_frame(c: canvas.Canvas, page_no: int, title: str) -> None:
-    width, height = A4
+    width, height = OFFICIAL_CATALOG_PAGE_SIZE
     c.setLineWidth(0.6)
     c.rect(24, 24, width - 48, height - 48)
     c.setFont(PDF_FONT_BOLD, 10)
@@ -920,7 +924,7 @@ def _draw_labeled_line(c: canvas.Canvas, label: str, value: str, y: float, x: fl
 
 def _draw_admin_page(c: canvas.Canvas) -> None:
     """Pagina 2, construită după geometria tipizatului oficial."""
-    width, height = A4
+    width, height = OFFICIAL_CATALOG_PAGE_SIZE
 
     c.setFont(PDF_FONT_BOLD, 23)
     c.drawCentredString(width / 2, height - 58, "MINISTERUL EDUCAȚIEI*")
@@ -1081,7 +1085,7 @@ def _draw_students_grid(
     page_no: int,
 ) -> None:
     """P29 – Date personale: numai rubricile confirmate ale tipizatului."""
-    width, height = A4
+    width, height = OFFICIAL_CATALOG_PAGE_SIZE
     left, right = 18, width - 16
     top, bottom = height - 72, 48
     rows = 35
@@ -1207,7 +1211,7 @@ def extract_general_statistics(wb, students: Sequence[StudentIdentity], gest_by_
 def _draw_general_statistics(c: canvas.Canvas, stats: GeneralStatistics) -> None:
     """Prototip P30; rubricile fără sursă administrativă rămân necompletate."""
     x_label, x_value = 42, 430
-    y, step = A4[1] - 92, 24
+    y, step = OFFICIAL_CATALOG_PAGE_SIZE[1] - 92, 24
     rows = (
         ("Elevi existenți în evidența clasei", stats.recorded_students),
         ("Elevi activi în evidența curentă", stats.active_students),
@@ -1241,7 +1245,7 @@ def _draw_marks_spread_placeholder(
     annual_states: Mapping[str, OfficialCatalogAnnualState] | None = None,
 ) -> None:
     """Geometrie P3/P4; populează numai Note/Data și Absențe în corpul rubricilor."""
-    width, height = A4
+    width, height = OFFICIAL_CATALOG_PAGE_SIZE
     left, right = 18, width - 16
     top, bottom = height - 47, 47
     header_h = 108
@@ -1677,7 +1681,7 @@ def generate_official_catalog_prototype(
         gest_by_rm = _gest_by_identity(gest_data, students)
 
         out = io.BytesIO()
-        c = canvas.Canvas(out, pagesize=A4, pageCompression=1, invariant=1)
+        c = canvas.Canvas(out, pagesize=OFFICIAL_CATALOG_PAGE_SIZE, pageCompression=1, invariant=1)
 
         # P1: datele clasei/unității și cadrele didactice.
         _draw_page_frame(c, 1, "Date de identificare și cadre didactice")
@@ -1689,7 +1693,7 @@ def generate_official_catalog_prototype(
         _draw_page_frame(c, 2, "NORME pentru completarea și utilizarea catalogului clasei")
         _draw_prototype_notice(c)
         c.setFont(PDF_FONT, 8)
-        c.drawString(42, A4[1] - 85, "Pagina rezervată reproducerii fidele a normelor din tipizatul oficial.")
+        c.drawString(42, OFFICIAL_CATALOG_PAGE_SIZE[1] - 85, "Pagina rezervată reproducerii fidele a normelor din tipizatul oficial.")
         c.showPage()
 
         # P3–P28: 13 deschideri consecutive, exact 3 poziții fizice/deschidere.
@@ -1728,7 +1732,7 @@ def generate_official_catalog_prototype(
         _draw_page_frame(c, 31, "PROCES-VERBAL")
         _draw_prototype_notice(c)
         c.setFont(PDF_FONT, 8)
-        c.drawString(42, A4[1] - 85, "Semnăturile și constatările administrative rămân necompletate automat.")
+        c.drawString(42, OFFICIAL_CATALOG_PAGE_SIZE[1] - 85, "Semnăturile și constatările administrative rămân necompletate automat.")
         c.showPage()
 
         # P32: verso-ul ultimei file este intenționat complet alb.
@@ -1758,7 +1762,7 @@ def generate_official_catalog_final(
         gest_by_rm = _gest_by_identity(gest_data, students)
 
         out = io.BytesIO()
-        c = canvas.Canvas(out, pagesize=A4, pageCompression=1, invariant=1)
+        c = canvas.Canvas(out, pagesize=OFFICIAL_CATALOG_PAGE_SIZE, pageCompression=1, invariant=1)
 
         _draw_page_frame(c, 1, "Date de identificare și cadre didactice")
         _draw_admin_page(c)
@@ -1766,7 +1770,7 @@ def generate_official_catalog_final(
 
         _draw_page_frame(c, 2, "NORME pentru completarea și utilizarea catalogului clasei")
         c.setFont(PDF_FONT, 8)
-        c.drawString(42, A4[1] - 85, "Pagina rezervată reproducerii fidele a normelor din tipizatul oficial.")
+        c.drawString(42, OFFICIAL_CATALOG_PAGE_SIZE[1] - 85, "Pagina rezervată reproducerii fidele a normelor din tipizatul oficial.")
         c.showPage()
 
         for spread_index in range(13):
@@ -1815,7 +1819,7 @@ def generate_official_catalog_final(
 
         _draw_page_frame(c, 31, "PROCES-VERBAL")
         c.setFont(PDF_FONT, 8)
-        c.drawString(42, A4[1] - 85, "Semnăturile și constatările administrative rămân necompletate automat.")
+        c.drawString(42, OFFICIAL_CATALOG_PAGE_SIZE[1] - 85, "Semnăturile și constatările administrative rămân necompletate automat.")
         c.showPage()
 
         c.showPage()
