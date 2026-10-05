@@ -259,6 +259,29 @@ class PhotoImportSafetyTests(unittest.TestCase):
                 apply_confirmed_import(path,ELEVI,CG,TH,resolve,[(stale,"NOU","stare veche")])
         finally: os.remove(path)
 
+    def test_batch_write_rolls_back_all_changes_on_late_conflict(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            ws.cell(13,8).value=7; ws.cell(13,9).value="02.10"; wb.save(path); wb.close()
+            first=ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",confidence=.99,verifiable=True)
+            conflict=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",confidence=.99,verifiable=True)
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,[
+                    (first,"NOU",""),
+                    (conflict,"NOU","stare intenționat învechită pentru test"),
+                ])
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            absences=[str(ws.cell(13,8+21+k).value or "").strip() for k in range(30)]
+            self.assertNotIn("01.10",absences)
+            self.assertEqual(ws.cell(13,8).value,7)
+            self.assertEqual(str(ws.cell(13,9).value),"02.10")
+            wb.close()
+        finally:
+            backup=path+".photo-import.bak"
+            if os.path.exists(backup): os.remove(backup)
+            os.remove(path)
+
     def test_write_then_duplicate_detection(self):
         path=workbook()
         try:
