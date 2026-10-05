@@ -99,6 +99,21 @@ class PhotoImportSafetyTests(unittest.TestCase):
                 apply_confirmed_import(path,ELEVI,CG,TH,resolve,result)
         finally: os.remove(path)
 
+    def test_unmotivated_reading_conflicts_with_existing_motivated_absence(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            ws.cell(13,8+21).value="02.10m"; wb.save(path); wb.close()
+            p=ImportProposal(0,"Cultură Generală","Matematică","absence","","02.10",motivated=False,confidence=.99,verifiable=True)
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
+            self.assertEqual(result[0][1],"CONFLICT")
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,[(p,"NOU","stare veche")])
+        finally:
+            backup=path+".photo-import.bak"
+            if os.path.exists(backup): os.remove(backup)
+            os.remove(path)
+
     def test_motivated_absence_conflicts_with_existing_unmotivated(self):
         path=workbook()
         try:
