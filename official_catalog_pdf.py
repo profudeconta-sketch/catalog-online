@@ -435,6 +435,15 @@ class PhysicalSubjectData:
 
 
 @dataclass(frozen=True)
+class OfficialCatalogSubjectPrintState:
+    """Cele trei rubrici fizice ale unei discipline, fără a inventa rezultate de examen."""
+    source_key: str
+    end_of_courses_average: object | None
+    corigency_exam_average: object | None
+    annual_average: object | None
+
+
+@dataclass(frozen=True)
 class OfficialCatalogAnnualState:
     """Valori anuale validate folosite numai la randarea catalogului."""
     student_key: str
@@ -447,6 +456,19 @@ class OfficialCatalogAnnualState:
     def subject_average(self, source_key: str) -> object | None:
         values = dict(self.subject_annual_averages)
         return values.get(source_key)
+
+    def subject_print_state(
+        self,
+        source_key: str,
+        existing_end_of_courses_average: object | None,
+    ) -> OfficialCatalogSubjectPrintState:
+        """Media de examen rămâne goală până când există o sursă explicită pentru ea."""
+        return OfficialCatalogSubjectPrintState(
+            source_key=source_key,
+            end_of_courses_average=existing_end_of_courses_average,
+            corigency_exam_average=None,
+            annual_average=self.subject_average(source_key),
+        )
 
 
 AnnualAuditRecord = (
@@ -1363,18 +1385,26 @@ def _draw_marks_spread_placeholder(
                 c.setFont(PDF_FONT_BOLD, 4.0)
                 for j, subject in enumerate(p3_data):
                     annual_state = annual_states.get(student.rm_pg) if annual_states is not None else None
-                    display_average = (
-                        annual_state.subject_average(subject.source_key)
-                        if annual_state is not None and subject.source_key is not None
-                        else subject.average
-                    )
-                    if display_average is not None:
-                        gx = grid_left + j * pair_w
-                        c.drawCentredString(
-                            gx + pair_w / 2,
-                            y_bottom + 2 * mean_row_h + 2,
-                            _norm(display_average),
+                    if annual_state is not None and subject.source_key is not None:
+                        print_state = annual_state.subject_print_state(
+                            subject.source_key, subject.average
                         )
+                    else:
+                        print_state = OfficialCatalogSubjectPrintState(
+                            source_key=subject.source_key or "",
+                            end_of_courses_average=subject.average,
+                            corigency_exam_average=None,
+                            annual_average=subject.average,
+                        )
+                    gx = grid_left + j * pair_w
+                    row_values = (
+                        (print_state.end_of_courses_average, y_bottom + 2 * mean_row_h + 2),
+                        (print_state.corigency_exam_average, y_bottom + mean_row_h + 2),
+                        (print_state.annual_average, y_bottom + 2),
+                    )
+                    for value, yy in row_values:
+                        if value is not None:
+                            c.drawCentredString(gx + pair_w / 2, yy, _norm(value))
 
             # Etichetele apar în zona de situație școlară, nu într-o
             # pseudo-coloană de disciplină.
@@ -1456,18 +1486,26 @@ def _draw_marks_spread_placeholder(
                 c.setFont(PDF_FONT_BOLD, 4.0)
                 for j, subject in enumerate(p4_data):
                     annual_state = annual_states.get(student.rm_pg) if annual_states is not None else None
-                    display_average = (
-                        annual_state.subject_average(subject.source_key)
-                        if annual_state is not None and subject.source_key is not None
-                        else subject.average
-                    )
-                    if display_average is not None:
-                        gx = left + j * pair_w
-                        c.drawCentredString(
-                            gx + pair_w / 2,
-                            y_bottom + 2 * mean_row_h + 2,
-                            _norm(display_average),
+                    if annual_state is not None and subject.source_key is not None:
+                        print_state = annual_state.subject_print_state(
+                            subject.source_key, subject.average
                         )
+                    else:
+                        print_state = OfficialCatalogSubjectPrintState(
+                            source_key=subject.source_key or "",
+                            end_of_courses_average=subject.average,
+                            corigency_exam_average=None,
+                            annual_average=subject.average,
+                        )
+                    gx = left + j * pair_w
+                    row_values = (
+                        (print_state.end_of_courses_average, y_bottom + 2 * mean_row_h + 2),
+                        (print_state.corigency_exam_average, y_bottom + mean_row_h + 2),
+                        (print_state.annual_average, y_bottom + 2),
+                    )
+                    for value, yy in row_values:
+                        if value is not None:
+                            c.drawCentredString(gx + pair_w / 2, yy, _norm(value))
 
             if student is not None:
                 attendance = extract_existing_attendance_summary(wb, student)
