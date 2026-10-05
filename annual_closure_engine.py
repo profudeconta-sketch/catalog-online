@@ -1209,9 +1209,10 @@ def derive_deferred_corigent_finalization(
         name = str(item.subject_name).strip()
         if item.source_status != "CORIGENT":
             raise AnnualClosureError(f"{name}: rezultatul trebuie să aibă starea sursă CORIGENT.")
-        if item.result_type not in {"CORIGENTA", "REEXAMINARE"}:
+        if item.result_type != "CORIGENTA":
             raise AnnualClosureError(
-                f"{name}: etapa de corigență acceptă numai CORIGENTA sau REEXAMINARE."
+                f"{name}: această etapă acceptă numai rezultatul CORIGENTA; "
+                "REEXAMINARE necesită fluxul separat de aprobare."
             )
         if name not in required:
             raise AnnualClosureError(f"{name}: disciplina nu aparține tranziției CORIGENT.")
@@ -1258,3 +1259,77 @@ def derive_deferred_corigent_finalization(
         final_general_average=general,
         finalized_on=finalized_on,
     )
+
+
+@dataclass(frozen=True)
+class ReexaminationApprovalRecord:
+    """Aprobarea explicită necesară înaintea unei reexaminări."""
+    schema_version: int
+    rules_version: str
+    generated_at: str
+    integrity_sha256: str
+    school_year: str
+    student_key: str
+    source_snapshot_sha256: str
+    subject_name: str
+    requested_at: str
+    approved_at: str
+    director_approval_reference: str
+
+
+def canonical_reexamination_approval_payload(record: ReexaminationApprovalRecord) -> bytes:
+    payload = asdict(record)
+    payload["integrity_sha256"] = ""
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def reexamination_approval_sha256(record: ReexaminationApprovalRecord) -> str:
+    return hashlib.sha256(canonical_reexamination_approval_payload(record)).hexdigest()
+
+
+def seal_reexamination_approval_record(
+    record: ReexaminationApprovalRecord,
+) -> ReexaminationApprovalRecord:
+    return replace(record, integrity_sha256=reexamination_approval_sha256(record))
+
+
+def verify_reexamination_approval_record(record: ReexaminationApprovalRecord) -> bool:
+    expected = str(record.integrity_sha256 or "")
+    return len(expected) == 64 and reexamination_approval_sha256(record) == expected
+
+
+def build_reexamination_approval_record(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    subject_name: str,
+    requested_at: datetime,
+    approved_at: datetime,
+    director_approval_reference: str,
+) -> ReexaminationApprovalRecord:
+    """Construiește aprobarea; eligibilitatea școlară se verifică separat."""
+    if not verify_annual_closure_snapshot(source_snapshot):
+        raise AnnualClosureError("Snapshotul sursă nu trece verificarea SHA-256.")
+    name = str(subject_name).strip()
+    reference = str(director_approval_reference).strip()
+    if not name or not reference:
+        raise AnnualClosureError("Reexaminarea necesită disciplina și referința aprobării directorului.")
+    if approved_at < requested_at:
+        raise AnnualClosureError("Aprobarea reexaminării nu poate preceda cererea.")
+    if approved_at - requested_at > __import__("datetime").timedelta(hours=24):
+        raise AnnualClosureError(
+            "Aprobarea indicată depășește fereastra de 24 de ore de la cerere; "
+            "cazul trebuie verificat administrativ."
+        )
+    return seal_reexamination_approval_record(ReexaminationApprovalRecord(
+        schema_version=1,
+        rules_version="etapa-5.6-reexaminare-2026-2027-v1",
+        generated_at=datetime.now(ZoneInfo("Europe/Bucharest")).isoformat(timespec="seconds"),
+        integrity_sha256="",
+        school_year=source_snapshot.school_year,
+        student_key=source_snapshot.student_key,
+        source_snapshot_sha256=source_snapshot.integrity_sha256,
+        subject_name=name,
+        requested_at=requested_at.isoformat(timespec="seconds"),
+        approved_at=approved_at.isoformat(timespec="seconds"),
+        director_approval_reference=reference,
+    ))
