@@ -193,12 +193,13 @@ def _parse_vision_records(body,student_names,start):
     except Exception as ex:
         raise PhotoImportError("Răspunsul AI nu este JSON valid; verificarea a fost oprită.") from ex
 
-def _vision_request(prompt,left,right,model=None):
+def _vision_request(prompt,left,right,model=None,student_count=3):
     model=model or os.environ.get("OPENAI_VISION_MODEL","gpt-6-luna")
     payload={"model":model,"input":[{"role":"user","content":[
         {"type":"input_text","text":prompt},
         {"type":"input_image","image_url":_data_url(left[0],left[1]),"detail":"high"},
-        {"type":"input_image","image_url":_data_url(right[0],right[1]),"detail":"high"}]}]}
+        {"type":"input_image","image_url":_data_url(right[0],right[1]),"detail":"high"},
+        *[{"type":"input_image","image_url":_data_url(n,d),"detail":"high"} for n,d in (_student_band_crops(left,student_count)+_student_band_crops(right,student_count))]}]}
     req=urllib.request.Request("https://api.openai.com/v1/responses",
         data=json.dumps(payload).encode(),
         headers={"Authorization":f"Bearer {_api_key()}","Content-Type":"application/json"},method="POST")
@@ -233,7 +234,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
           "Pentru NOTE, forma fizică poate fi NOTĂ/ZI, cu luna indicată contextual în ACEEAȘI rubrică. Data este lizibilă numai dacă luna este demonstrabilă vizual acolo; "
           "nu deduce luna din perioada cerută și nu o împrumuta din altă rubrică. "
           "legible=true numai dacă TOATE câmpurile sunt citibile direct din fotografie, fără inferență. Nu ghici.")
-        rows=_parse_vision_records(_vision_request(prompt,left,right),student_names,start)
+        rows=_parse_vision_records(_vision_request(prompt,left,right,student_count=len(student_names)),student_names,start)
         out=[]
         for r in rows:
             try:
@@ -320,7 +321,7 @@ def compare_with_workbook(path,elevi,cg,th,resolve,items):
     try:
       for p in deduplicate_proposals(items):
         if not p.verifiable:
-          out.append((p,"NECESITĂ_VERIFICARE",p.verification_reason or "Informația nu poate fi demonstrată ca lizibilă.")); continue
+          out.append((p,"NECESITĂ_VERIFICARE_UMANĂ",p.verification_reason or "Informația nu poate fi demonstrată ca lizibilă.")); continue
         mapped=lookup.get((p.category.casefold(),p.subject.casefold()))
         if not mapped: out.append((p,"NECUNOSCUT","Disciplina/modulul nu corespunde exact.")); continue
         cat,_,col=mapped; ws=wb[cat]; row=resolve(wb,elevi[p.student_index])
