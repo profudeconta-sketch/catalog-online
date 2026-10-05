@@ -638,6 +638,7 @@ class AnnualFinalizationRecord:
     student_key: str
     source_snapshot_sha256: str
     source_status: str
+    audit_chain_sha256: tuple[str, ...]
     subject_results: tuple[AnnualFinalizationSubjectResult, ...]
     final_status: str
     final_general_average: str | None
@@ -686,6 +687,7 @@ def build_annual_finalization_record(
     final_status: str,
     final_general_average: Decimal | None,
     finalized_on: date,
+    audit_chain_sha256: Sequence[str] = (),
 ) -> AnnualFinalizationRecord:
     """Construiește actul ulterior fără a modifica snapshotul sursă.
 
@@ -747,8 +749,12 @@ def build_annual_finalization_record(
             raise AnnualClosureError("Media generală definitivă este în afara intervalului 1–10.")
         general = str(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
+    chain = tuple(str(value).strip() for value in audit_chain_sha256)
+    if any(len(value) != 64 for value in chain) or len(set(chain)) != len(chain):
+        raise AnnualClosureError("Lanțul SHA-256 al definitivării este invalid sau duplicat.")
+
     record = AnnualFinalizationRecord(
-        schema_version=1,
+        schema_version=2,
         rules_version="etapa-5.6-finalizare-2026-2027-v1",
         generated_at=datetime.now(ZoneInfo("Europe/Bucharest")).isoformat(timespec="seconds"),
         integrity_sha256="",
@@ -756,6 +762,7 @@ def build_annual_finalization_record(
         student_key=source_snapshot.student_key,
         source_snapshot_sha256=source_snapshot.integrity_sha256,
         source_status=source_snapshot.final_status,
+        audit_chain_sha256=chain,
         subject_results=tuple(normalized),
         final_status=final_status,
         final_general_average=general,
@@ -1041,6 +1048,7 @@ def derive_deferred_finalization(
         final_status=resolution.status,
         final_general_average=resolution.general_average,
         finalized_on=finalized_on,
+        audit_chain_sha256=(deferred_record.integrity_sha256,),
     )
 
 
@@ -1160,6 +1168,10 @@ def derive_deferred_corigent_finalization(
         final_status=outcome.status,
         final_general_average=outcome.general_average,
         finalized_on=finalized_on,
+        audit_chain_sha256=(
+            deferred_record.integrity_sha256,
+            transition_record.integrity_sha256,
+        ),
     )
 
 @dataclass(frozen=True)
@@ -1417,4 +1429,5 @@ def derive_reexamination_finalization(
         final_status=final_status,
         final_general_average=general,
         finalized_on=finalized_on,
+        audit_chain_sha256=(approval.integrity_sha256,),
     )
