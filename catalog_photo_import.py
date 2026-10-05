@@ -207,10 +207,16 @@ def deduplicate_proposals(items):
     out=[]
     for rows in groups.values():
         semantics={(p.value if p.kind=="grade" else "", p.motivated) for p in rows}
-        if len(semantics)!=1:
-            # Două citiri diferite pentru aceeași rubrică și dată rămân vizibile, dar sunt blocate.
+        verified_semantics={(p.value if p.kind=="grade" else "",p.motivated) for p in rows if p.verifiable}
+        if len(verified_semantics)==1:
+            # Un singur rezultat a obținut consensul cerut; citirile izolate contradictorii nu îl anulează.
+            wanted=next(iter(verified_semantics))
+            candidates=[p for p in rows if p.verifiable and ((p.value if p.kind=="grade" else "",p.motivated)==wanted)]
+            out.append(max(candidates,key=lambda p:p.confidence)); continue
+        if len(verified_semantics)>1 or len(semantics)!=1:
+            # Mai multe valori demonstrate contradictoriu, sau nicio valoare demonstrată: fail closed.
             best=max(rows,key=lambda p:p.confidence)
-            out.append(ImportProposal(best.student_index,best.category,best.subject,best.kind,best.value,best.date,best.motivated,best.confidence,best.source_image,False,"Citiri contradictorii pentru aceeași rubrică; nu se poate demonstra valoarea."))
+            out.append(ImportProposal(best.student_index,best.category,best.subject,best.kind,best.value,best.date,best.motivated,best.confidence,best.source_image,False,"Citiri contradictorii fără un singur rezultat demonstrat; nu se scrie automat."))
             continue
         out.append(max(rows,key=lambda p:p.confidence))
     return out
