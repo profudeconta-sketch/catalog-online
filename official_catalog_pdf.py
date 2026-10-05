@@ -284,6 +284,21 @@ def _coerce_catalog_date(value: object) -> date:
             return datetime.strptime(text, fmt).date()
         except ValueError:
             pass
+
+    # Catalogul existent folosește legitim și forma scurtă ZZ.LL / ZZ/LL.
+    # Anul este determinist în contextul anului școlar 2026-2027:
+    # septembrie-decembrie -> 2026, ianuarie-august -> 2027.
+    import re
+    short_match = re.fullmatch(r"\s*(\d{1,2})[./](\d{1,2})\s*", text)
+    if short_match:
+        day = int(short_match.group(1))
+        month = int(short_match.group(2))
+        year = 2026 if 9 <= month <= 12 else 2027
+        try:
+            return date(year, month, day)
+        except ValueError:
+            pass
+
     raise OfficialCatalogError(f"Data {text!r} nu poate fi reprezentată sigur în catalog.")
 
 
@@ -2286,10 +2301,12 @@ def generate_official_catalog_current(
     excel_path: str,
     gest_data: Sequence[Mapping],
 ) -> bytes:
-    """Generează P1-P32 la zi, strict read-only, fără a inventa situații anuale."""
+    """Generează P1-P32 la zi fără scrieri și fără a inventa situații anuale."""
     _register_unicode_fonts()
     _validate_physical_source_mapping()
-    wb = openpyxl.load_workbook(excel_path, data_only=True, read_only=True)
+    # Modul normal de citire evită costul foarte mare al accesului aleator repetat
+    # prin worksheet.cell() din read_only=True. Workbook-ul nu este niciodată salvat.
+    wb = openpyxl.load_workbook(excel_path, data_only=True, read_only=False)
     try:
         students = validate_and_resolve_students(wb, gest_data)
         gest_by_rm = _gest_by_identity(gest_data, students)
