@@ -1359,11 +1359,13 @@ def derive_corigent_session_outcome(
             raise AnnualClosureError(f"{name}: disciplina nu aparține sesiunii de corigență.")
         if name in replacements:
             raise AnnualClosureError(f"{name}: rezultat de corigență duplicat.")
-        if not isinstance(item.resulting_annual_average, int) or isinstance(
-            item.resulting_annual_average, bool
-        ) or not 1 <= item.resulting_annual_average <= 10:
-            raise AnnualClosureError(f"{name}: media rezultată este invalidă.")
-        replacements[name] = Decimal(AnnualFinalizationSubjectResult.normalize_average(item.resulting_annual_average))
+        try:
+            normalized_average = AnnualFinalizationSubjectResult.normalize_average(
+                item.resulting_annual_average
+            )
+        except AnnualClosureError as exc:
+            raise AnnualClosureError(f"{name}: {exc}") from exc
+        replacements[name] = Decimal(normalized_average)
 
     missing = sorted(required.difference(replacements))
     if missing:
