@@ -1826,12 +1826,12 @@ with tab_photo:
             pairs = pair_catalog_images(images, skip_cover=has_cover)
             expected_pairs = (len(ELEVI) + 2) // 3
             if len(pairs) != expected_pairs:
-                st.warning(
-                    f"Au fost găsite {len(pairs)} perechi pentru {len(ELEVI)} elevi; "
-                    f"structura curentă a clasei așteaptă {expected_pairs} perechi."
+                raise PhotoImportError(
+                    f"Structură incompletă sau excedentară: au fost găsite {len(pairs)} perechi "
+                    f"pentru {len(ELEVI)} elevi, dar clasa necesită exact {expected_pairs}. "
+                    "Analiza și orice scriere sunt blocate până la încărcarea arhivei complete."
                 )
-            else:
-                st.success(f"Structură validată: {len(images)} fotografii, {len(pairs)} perechi stânga/dreapta.")
+            st.success(f"Structură validată: {len(images)} fotografii, {len(pairs)} perechi stânga/dreapta.")
 
             zoom = st.slider("Zoom pentru verificarea scrisului olograf", 100, 250, 150, 25, key="photo_zoom")
             pair_no = st.selectbox(
