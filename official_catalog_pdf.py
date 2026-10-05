@@ -1910,14 +1910,32 @@ def _draw_v6_data_overlay(
         if side == "stanga":
             # Identitatea și situația școlară sunt valori variabile; textele rubricilor sunt în V6.
             x_right = LEFT_IDENTITY_RIGHT_X
-            name_x, name_y = out(31.0, block.top_y - 20.0)
-            c.setFont(PDF_FONT_BOLD, 7.2); c.drawString(name_x, name_y, student.name)
+
+            # Numele complet (inclusiv inițiala tatălui, așa cum este stocat în gestiune/Excel)
+            # se adaptează strict la lățimea rubricii și nu poate intra în discipline.
+            name_left = 31.0
+            name_right = x_right - 4.0
+            name_x, name_y = out(name_left, block.top_y - 20.0)
+            name_width = (name_right - name_left) * 1.4
+            name_size = _fit_text(c, student.name, name_width, PDF_FONT_BOLD, 7.2, 4.6)
+            c.setFont(PDF_FONT_BOLD, name_size)
+            c.drawString(name_x, name_y, student.name)
+
             rx, ry = out(x_right - 5.0, block.top_y - 77.0)
-            c.setFont(PDF_FONT, 5.8); c.drawRightString(rx, ry, student.nr_matr)
+            c.setFont(PDF_FONT, 5.8)
+            c.drawRightString(rx, ry, student.nr_matr)
             rx, ry = out(x_right - 5.0, block.top_y - 97.0)
             c.drawRightString(rx, ry, student.rm_pg)
+
+            # Ordinea reală a celor trei rubrici din „Situația școlară”:
+            # Media generală / sfârșitul cursurilor / sfârșitul anului școlar.
+            rx, ry = out(x_right - 5.0, block.top_y - 119.0)
+            c.setFont(PDF_FONT_BOLD, 5.4)
+            if annual_state.general_average is not None:
+                c.drawRightString(rx, ry, _format_catalog_average(annual_state.general_average))
+
             rx, ry = out(x_right - 5.0, block.top_y - 139.0)
-            c.setFont(PDF_FONT_BOLD, 5.4); c.drawRightString(rx, ry, annual_state.end_of_courses_status)
+            c.drawRightString(rx, ry, annual_state.end_of_courses_status)
             rx, ry = out(x_right - 5.0, block.top_y - 159.0)
             c.drawRightString(rx, ry, annual_state.final_status)
         else:
