@@ -1225,8 +1225,8 @@ def _draw_marks_spread_placeholder(
         c.setFont(PDF_FONT_BOLD, 13)
         c.drawCentredString(left + identity_w / 2, top - 28, "ELEVII")
         c.rect(grid_left, top - header_h, right - grid_left, header_h)
-        c.setFont(PDF_FONT_BOLD, 7.8)
-        c.drawRightString(right - 4, top - 10, "DISCIPLINELE/MODULELE***  DE")
+        c.setFont(PDF_FONT_BOLD, 6.8)
+        c.drawCentredString((grid_left + right) / 2, top - 9, "DISCIPLINELE/MODULELE***")
         subject_header_bottom = top - header_h + 18
         c.line(grid_left, subject_header_bottom, right, subject_header_bottom)
         for j, slot in enumerate(slots):
@@ -1235,9 +1235,9 @@ def _draw_marks_spread_placeholder(
             c.line(gx + pair_w / 2, top - header_h, gx + pair_w / 2, subject_header_bottom)
             if slot:
                 c.saveState()
-                c.translate(gx + pair_w / 2 + 1.2, subject_header_bottom + 4)
+                c.translate(gx + pair_w / 2 + 0.8, subject_header_bottom + 4)
                 c.rotate(90)
-                size = _fit_text(c, slot, header_h - 34, PDF_FONT_BOLD, 4.4, 2.7)
+                size = _fit_text(c, slot, header_h - 38, PDF_FONT_BOLD, 4.1, 2.5)
                 c.setFont(PDF_FONT_BOLD, size)
                 c.drawString(0, 0, slot)
                 c.restoreState()
@@ -1252,8 +1252,8 @@ def _draw_marks_spread_placeholder(
         pair_w = (grid_right - left) / len(slots)
 
         c.rect(left, top - header_h, right - left, header_h)
-        c.setFont(PDF_FONT_BOLD, 7.8)
-        c.drawString(left + 16, top - 10, "ÎNVĂȚĂMÂNT")
+        c.setFont(PDF_FONT_BOLD, 6.8)
+        c.drawCentredString((left + grid_right) / 2, top - 9, "DISCIPLINELE/MODULELE***")
         c.setFont(PDF_FONT_BOLD, 5.0)
         c.drawCentredString(grid_right + terminal_w * .72, top - 10, "ABSENȚE")
         subject_header_bottom = top - header_h + 18
@@ -1264,9 +1264,9 @@ def _draw_marks_spread_placeholder(
             c.line(gx + pair_w / 2, top - header_h, gx + pair_w / 2, subject_header_bottom)
             if slot:
                 c.saveState()
-                c.translate(gx + pair_w / 2 + 1.2, subject_header_bottom + 4)
+                c.translate(gx + pair_w / 2 + 0.8, subject_header_bottom + 4)
                 c.rotate(90)
-                size = _fit_text(c, slot, header_h - 34, PDF_FONT_BOLD, 4.4, 2.7)
+                size = _fit_text(c, slot, header_h - 38, PDF_FONT_BOLD, 4.1, 2.5)
                 c.setFont(PDF_FONT_BOLD, size)
                 c.drawString(0, 0, slot)
                 c.restoreState()
