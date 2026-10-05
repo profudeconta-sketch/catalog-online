@@ -13,7 +13,7 @@ from typing import Any, Mapping
 
 from annual_closure_engine import AnnualClosureSnapshot, verify_annual_closure_snapshot
 
-FINAL_STATUS_PRIVATE_REGISTRY_PATH = "registru_situatie_definitiva_2026_2027.json"
+FINAL_STATUS_PRIVATE_REGISTRY_PATH = "inchideri_anuale/registru_situatie_definitiva_2026_2027.json"
 SCHOOL_YEAR = "2026-2027"
 SCHEMA_VERSION = 1
 DIRECT_FINAL_STATUSES = frozenset({"PROMOVAT", "REPETENT"})
