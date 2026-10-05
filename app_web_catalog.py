@@ -19,6 +19,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import io
 import shutil
+import time
 import copy
 from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document, store_new_document
 from conduct_storage import ConductStorageError, conduct_grades_for_student, load_conduct_registry, save_conduct_grade
@@ -3727,7 +3728,17 @@ with tab9:
         use_container_width=True,
     ):
         try:
+            validation_status = st.status(
+                "Diagnostic validare: pornesc citirea catalogului...",
+                expanded=True,
+            )
+            validation_started = time.perf_counter()
+            validation_status.write("Etapa 1/2 — deschid și citesc catalogul Excel.")
             class_results = build_class_annual_closure_previews(selected_file)
+            validation_status.write(
+                f"Etapa 1/2 finalizată în {time.perf_counter() - validation_started:.2f} s."
+            )
+            validation_status.write("Etapa 2/2 — sintetizez rezultatele clasei.")
             ready_count = 0
             blocked_count = 0
             error_count = 0
@@ -3739,6 +3750,12 @@ with tab9:
                     ready_count += 1
                 else:
                     blocked_count += 1
+
+            validation_status.update(
+                label=f"Diagnostic finalizat în {time.perf_counter() - validation_started:.2f} s.",
+                state="complete",
+                expanded=True,
+            )
 
             col_ready, col_blocked, col_error = st.columns(3)
             col_ready.metric("Pregătiți", ready_count)
