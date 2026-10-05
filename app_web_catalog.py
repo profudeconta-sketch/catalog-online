@@ -1816,9 +1816,14 @@ with tab_photo:
     )
 
     if photo_zip is not None and import_start <= import_end:
+        has_cover = st.checkbox(
+            "Prima fotografie este coperta catalogului",
+            value=True,
+            help="Bifează numai dacă prima imagine nu este o pagină stânga/dreapta cu elevi."
+        )
         try:
             images = safe_zip_images(photo_zip.getvalue())
-            pairs = pair_catalog_images(images, skip_cover=True)
+            pairs = pair_catalog_images(images, skip_cover=has_cover)
             expected_pairs = (len(ELEVI) + 2) // 3
             if len(pairs) != expected_pairs:
                 st.warning(
