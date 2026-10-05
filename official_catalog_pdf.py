@@ -1827,6 +1827,7 @@ def _draw_v6_data_overlay(
     students: Sequence[StudentIdentity],
     side: str,
     annual_states: Mapping[str, OfficialCatalogAnnualState],
+    current_mode: bool = False,
 ) -> None:
     """Desenează exclusiv date variabile peste geometria V6 deja tipărită."""
     from official_catalog_v6_geometry import (
@@ -1918,17 +1919,18 @@ def _draw_v6_data_overlay(
                 )
                 absence_y -= absence_step
 
-            print_state = annual_state.subject_print_state(subject.source_key, subject.average)
-            row_values = (
-                print_state.end_of_courses_average,
-                print_state.corigency_exam_average,
-                print_state.annual_average,
-            )
-            for value, yline in zip(row_values, block.mean_lines_y):
-                if value is not None:
-                    cx, cy = out((x0 + x1) / 2, yline - 8.0)
-                    c.setFont(PDF_FONT_BOLD, 5.6)
-                    c.drawCentredString(cx, cy, _format_catalog_average(value))
+            if not current_mode:
+                print_state = annual_state.subject_print_state(subject.source_key, subject.average)
+                row_values = (
+                    print_state.end_of_courses_average,
+                    print_state.corigency_exam_average,
+                    print_state.annual_average,
+                )
+                for value, yline in zip(row_values, block.mean_lines_y):
+                    if value is not None:
+                        cx, cy = out((x0 + x1) / 2, yline - 8.0)
+                        c.setFont(PDF_FONT_BOLD, 5.6)
+                        c.drawCentredString(cx, cy, _format_catalog_average(value))
 
         if side == "stanga":
             # Identitatea și situația școlară sunt valori variabile; textele rubricilor sunt în V6.
@@ -1961,33 +1963,46 @@ def _draw_v6_data_overlay(
             c.setFont(PDF_FONT, rm_pg_size)
             c.drawString(rm_pg_x, rm_pg_y, student.rm_pg)
 
-            # Media generală și mențiunile situației școlare sunt evidențiate bold.
-            c.setFont(PDF_FONT_BOLD, 5.4)
-            if annual_state.general_average is not None:
-                gx, gy = out(104.0, block.top_y - 119.0)
-                c.drawString(gx, gy, _format_catalog_average(annual_state.general_average))
+            # În modul la zi, rubricile anuale rămân intenționat necompletate.
+            if not current_mode:
+                c.setFont(PDF_FONT_BOLD, 5.4)
+                if annual_state.general_average is not None:
+                    gx, gy = out(104.0, block.top_y - 119.0)
+                    c.drawString(gx, gy, _format_catalog_average(annual_state.general_average))
 
-            ex, ey = out(112.0, block.top_y - 139.0)
-            c.drawString(ex, ey, annual_state.end_of_courses_status)
-            fx, fy = out(112.0, block.top_y - 159.0)
-            c.drawString(fx, fy, annual_state.final_status)
+                ex, ey = out(112.0, block.top_y - 139.0)
+                c.drawString(ex, ey, annual_state.end_of_courses_status)
+                fx, fy = out(112.0, block.top_y - 159.0)
+                c.drawString(fx, fy, annual_state.final_status)
         else:
             # Blocul terminal: purtare, total absențe și nemotivate.
             conduct_center = (RIGHT_CONDUCT_LEFT_X + RIGHT_CONDUCT_RIGHT_X) / 2
             total_center = (RIGHT_CONDUCT_RIGHT_X + RIGHT_ABS_TOTAL_RIGHT_X) / 2
             unmotiv_center = (RIGHT_ABS_TOTAL_RIGHT_X + RIGHT_TERMINAL_RIGHT_X) / 2
             c.setFont(PDF_FONT_BOLD, 5.8)
-            if annual_state.conduct_annual_average is not None:
+            if not current_mode and annual_state.conduct_annual_average is not None:
                 conduct_text = _format_catalog_average(annual_state.conduct_annual_average)
                 # Purtarea nu are examen de corigență: V6 marchează deja rândul
                 # intermediar cu X. Valoarea se înscrie la Media și Media anuală.
                 for yline in (block.mean_lines_y[0], block.mean_lines_y[2]):
                     cx, cy = out(conduct_center, yline - 8.0)
                     c.drawCentredString(cx, cy, conduct_text)
+            if current_mode:
+                current_absences = tuple(
+                    entry
+                    for subject in subject_data
+                    for entry in subject.absences
+                    if subject.source_key is not None
+                )
+                total_absences = len(current_absences)
+                unmotivated_absences = sum(1 for entry in current_absences if not entry.motivated)
+            else:
+                total_absences = annual_state.total_absences
+                unmotivated_absences = annual_state.total_unmotivated_absences
             cx, cy = out(total_center, block.mean_lines_y[0] - 8.0)
-            c.drawCentredString(cx, cy, str(annual_state.total_absences))
+            c.drawCentredString(cx, cy, str(total_absences))
             cx, cy = out(unmotiv_center, block.mean_lines_y[0] - 8.0)
-            c.drawCentredString(cx, cy, str(annual_state.total_unmotivated_absences))
+            c.drawCentredString(cx, cy, str(unmotivated_absences))
 
 
 def _build_v6_overlay_page(
@@ -1995,10 +2010,11 @@ def _build_v6_overlay_page(
     students: Sequence[StudentIdentity],
     side: str,
     annual_states: Mapping[str, OfficialCatalogAnnualState],
+    current_mode: bool = False,
 ) -> bytes:
     out = io.BytesIO()
     c = canvas.Canvas(out, pagesize=OFFICIAL_CATALOG_PAGE_SIZE, pageCompression=1, invariant=1)
-    _draw_v6_data_overlay(c, wb, students, side, annual_states)
+    _draw_v6_data_overlay(c, wb, students, side, annual_states, current_mode=current_mode)
     c.showPage(); c.save()
     return out.getvalue()
 
@@ -2227,6 +2243,143 @@ def _draw_official_process_overlay(
     c.drawString(320.0, 168.0, CATALOG_CONFIG["diriginte"])
 
 
+
+def _blank_current_state(student_key: str) -> OfficialCatalogAnnualState:
+    """Stare tehnică de randare: nu reprezintă și nu simulează o închidere anuală."""
+    return OfficialCatalogAnnualState(
+        student_key=student_key,
+        subject_end_of_courses_averages=(),
+        subject_annual_averages=(),
+        subject_corigency_exam_averages=(),
+        total_absences=0,
+        total_unmotivated_absences=0,
+        conduct_annual_average=None,
+        general_average=None,
+        end_of_courses_status="",
+        final_status="",
+    )
+
+
+def _current_statistics_overlay(c: canvas.Canvas, stats: GeneralStatistics) -> None:
+    """Completează pe P31 numai valori certe la data generării; rezultatele anuale rămân goale."""
+    h = OFFICIAL_CATALOG_PAGE_SIZE[1]
+    x = 439.5
+    values = (
+        (180.0, stats.recorded_students),
+        (225.0, stats.added_dated_students),
+        (269.0, stats.departed_dated_students),
+        (306.0, stats.active_students),
+        (774.0, stats.total_absences),
+        (818.0, stats.unmotivated_absences),
+    )
+    c.setFont(PDF_FONT_BOLD, 8.0)
+    for top, value in values:
+        if value is not None:
+            c.drawCentredString(x, h - top - 8.0, str(value))
+
+
+def generate_official_catalog_current(
+    excel_path: str,
+    gest_data: Sequence[Mapping],
+) -> bytes:
+    """Generează P1-P32 la zi, strict read-only, fără a inventa situații anuale."""
+    _register_unicode_fonts()
+    _validate_physical_source_mapping()
+    wb = openpyxl.load_workbook(excel_path, data_only=True, read_only=True)
+    try:
+        students = validate_and_resolve_students(wb, gest_data)
+        gest_by_rm = _gest_by_identity(gest_data, students)
+        current_states = {student.rm_pg: _blank_current_state(student.rm_pg) for student in students}
+
+        body_pages: list[bytes] = []
+        class_total_absences = 0
+        class_unmotivated_absences = 0
+        for student in students:
+            for source_key in tuple(CATALOG_P3_SOURCE_KEYS) + tuple(CATALOG_P4_SOURCE_KEYS):
+                if source_key is None:
+                    continue
+                absences = extract_absence_entries(wb, student, source_key)
+                class_total_absences += len(absences)
+                class_unmotivated_absences += sum(1 for entry in absences if not entry.motivated)
+
+        for spread_index in range(13):
+            group = students[spread_index * 3 : spread_index * 3 + 3]
+            for side in ("stanga", "dreapta"):
+                try:
+                    template = build_body_template_half(side)
+                except CatalogBodyTemplateError as exc:
+                    raise OfficialCatalogError(str(exc)) from exc
+                overlay = _build_v6_overlay_page(
+                    wb, group, side, current_states, current_mode=True
+                )
+                body_pages.append(_merge_body_template_with_overlay(template, overlay))
+
+        base_stats = extract_general_statistics(wb, students, gest_by_rm)
+        current_stats = GeneralStatistics(
+            recorded_students=base_stats.recorded_students,
+            active_students=base_stats.active_students,
+            transferred_students=base_stats.transferred_students,
+            withdrawn_students=base_stats.withdrawn_students,
+            added_dated_students=base_stats.added_dated_students,
+            departed_dated_students=base_stats.departed_dated_students,
+            total_absences=class_total_absences,
+            unmotivated_absences=class_unmotivated_absences,
+            promoted_students=None,
+            corigent_students=None,
+            repeat_students=None,
+            deferred_students=None,
+        )
+
+        try:
+            p1 = merge_official_page_with_overlay(0)
+            p2 = merge_official_page_with_overlay(1)
+            p3 = merge_official_page_with_overlay(
+                2, _build_official_overlay(_draw_official_admin_overlay)
+            )
+            p30 = merge_official_page_with_overlay(
+                6,
+                _build_official_overlay(
+                    lambda c: _draw_official_personal_data_overlay(c, students, gest_by_rm)
+                ),
+            )
+            p31 = merge_official_page_with_overlay(
+                5,
+                _build_official_overlay(lambda c: _current_statistics_overlay(c, current_stats)),
+            )
+            p32 = merge_official_page_with_overlay(
+                7,
+                _build_official_overlay(lambda c: _draw_official_process_overlay(c, students)),
+            )
+        except OfficialCatalogSourceError as exc:
+            raise OfficialCatalogError(str(exc)) from exc
+
+        writer = PdfWriter()
+        for page_bytes in (p1, p2, p3):
+            _append_pdf_page(writer, page_bytes)
+        for page_bytes in body_pages:
+            _append_pdf_page(writer, page_bytes)
+        for page_bytes in (p30, p31, p32):
+            _append_pdf_page(writer, page_bytes)
+
+        if len(writer.pages) != OFFICIAL_CATALOG_PAGE_COUNT:
+            raise OfficialCatalogError(
+                f"Catalogul la zi are {len(writer.pages)} pagini, nu {OFFICIAL_CATALOG_PAGE_COUNT}."
+            )
+        for index, page in enumerate(writer.pages, start=1):
+            width = float(page.mediabox.width)
+            height = float(page.mediabox.height)
+            if abs(width - OFFICIAL_CATALOG_PAGE_SIZE[0]) > 0.60 or abs(height - OFFICIAL_CATALOG_PAGE_SIZE[1]) > 0.60:
+                raise OfficialCatalogError(
+                    f"Pagina {index} are dimensiuni nevalide: {width:.2f} x {height:.2f} pt."
+                )
+
+        final_out = io.BytesIO()
+        writer.write(final_out)
+        return final_out.getvalue()
+    finally:
+        wb.close()
+
+
 def generate_official_catalog_final(
     excel_path: str,
     gest_data: Sequence[Mapping],
@@ -2362,7 +2515,11 @@ def assert_read_only_contract() -> bool:
         "update_excel_computed_values",
         "save_gestiune_data",
     }
-    for generator in (generate_official_catalog_prototype, generate_official_catalog_final):
+    for generator in (
+        generate_official_catalog_prototype,
+        generate_official_catalog_current,
+        generate_official_catalog_final,
+    ):
         names = set(generator.__code__.co_names)
         if names & forbidden_names:
             raise OfficialCatalogError("Generatorul încalcă contractul read-only.")
