@@ -54,6 +54,95 @@ IX_TH_2026_2027_CDEOS_MAX_HOURS: Mapping[str, int] = {
 }
 
 
+# Coordonatele sunt aceleași cu structura Excel existentă; motorul doar citește.
+EXCEL_CG_LAYOUT: tuple[tuple[str, int], ...] = (
+    ("Limba și literatura română", 8),
+    ("Limba engleză (L1)", 61),
+    ("Limba franceză (L2)", 114),
+    ("Matematică", 167),
+    ("Fizică", 220),
+    ("Chimie", 273),
+    ("Biologie", 326),
+    ("Istorie", 379),
+    ("Geografie", 432),
+    ("Logică, argumentare și comunicare", 485),
+    ("Informatică / TIC", 538),
+    ("Educație fizică", 591),
+    ("Religie", 644),
+    ("Arte vizuale și educație plastică", 697),
+)
+EXCEL_MODULE_LAYOUT: tuple[tuple[str, int], ...] = (
+    ("M1 – Bazele contabilității", 8),
+    ("M2 – Etică și comunicare", 61),
+    ("M3 – Structuri de primire turistică", 114),
+    ("M4 – Procese și calitate în HoReCa", 167),
+    ("M5 – CDEOȘ – Stagii de pregătire practică", 220),
+    ("M6 – Curriculum pentru aprofundare și inserție profesională", 273),
+)
+WEEKLY_HOURS_IX_TH_2026_2027: Mapping[str, Decimal] = {
+    "Limba și literatura română": Decimal("3"),
+    "Limba engleză (L1)": Decimal("2"),
+    "Limba franceză (L2)": Decimal("1"),
+    "Matematică": Decimal("2"),
+    "Fizică": Decimal("1"),
+    "Chimie": Decimal("1"),
+    "Biologie": Decimal("1"),
+    "Istorie": Decimal("1"),
+    "Geografie": Decimal("1"),
+    "Logică, argumentare și comunicare": Decimal("1"),
+    "Religie": Decimal("1"),
+    "Arte vizuale și educație plastică": Decimal("1"),
+    "Educație fizică": Decimal("1"),
+    "Informatică / TIC": Decimal("1"),
+}
+
+
+def subject_inputs_from_workbook(
+    wb,
+    student_row: int,
+    school_cdeos_hours: Mapping[str, int] | None = None,
+) -> tuple[SubjectInput, ...]:
+    """Construiește intrările motorului exclusiv prin citire din workbook."""
+    if "Cultură Generală" not in wb.sheetnames or "Module Tehnologice" not in wb.sheetnames:
+        raise AnnualClosureError("Lipsesc foile obligatorii pentru închiderea anuală.")
+    result = []
+    for sheet_name, layout, is_module in (
+        ("Cultură Generală", EXCEL_CG_LAYOUT, False),
+        ("Module Tehnologice", EXCEL_MODULE_LAYOUT, True),
+    ):
+        ws = wb[sheet_name]
+        for name, start_col in layout:
+            grades = []
+            for k in range(10):
+                value = ws.cell(row=student_row, column=start_col + k * 2).value
+                if value not in (None, ""):
+                    grades.append(_decimal_grade(value))
+            unmotivated = motivated = 0
+            for k in range(30):
+                value = ws.cell(row=student_row, column=start_col + 21 + k).value
+                if value in (None, ""):
+                    continue
+                text = str(value).strip()
+                if text.endswith(("m", "M")):
+                    motivated += 1
+                else:
+                    unmotivated += 1
+            annual_hours = official_annual_hours(name, school_cdeos_hours)
+            result.append(SubjectInput(
+                name=name,
+                grades=tuple(grades),
+                unmotivated_absences=unmotivated,
+                motivated_absences=motivated,
+                annual_hours=annual_hours,
+                weekly_hours=None if is_module else WEEKLY_HOURS_IX_TH_2026_2027[name],
+                is_module=is_module,
+                # Momentul finalizării modulelor trebuie furnizat din curriculum/orar,
+                # nu dedus din poziția lor în Excel.
+                ends_during_year=False,
+            ))
+    return tuple(result)
+
+
 def official_annual_hours(subject_name: str, school_cdeos_hours: Mapping[str, int] | None = None) -> int:
     if subject_name in IX_TH_2026_2027_ANNUAL_HOURS:
         return IX_TH_2026_2027_ANNUAL_HOURS[subject_name]
