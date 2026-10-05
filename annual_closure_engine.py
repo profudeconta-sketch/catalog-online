@@ -136,11 +136,25 @@ def subject_inputs_from_workbook(
                 annual_hours=annual_hours,
                 weekly_hours=None if is_module else WEEKLY_HOURS_IX_TH_2026_2027[name],
                 is_module=is_module,
-                # Momentul finalizării modulelor trebuie furnizat din curriculum/orar,
-                # nu dedus din poziția lor în Excel.
+                # Pentru clasa IX TH toate modulele M1–M6 se încheie la sfârșitul anului.
                 ends_during_year=False,
             ))
     return tuple(result)
+
+
+def build_student_subject_inputs(
+    wb,
+    elev_info,
+    row_resolver,
+    school_cdeos_hours: Mapping[str, int] | None = None,
+) -> tuple[SubjectInput, ...]:
+    """Adaptor fail-closed: validează identitatea, apoi citește situația elevului."""
+    student_row = row_resolver(wb, elev_info)
+    return subject_inputs_from_workbook(
+        wb,
+        student_row=student_row,
+        school_cdeos_hours=school_cdeos_hours,
+    )
 
 
 def official_annual_hours(subject_name: str, school_cdeos_hours: Mapping[str, int] | None = None) -> int:
