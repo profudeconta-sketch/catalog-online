@@ -391,5 +391,26 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertIn('if pair_idx in pair_results:', source)
         self.assertIn('if len(pair_results) != len(pairs):', source)
 
+    def test_streamlit_photo_workflow_is_ai_free_and_keeps_write_gates(self):
+        source = Path("app_web_catalog.py").read_text(encoding="utf-8")
+        block = source[source.index("# --- IMPORT FOTO CATALOG FIZIC (FĂRĂ AI EXTERN) ---"):
+                       source.index("# --- GENERATOARE PDF ---")]
+        self.assertNotIn("analyze_pair_with_vision(", block)
+        self.assertNotIn("recover_uncertain_proposals(", block)
+        self.assertNotIn("OPENAI_API_KEY", block)
+        self.assertIn("Transcriere verificată din fotografia afișată", block)
+        self.assertIn("compare_with_workbook(", block)
+        self.assertIn("apply_confirmed_import(", block)
+        self.assertIn("update_excel_computed_values(", block)
+        self.assertIn("DEJA_EXISTENT", block)
+        self.assertIn("push_to_github(", block)
+
+    def test_manual_photo_list_is_scoped_to_archive_period_and_cover(self):
+        source = Path("app_web_catalog.py").read_text(encoding="utf-8")
+        self.assertIn('run_key = (archive_id, str(import_start), str(import_end), bool(has_cover), "manual-v1")', source)
+        self.assertIn('st.session_state["photo_manual_proposals"] = []', source)
+        self.assertIn('direct_check = st.checkbox(', source)
+        self.assertIn('disabled=not direct_check', source)
+
 if __name__=="__main__":
     unittest.main()
