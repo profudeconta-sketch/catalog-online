@@ -62,8 +62,10 @@ def build_body_template_half(side: str) -> bytes:
     source.cropbox = RectangleObject((x0, 0.0, x0 + HALF_W, SPREAD_H))
 
     # După decupare, jumătatea dreaptă trebuie readusă cu originea la x=0.
+    # Matrice explicită: x' = SCALE * x - SCALE * x0.
+    # Evită ambiguitatea ordinii operațiilor compuse pentru jumătatea dreaptă.
     source.add_transformation(
-        Transformation().translate(tx=-x0, ty=0).scale(sx=SCALE, sy=SCALE)
+        Transformation(ctm=(SCALE, 0, 0, SCALE, -SCALE * x0, 0))
     )
 
     target = PdfWriter()
