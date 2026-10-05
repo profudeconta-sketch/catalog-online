@@ -591,7 +591,12 @@ def preview_annual_closure(
 
     readiness = list(blockers)
     for result in results:
-        if not result.has_minimum_grade_reference:
+        total_subject_absences = result.unmotivated_absences + result.motivated_absences
+        already_deferred_by_absence_rule = (
+            total_subject_absences >= result.annual_hours * 0.50
+            and not result.has_minimum_grade_reference
+        )
+        if not result.has_minimum_grade_reference and not already_deferred_by_absence_rule:
             readiness.append(
                 f"{result.name}: numărul de note este sub reperul ROFUIP configurat "
                 f"({result.minimum_grade_reference}). Art. 117 poate impune declararea AMÂNAT "
