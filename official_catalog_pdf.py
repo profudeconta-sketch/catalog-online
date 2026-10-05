@@ -987,6 +987,13 @@ def _draw_prototype_notice(c: canvas.Canvas) -> None:
     c.drawString(30, 30, "PROTOTIP ETAPA 5.5 – NU REPREZINTĂ CATALOG ÎNCHEIAT")
 
 
+def _draw_bold_string(c: canvas.Canvas, x: float, y: float, text: str, size: float) -> None:
+    """Îngroșare vizibilă robustă pentru nume proprii, fără a afecta notele/absențele."""
+    c.setFont(PDF_FONT_BOLD, size)
+    c.drawString(x, y, text)
+    c.drawString(x + 0.32, y, text)
+
+
 def _fit_text(c: canvas.Canvas, text: str, max_width: float, font: str, size: float, min_size: float = 5.0) -> float:
     """Micșorează numai cât este necesar; nu trunchiază denumirile oficiale."""
     current = size
@@ -1958,8 +1965,7 @@ def _draw_v6_data_overlay(
             name_x, name_y = out(name_left, block.top_y - 20.0)
             name_width = (name_right - name_left) * 1.4
             name_size = _fit_text(c, student.name, name_width, PDF_FONT_BOLD, 7.2, 4.6)
-            c.setFont(PDF_FONT_BOLD, name_size)
-            c.drawString(name_x, name_y, student.name)
+            _draw_bold_string(c, name_x, name_y, student.name, name_size)
 
             # Valorile se așază imediat după etichetele tipărite, deasupra punctelor.
             # Coordonatele x sunt măsurate în spațiul V6, nu aliniate la marginea blocului.
@@ -2078,7 +2084,8 @@ def _draw_official_cover_overlay(c: canvas.Canvas) -> None:
     # Fiecare valoare este așezată în câmpul ei, nu într-o zonă aproximativă.
     unitate_size = _fit_text(c, CATALOG_CONFIG["unitate"], 235.0, PDF_FONT_BOLD, 10.5, 8.0)
     c.setFont(PDF_FONT_BOLD, unitate_size)
-    c.drawCentredString(515.0, h - 371.0, CATALOG_CONFIG["unitate"])
+    # Deasupra liniei punctate, fără suprapunere peste puncte.
+    c.drawCentredString(515.0, h - 363.0, CATALOG_CONFIG["unitate"])
 
     c.setFont(PDF_FONT_BOLD, 9.5)
     c.drawString(365.0, h - 410.0, "Turda")
@@ -2169,8 +2176,7 @@ def _draw_personal_cell_multiline(
 
     direct_size = fitting_size(value)
     if direct_size is not None:
-        c.setFont(PDF_FONT_BOLD, direct_size)
-        c.drawString(x, baseline, value)
+        _draw_bold_string(c, x, baseline, value, direct_size)
         return
 
     import re
@@ -2231,8 +2237,7 @@ def _draw_personal_cell_multiline(
     line_gap = 4.8
     start_y = baseline + (len(lines) - 1) * line_gap / 2
     for index, (line, size) in enumerate(zip(lines, sizes)):
-        c.setFont(PDF_FONT_BOLD, size)
-        c.drawString(x, start_y - index * line_gap, line)
+        _draw_bold_string(c, x, start_y - index * line_gap, line, size)
 
 def _draw_official_personal_data_overlay(
     c: canvas.Canvas,
@@ -2274,7 +2279,7 @@ def _draw_official_personal_data_overlay(
         c.drawCentredString(84.0, baseline, student.nr_matr)
 
         name_size = _fit_text(c, student.name, 180.0, PDF_FONT_BOLD, 6.4, 4.4)
-        c.setFont(PDF_FONT_BOLD, name_size); c.drawString(111.0, baseline, student.name)
+        _draw_bold_string(c, 111.0, baseline, student.name, name_size)
 
         if birth:
             c.setFont(PDF_FONT_BOLD, 6.2); c.drawCentredString(343.0, baseline, birth)
