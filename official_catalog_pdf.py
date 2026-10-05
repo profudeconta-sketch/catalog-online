@@ -447,7 +447,8 @@ class OfficialCatalogSubjectPrintState:
 class OfficialCatalogAnnualState:
     """Valori anuale validate folosite numai la randarea catalogului."""
     student_key: str
-    subject_annual_averages: tuple[tuple[str, int], ...]
+    subject_annual_averages: tuple[tuple[str, object], ...]
+    subject_corigency_exam_averages: tuple[tuple[str, object], ...]
     conduct_annual_average: object | None
     general_average: object | None
     end_of_courses_status: str
@@ -462,11 +463,12 @@ class OfficialCatalogAnnualState:
         source_key: str,
         existing_end_of_courses_average: object | None,
     ) -> OfficialCatalogSubjectPrintState:
-        """Media de examen rămâne goală până când există o sursă explicită pentru ea."""
+        """Separă media de la cursuri, media examenului și media anuală definitivă."""
+        exam_values = dict(self.subject_corigency_exam_averages)
         return OfficialCatalogSubjectPrintState(
             source_key=source_key,
             end_of_courses_average=existing_end_of_courses_average,
-            corigency_exam_average=None,
+            corigency_exam_average=exam_values.get(source_key),
             annual_average=self.subject_average(source_key),
         )
 
@@ -586,6 +588,7 @@ def official_catalog_state_from_records(
 
     final_status = snapshot.final_status
     general_average = snapshot.general_average
+    corigency_exam_values: dict[str, object] = {}
 
     if finalization is None and audit_records:
         raise OfficialCatalogError(
@@ -605,6 +608,15 @@ def official_catalog_state_from_records(
         validate_finalization_audit_chain_for_print(
             snapshot, finalization, audit_records
         )
+        for record in audit_records:
+            if isinstance(record, CorigentSessionRecord):
+                for result in record.corigent_results:
+                    name = str(result.subject_name).strip()
+                    if name not in subject_values:
+                        raise OfficialCatalogError(
+                            f"Actul corigenței conține disciplina necunoscută {name!r}."
+                        )
+                    corigency_exam_values[name] = result.resulting_annual_average
         for result in finalization.subject_results:
             name = str(result.subject_name).strip()
             if name not in subject_values:
@@ -612,12 +624,15 @@ def official_catalog_state_from_records(
                     f"Actul de definitivare conține disciplina necunoscută {name!r}."
                 )
             subject_values[name] = result.resulting_annual_average
+            if result.result_type == "CORIGENTA":
+                corigency_exam_values[name] = result.resulting_annual_average
         final_status = finalization.final_status
         general_average = finalization.final_general_average
 
     return OfficialCatalogAnnualState(
         student_key=str(snapshot.student_key).strip(),
         subject_annual_averages=tuple(sorted(subject_values.items())),
+        subject_corigency_exam_averages=tuple(sorted(corigency_exam_values.items())),
         conduct_annual_average=snapshot.conduct_annual_average,
         general_average=general_average,
         end_of_courses_status=snapshot.final_status,
