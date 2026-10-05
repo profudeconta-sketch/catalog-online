@@ -1,4 +1,4 @@
-"""Persistență fail-closed pentru snapshoturile anuale Etapa 5.6.
+"""Persistență fail-closed pentru snapshoturile de închidere a cursurilor, Etapa 5.6.
 
 Registrul este separat de datele primare. O închidere existentă nu se suprascrie.
 Publicarea în repository-ul privat rămâne responsabilitatea aplicației, după
@@ -306,7 +306,7 @@ def publish_private_annual_closure_registry(
 def persist_private_annual_closure_once(
     snapshot: AnnualClosureSnapshot,
 ) -> dict[str, Any]:
-    """Persistă definitiv un snapshot anual în registrul privat, fără suprascriere.
+    """Persistă o singură dată snapshotul de la încheierea cursurilor, fără suprascriere.
 
     Operația este intenționat independentă de interfața catalogului și de datele
     primare. Conflictul de versiune al registrului privat este tratat fail-closed.
@@ -324,7 +324,7 @@ def persist_private_annual_closure_once(
             # Retry idempotent: nu publicăm și nu modificăm repository-ul privat.
             return registry
         raise AnnualClosureStorageError(
-            "Elevul are deja o închidere anuală definitivă în registrul privat. "
+            "Elevul are deja un snapshot de închidere a situației școlare în registrul privat. "
             "Corectarea necesită un flux separat și auditabil."
         )
 
