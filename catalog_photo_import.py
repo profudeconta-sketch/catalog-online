@@ -160,7 +160,7 @@ def _student_band_crops(image, count):
     w,h=im.size
     # Antetul ocupă aproximativ partea superioară; benzile elevilor sunt egale în formular.
     top=int(h*0.055); bottom=int(h*0.94)
-    band=(bottom-top)/count
+    band=(bottom-top)/3
     out=[]
     for idx in range(count):
         y0=max(0,int(top+idx*band)-25); y1=min(h,int(top+(idx+1)*band)+25)
