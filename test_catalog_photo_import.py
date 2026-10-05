@@ -77,6 +77,28 @@ class PhotoImportSafetyTests(unittest.TestCase):
             if backup and os.path.exists(backup): os.remove(backup)
         finally: os.remove(path)
 
+    def test_same_absence_day_in_different_month_is_not_duplicate(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            ws.cell(13,8+21).value="01.09"; wb.save(path); wb.close()
+            p=ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",confidence=.99,verifiable=True)
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
+            self.assertEqual(result[0][1],"NOU")
+        finally: os.remove(path)
+
+    def test_second_grade_same_date_is_conflict_even_if_value_differs(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            ws.cell(13,8).value=8; ws.cell(13,9).value="02.10"; wb.save(path); wb.close()
+            p=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",confidence=.99,verifiable=True)
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
+            self.assertEqual(result[0][1],"CONFLICT")
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,result)
+        finally: os.remove(path)
+
     def test_motivated_absence_conflicts_with_existing_unmotivated(self):
         path=workbook()
         try:
