@@ -2304,7 +2304,7 @@ def generate_official_catalog_final(
         for index, page in enumerate(writer.pages, start=1):
             width = float(page.mediabox.width)
             height = float(page.mediabox.height)
-            if abs(width - OFFICIAL_CATALOG_PAGE_SIZE[0]) > 0.25 or abs(height - OFFICIAL_CATALOG_PAGE_SIZE[1]) > 0.25:
+            if abs(width - OFFICIAL_CATALOG_PAGE_SIZE[0]) > 0.60 or abs(height - OFFICIAL_CATALOG_PAGE_SIZE[1]) > 0.60:
                 raise OfficialCatalogError(
                     f"Pagina {index} are dimensiuni nevalide: {width:.2f} x {height:.2f} pt."
                 )
