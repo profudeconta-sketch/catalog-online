@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 from openpyxl import Workbook, load_workbook
-from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, deduplicate_proposals, compare_with_workbook, apply_confirmed_import
+from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, pair_catalog_images, deduplicate_proposals, compare_with_workbook, apply_confirmed_import
 
 CG=[("Matematică",8)]
 TH=[]
@@ -85,6 +85,22 @@ class PhotoImportSafetyTests(unittest.TestCase):
             with self.assertRaises(PhotoImportError):
                 apply_confirmed_import(path,ELEVI,CG,TH,resolve,result)
         finally: os.remove(path)
+
+    def test_cover_handling_is_explicit(self):
+        imgs=[(f"{i}.jpeg",b"x") for i in range(1,24)]
+        pairs=pair_catalog_images(imgs,skip_cover=True)
+        self.assertEqual(len(pairs),11)
+        self.assertEqual(pairs[0][0][0],"2.jpeg")
+        self.assertEqual(pairs[-1][1][0],"23.jpeg")
+        with self.assertRaises(PhotoImportError):
+            pair_catalog_images(imgs,skip_cover=False)
+
+    def test_even_archive_does_not_silently_keep_cover(self):
+        imgs=[(f"{i}.jpeg",b"x") for i in range(1,5)]
+        # Dacă utilizatorul declară prima imagine drept copertă, 3 imagini rămase sunt invalide.
+        with self.assertRaises(PhotoImportError):
+            pair_catalog_images(imgs,skip_cover=True)
+        self.assertEqual(len(pair_catalog_images(imgs,skip_cover=False)),2)
 
     def test_contradiction_stays_visible_and_blocked(self):
         a=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.98,verifiable=True)
