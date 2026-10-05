@@ -15,6 +15,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install openpyxl
+      - run: pip install openpyxl pillow
       - run: python -m unittest -v test_catalog_photo_import.py
       - run: python -m py_compile catalog_photo_import.py app_web_catalog.py
