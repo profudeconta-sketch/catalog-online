@@ -3632,7 +3632,7 @@ with tab9:
             wb_preview = openpyxl.load_workbook(selected_file, read_only=True, data_only=True)
             try:
                 subjects = build_student_subject_inputs(
-                    wb_preview, ELEVI[elev_idx_p], resolve_student_row, None
+                    wb_preview, ELEVI[elev_idx_p], resolve_student_row, {"M5": 120, "M6": 120}
                 )
             finally:
                 wb_preview.close()
