@@ -356,22 +356,21 @@ def calculate_conduct(
     total_unmotivated: int,
     subject_results: Sequence[SubjectResult],
 ) -> tuple[Decimal, int, Decimal]:
-    """Media de bază la purtare, apoi diminuarea legală pentru nefrecventare."""
-    if not interval_conduct_grades:
+    """ROFUIP art. 108–109 + Statut art. 28: bază anuală, apoi diminuare pentru absențe."""
+    if len(interval_conduct_grades) != len(CLJ_2026_2027_COURSE_INTERVALS):
         raise AnnualClosureError(
-            "Lipsesc notele la purtare acordate pentru intervalele de cursuri."
+            "Închiderea anuală necesită câte o notă la purtare pentru toate cele 5 "
+            "intervale de cursuri."
         )
     grades = tuple(_decimal_grade(v) for v in interval_conduct_grades)
     raw_base = sum(grades, Decimal("0")) / Decimal(len(grades))
-    # ROFUIP art. 109: și la purtare se încheie o singură medie anuală,
-    # rotunjită la întregul cel mai apropiat; .50 în favoarea elevului.
     rounded_base = Decimal(round_annual_subject_average(raw_base))
 
     total_steps = total_unmotivated // 20
     subject_threshold_steps = sum(1 for s in subject_results if s.reaches_20_percent)
 
-    # „sau” = criterii alternative pentru diminuare; folosim sancțiunea mai severă,
-    # fără a dubla aceleași absențe prin însumarea celor două criterii.
+    # Criteriile legale sunt alternative („sau”). Nu însumăm aceeași nefrecventare
+    # de două ori; aplicăm numărul de trepte rezultat din criteriul mai sever.
     penalty = max(total_steps, subject_threshold_steps)
     annual = max(Decimal("1"), rounded_base - Decimal(penalty))
     return rounded_base, penalty, annual
