@@ -361,3 +361,29 @@ def persist_private_annual_closure_once(
             "Snapshotul anual publicat nu corespunde datelor validate."
         )
     return final
+
+
+def reconcile_private_annual_closure(
+    snapshot: AnnualClosureSnapshot,
+) -> str:
+    """Verificare read-only după o publicare cu rezultat incert.
+
+    Returnează:
+      - CONFIRMED: snapshotul există și este identic;
+      - ABSENT: elevul nu apare în registrul privat;
+      - CONFLICT: elevul apare, dar cu alt snapshot valid.
+
+    Funcția nu scrie și nu modifică registrul privat.
+    """
+    key = str(snapshot.student_key).strip()
+    if not key:
+        raise AnnualClosureStorageError("Lipsește identificatorul stabil al elevului.")
+    payload = _snapshot_dict(snapshot)
+
+    registry, _registry_sha = load_private_annual_closure_registry()
+    existing = registry["snapshots"].get(key)
+    if existing is None:
+        return "ABSENT"
+    if existing == payload:
+        return "CONFIRMED"
+    return "CONFLICT"
