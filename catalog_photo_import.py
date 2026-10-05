@@ -131,13 +131,12 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
     Un caz devine verificabil doar prin consens semantic exact între două citiri lizibile.
     """
     uncertain=[p for p in items if not p.verifiable]
-    if not uncertain:
-        return items
     targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
               "kind":p.kind,"value":p.value,"date":p.date,"motivated":p.motivated}
              for p in uncertain]
-    prompt=("Efectuează o A DOUA citire independentă a fotografiilor originale. "
-      "Verifică exclusiv înscrierile candidate de mai jos și nu folosi prima interpretare ca adevăr: "
+    prompt=("Efectuează o A DOUA citire independentă și COMPLETĂ a fotografiilor originale. "
+      "Scopul este atât verificarea candidaților slabi, cât și detectarea oricărei înscrieri din perioada cerută "
+      "care ar fi putut fi omisă la prima citire. Candidații slabi cunoscuți sunt: "
       f"{json.dumps(targets,ensure_ascii=False)}. "
       f"Elevii de sus în jos sunt {json.dumps(student_names,ensure_ascii=False)}. "
       f"Discipline permise: {json.dumps(allowed_subjects,ensure_ascii=False)}. "
@@ -162,20 +161,26 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
                 legible and conf>=0.90,""))
         except Exception:
             continue
-    by_key={_semantic_key(p):p for p in second if p.verifiable}
+    first_by_key={_semantic_key(p):p for p in items}
+    second_by_key={_semantic_key(p):p for p in second}
     recovered=[]
-    for p in items:
-        if p.verifiable:
-            recovered.append(p); continue
-        q=by_key.get(_semantic_key(p))
-        if q is not None:
+    all_keys=set(first_by_key)|set(second_by_key)
+    for key in all_keys:
+        p=first_by_key.get(key); q=second_by_key.get(key)
+        if p is not None and q is not None and p.verifiable and q.verifiable:
             recovered.append(ImportProposal(p.student_index,p.category,p.subject,p.kind,p.value,p.date,
-                p.motivated,min(p.confidence,q.confidence),p.source_image,True,
-                "Verificat prin două citiri independente concordante ale fotografiei originale."))
+                p.motivated,max(p.confidence,q.confidence),p.source_image,True,
+                "Demonstrat prin două citiri independente, complete și concordante ale fotografiei originale."))
+        elif p is not None and q is not None and (p.verifiable or q.verifiable):
+            base=p if p.verifiable else q
+            recovered.append(ImportProposal(base.student_index,base.category,base.subject,base.kind,base.value,base.date,
+                base.motivated,base.confidence,base.source_image,False,
+                "Informația apare în ambele citiri, dar nu este demonstrată ca lizibilă independent în ambele."))
         else:
-            recovered.append(ImportProposal(p.student_index,p.category,p.subject,p.kind,p.value,p.date,
-                p.motivated,p.confidence,p.source_image,False,
-                "A doua citire independentă nu a demonstrat fără echivoc aceeași informație."))
+            base=p or q
+            recovered.append(ImportProposal(base.student_index,base.category,base.subject,base.kind,base.value,base.date,
+                base.motivated,base.confidence,base.source_image,False,
+                "Informația apare într-o singură citire sau nu este lizibilă concordant; necesită recuperare/verificare suplimentară."))
     return recovered
 
 def deduplicate_proposals(items):
