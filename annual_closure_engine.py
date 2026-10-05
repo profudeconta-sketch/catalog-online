@@ -1333,3 +1333,115 @@ def build_reexamination_approval_record(
         approved_at=approved_at.isoformat(timespec="seconds"),
         director_approval_reference=reference,
     ))
+
+
+@dataclass(frozen=True)
+class CorigentSessionOutcome:
+    """Rezultatul intermediar al sesiunii de corigență, înainte de reexaminare."""
+    status: str
+    subject_annual_averages: tuple[tuple[str, int], ...]
+    failed_subjects: tuple[str, ...]
+    general_average: Decimal | None
+
+
+def derive_corigent_session_outcome(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    corigent_subjects: Sequence[str],
+    base_subject_annual_averages: Sequence[tuple[str, int]],
+    corigent_results: Sequence[AnnualFinalizationSubjectResult],
+) -> CorigentSessionOutcome:
+    """Evaluează prima sesiune de corigență fără a presupune că situația e definitivă."""
+    if not verify_annual_closure_snapshot(source_snapshot):
+        raise AnnualClosureError("Snapshotul sursă nu trece verificarea SHA-256.")
+
+    base = {}
+    for raw_name, raw_average in base_subject_annual_averages:
+        name = str(raw_name).strip()
+        if not name or name in base:
+            raise AnnualClosureError("Lista mediilor de bază conține discipline invalide/duplicate.")
+        average = int(raw_average)
+        if not 1 <= average <= 10:
+            raise AnnualClosureError(f"{name}: media anuală de bază este invalidă.")
+        base[name] = average
+
+    required = {str(name).strip() for name in corigent_subjects if str(name).strip()}
+    if not required or len(required) > 2:
+        raise AnnualClosureError("Sesiunea de corigență necesită una sau două discipline.")
+    if not required.issubset(base):
+        raise AnnualClosureError("Disciplinele de corigență nu corespund mediilor de bază.")
+
+    replacements = {}
+    for item in corigent_results:
+        name = str(item.subject_name).strip()
+        if item.source_status != "CORIGENT" or item.result_type != "CORIGENTA":
+            raise AnnualClosureError(
+                f"{name}: prima sesiune acceptă numai rezultate CORIGENT/CORIGENTA."
+            )
+        if name not in required:
+            raise AnnualClosureError(f"{name}: disciplina nu aparține sesiunii de corigență.")
+        if name in replacements:
+            raise AnnualClosureError(f"{name}: rezultat de corigență duplicat.")
+        if not isinstance(item.resulting_annual_average, int) or isinstance(
+            item.resulting_annual_average, bool
+        ) or not 1 <= item.resulting_annual_average <= 10:
+            raise AnnualClosureError(f"{name}: media rezultată este invalidă.")
+        replacements[name] = item.resulting_annual_average
+
+    missing = sorted(required.difference(replacements))
+    if missing:
+        raise AnnualClosureError(
+            "Lipsesc rezultatele primei sesiuni de corigență pentru: " + ", ".join(missing) + "."
+        )
+
+    final_averages = dict(base)
+    final_averages.update(replacements)
+    failed = tuple(sorted(name for name in required if final_averages[name] < 5))
+    conduct = Decimal(str(source_snapshot.conduct_annual_average))
+
+    if conduct < Decimal("6"):
+        status = "REPETENT"
+        general = None
+    elif not failed:
+        status = "PROMOVAT"
+        values = [Decimal(value) for value in final_averages.values()]
+        values.append(conduct)
+        general = (
+            sum(values, Decimal("0")) / Decimal(len(values))
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    elif len(failed) == 1:
+        status = "REEXAMINARE_ELIGIBILA"
+        general = None
+    else:
+        status = "REPETENT"
+        general = None
+
+    return CorigentSessionOutcome(
+        status=status,
+        subject_annual_averages=tuple(sorted(final_averages.items())),
+        failed_subjects=failed,
+        general_average=general,
+    )
+
+
+def validate_reexamination_approval_for_outcome(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    outcome: CorigentSessionOutcome,
+    approval: ReexaminationApprovalRecord,
+) -> None:
+    """Leagă aprobarea de singura disciplină rămasă nepromovată."""
+    if outcome.status != "REEXAMINARE_ELIGIBILA" or len(outcome.failed_subjects) != 1:
+        raise AnnualClosureError("Rezultatul sesiunii nu permite reexaminarea.")
+    if not verify_reexamination_approval_record(approval):
+        raise AnnualClosureError("Aprobarea reexaminării nu trece verificarea SHA-256.")
+    if (
+        approval.source_snapshot_sha256 != source_snapshot.integrity_sha256
+        or approval.student_key != source_snapshot.student_key
+        or approval.school_year != source_snapshot.school_year
+    ):
+        raise AnnualClosureError("Aprobarea reexaminării nu aparține elevului/snapshotului.")
+    if approval.subject_name != outcome.failed_subjects[0]:
+        raise AnnualClosureError(
+            "Aprobarea reexaminării nu corespunde singurei discipline nepromovate."
+        )
