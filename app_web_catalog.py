@@ -22,7 +22,8 @@ import shutil
 import copy
 from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document, store_new_document
 from conduct_storage import ConductStorageError, conduct_grades_for_student, load_conduct_registry, save_conduct_grade
-from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, IX_TH_2026_2027_CLASS_CDEOS_HOURS, build_student_subject_inputs, preview_annual_closure
+from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, IX_TH_2026_2027_CLASS_CDEOS_HOURS, build_annual_closure_snapshot, build_student_subject_inputs, preview_annual_closure
+from annual_closure_storage import AnnualClosureStorageError, persist_private_annual_closure_once
 from leave_pass_storage import (
     STATUS_APPROVED as LEAVE_STATUS_APPROVED,
     STATUS_EXPIRED as LEAVE_STATUS_EXPIRED,
@@ -3650,6 +3651,7 @@ def build_class_annual_closure_previews(file_path):
                     "student_key": student_key,
                     "name": str(elev_info[1]).strip(),
                     "preview": preview,
+                    "conduct_values": tuple(conduct_values),
                     "error": None,
                 })
             except (ConductStorageError, AnnualClosureError, RuntimeError, ValueError) as ex:
@@ -3657,6 +3659,7 @@ def build_class_annual_closure_previews(file_path):
                     "student_key": student_key,
                     "name": str(elev_info[1]).strip(),
                     "preview": None,
+                    "conduct_values": None,
                     "error": str(ex),
                 })
     finally:
@@ -3730,6 +3733,74 @@ with tab9:
                         st.warning(blocker)
         except (AnnualClosureError, ConductStorageError, RuntimeError, OSError) as ex:
             st.error(f"Validarea clasei nu a putut fi finalizată: {ex}")
+
+
+# Închiderea situației școlare persistă numai snapshoturi validate în registrul privat separat.
+with tab9:
+    st.divider()
+    st.subheader("Închiderea situației școlare")
+    st.warning(
+        "Operația fixează snapshotul de la încheierea cursurilor. Nu modifică Excelul. "
+        "Snapshoturile existente nu sunt suprascrise; orice conflict blochează operația."
+    )
+    closure_confirmed = st.checkbox(
+        "Confirm că am verificat situația clasei și doresc închiderea situației școlare.",
+        key="confirm_annual_class_closure",
+    )
+    if st.button(
+        "🔒 Închiderea situației școlare",
+        key="persist_annual_class_closure",
+        type="primary",
+        use_container_width=True,
+        disabled=not closure_confirmed,
+    ):
+        try:
+            class_results = build_class_annual_closure_previews(selected_file)
+            invalid = [item for item in class_results if item["error"] is not None]
+            blocked = [
+                item for item in class_results
+                if item["error"] is None
+                and not item["preview"].ready_for_final_closure
+                and item["preview"].final_status != "AMANAT"
+            ]
+            if invalid or blocked:
+                st.error(
+                    "Închiderea a fost blocată înainte de orice scriere: "
+                    "cel puțin un elev are date incomplete/incoerente sau blocaje nerezolvate."
+                )
+                for item in invalid:
+                    st.error(f"{item['name']}: {item['error']}")
+                for item in blocked:
+                    for reason in item["preview"].readiness_blockers:
+                        st.warning(f"{item['name']}: {reason}")
+            else:
+                snapshots = []
+                for item in class_results:
+                    snapshots.append(
+                        build_annual_closure_snapshot(
+                            student_key=item["student_key"],
+                            preview=item["preview"],
+                            interval_conduct_grades=item["conduct_values"],
+                        )
+                    )
+
+                # Revalidăm toate snapshoturile înainte de prima publicare.
+                if len(snapshots) != len(class_results):
+                    raise AnnualClosureError("Numărul snapshoturilor nu corespunde clasei validate.")
+
+                persisted = 0
+                for snapshot in snapshots:
+                    persist_private_annual_closure_once(snapshot)
+                    persisted += 1
+                st.success(
+                    f"Închiderea situației școlare a fost înregistrată pentru {persisted} elevi. "
+                    "Datele primare din Excel nu au fost modificate."
+                )
+        except (AnnualClosureError, AnnualClosureStorageError, ConductStorageError, RuntimeError, OSError) as ex:
+            st.error(
+                "Închiderea situației școlare nu a fost finalizată în siguranță. "
+                f"Motiv: {ex}"
+            )
 
 
 # Preview-ul anual rămâne read-only; este disponibil doar când registrul are toate cele 5 note.
