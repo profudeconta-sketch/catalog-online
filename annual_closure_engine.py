@@ -102,7 +102,7 @@ def validate_conduct_interval_grades(
 # de Minister pentru domeniul Turism și alimentație.
 IX_TH_2026_2027_ANNUAL_HOURS: Mapping[str, int] = {
     "Limba și literatura română": 90,
-    "Limba engleză (L1)": 60,
+    "Limba engleză (L1)": 120,
     "Limba franceză (L2)": 30,
     "Matematică": 60,
     "Fizică": 30,
@@ -125,7 +125,15 @@ IX_TH_2026_2027_ANNUAL_HOURS: Mapping[str, int] = {
 # iar oferta concretă a școlii trebuie furnizată explicit motorului.
 IX_TH_2026_2027_CDEOS_MAX_HOURS: Mapping[str, int] = {
     "M5 – CDEOȘ – Stagii de pregătire practică": 150,
-    "M6 – Curriculum pentru aprofundare și inserție profesională": 30,
+    "M6 – Curriculum pentru aprofundare și inserție profesională": 60,
+}
+
+# Configurația efectivă aprobată/comunicată pentru clasa IX TH intensiv engleză.
+# Se păstrează separat de planul generic: M5=60h, M6=60h; engleza are
+# încă 60h/an pentru regimul intensiv, deci 120h/an în total.
+IX_TH_2026_2027_CLASS_CDEOS_HOURS: Mapping[str, int] = {
+    "M5 – CDEOȘ – Stagii de pregătire practică": 60,
+    "M6 – Curriculum pentru aprofundare și inserție profesională": 60,
 }
 
 
@@ -156,7 +164,7 @@ EXCEL_MODULE_LAYOUT: tuple[tuple[str, int], ...] = (
 )
 WEEKLY_HOURS_IX_TH_2026_2027: Mapping[str, Decimal] = {
     "Limba și literatura română": Decimal("3"),
-    "Limba engleză (L1)": Decimal("2"),
+    "Limba engleză (L1)": Decimal("4"),
     "Limba franceză (L2)": Decimal("1"),
     "Matematică": Decimal("2"),
     "Fizică": Decimal("1"),
