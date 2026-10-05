@@ -91,11 +91,19 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
     return out
 
 def deduplicate_proposals(items):
-    best={}
+    """O singură înregistrare per elev/disciplină/tip/dată; ambiguitățile se blochează."""
+    groups={}
     for p in items:
-        key=(p.student_index,p.category.casefold(),p.subject.casefold(),p.kind,p.value,p.date,p.motivated)
-        if key not in best or p.confidence>best[key].confidence: best[key]=p
-    return list(best.values())
+        base=(p.student_index,p.category.casefold(),p.subject.casefold(),p.kind,p.date)
+        groups.setdefault(base,[]).append(p)
+    out=[]
+    for rows in groups.values():
+        semantics={(p.value if p.kind=="grade" else "", p.motivated) for p in rows}
+        if len(semantics)!=1:
+            # Două citiri diferite pentru aceeași rubrică și dată = nu ghicim.
+            continue
+        out.append(max(rows,key=lambda p:p.confidence))
+    return out
 
 def _lookup(cg,th):
     return {(cat.casefold(),name.casefold()):(cat,name,col) for cat,items in (("Cultură Generală",cg),("Module Tehnologice",th)) for name,col in items}
