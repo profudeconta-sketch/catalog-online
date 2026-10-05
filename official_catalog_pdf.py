@@ -1305,9 +1305,23 @@ def _draw_marks_spread_placeholder(
                 c.saveState()
                 c.translate(gx + pair_w / 2 + 0.8, subject_header_bottom + 4)
                 c.rotate(90)
-                size = _fit_text(c, slot, header_h - 38, PDF_FONT_BOLD, 4.1, 2.5)
+                header_lines = (slot,)
+                if slot == "M6 – Curriculum pentru aprofundare și inserție profesională":
+                    header_lines = (
+                        "M6 – Curriculum pentru aprofundare",
+                        "și inserție profesională",
+                    )
+                sizes = [
+                    _fit_text(c, line, header_h - 38, PDF_FONT_BOLD, 4.1, 2.5)
+                    for line in header_lines
+                ]
+                size = min(sizes)
                 c.setFont(PDF_FONT_BOLD, size)
-                c.drawString(0, 0, slot)
+                if len(header_lines) == 1:
+                    c.drawString(0, 0, header_lines[0])
+                else:
+                    c.drawString(0, -2.2, header_lines[0])
+                    c.drawString(0, 2.2, header_lines[1])
                 c.restoreState()
             c.setFont(PDF_FONT, 2.8)
             c.drawCentredString(gx + pair_w * .25, top - header_h + 6, "Absențe")
@@ -1334,9 +1348,23 @@ def _draw_marks_spread_placeholder(
                 c.saveState()
                 c.translate(gx + pair_w / 2 + 0.8, subject_header_bottom + 4)
                 c.rotate(90)
-                size = _fit_text(c, slot, header_h - 38, PDF_FONT_BOLD, 4.1, 2.5)
+                header_lines = (slot,)
+                if slot == "M6 – Curriculum pentru aprofundare și inserție profesională":
+                    header_lines = (
+                        "M6 – Curriculum pentru aprofundare",
+                        "și inserție profesională",
+                    )
+                sizes = [
+                    _fit_text(c, line, header_h - 38, PDF_FONT_BOLD, 4.1, 2.5)
+                    for line in header_lines
+                ]
+                size = min(sizes)
                 c.setFont(PDF_FONT_BOLD, size)
-                c.drawString(0, 0, slot)
+                if len(header_lines) == 1:
+                    c.drawString(0, 0, header_lines[0])
+                else:
+                    c.drawString(0, -2.2, header_lines[0])
+                    c.drawString(0, 2.2, header_lines[1])
                 c.restoreState()
             c.setFont(PDF_FONT, 2.8)
             c.drawCentredString(gx + pair_w * .25, top - header_h + 6, "Absențe")
