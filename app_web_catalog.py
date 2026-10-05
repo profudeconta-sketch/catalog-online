@@ -21,8 +21,8 @@ import io
 import shutil
 import copy
 from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document, store_new_document
-from conduct_storage import ConductStorageError, load_conduct_registry, save_conduct_grade
-from annual_closure_engine import CLJ_2026_2027_COURSE_INTERVALS
+from conduct_storage import ConductStorageError, conduct_grades_for_student, load_conduct_registry, save_conduct_grade
+from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, build_student_subject_inputs, preview_annual_closure
 from leave_pass_storage import (
     STATUS_APPROVED as LEAVE_STATUS_APPROVED,
     STATUS_EXPIRED as LEAVE_STATUS_EXPIRED,
@@ -3620,3 +3620,35 @@ with tab9:
                         st.rerun()
                 except (ConductStorageError, Exception) as ex:
                     st.error(f"Nota la purtare nu a fost salvată: {ex}")
+
+
+# Preview-ul anual rămâne read-only; este disponibil doar când registrul are toate cele 5 note.
+with tab9:
+    st.divider()
+    st.subheader("Simulare închidere anuală")
+    if st.button("🧮 Simulează situația anuală", key="annual_preview_readonly", use_container_width=True):
+        try:
+            conduct_values = conduct_grades_for_student(student_key)
+            wb_preview = openpyxl.load_workbook(selected_file, read_only=True, data_only=True)
+            try:
+                subjects = build_student_subject_inputs(
+                    wb_preview, ELEVI[elev_idx_p], resolve_student_row, None
+                )
+            finally:
+                wb_preview.close()
+            preview = preview_annual_closure(
+                subjects,
+                sum(item.motivated_absences for item in subjects),
+                conduct_values,
+            )
+            st.success(
+                f"Situație preliminară: {preview.final_status}; "
+                f"purtare anuală: {preview.conduct_annual_average}; "
+                f"absențe totale: {preview.total_absences}."
+            )
+            if preview.general_average is not None:
+                st.info(f"Media generală anuală preliminară: {preview.general_average}")
+            for blocker in preview.blockers:
+                st.warning(blocker)
+        except (ConductStorageError, AnnualClosureError, RuntimeError) as ex:
+            st.warning(f"Simularea anuală nu poate fi finalizată încă: {ex}")
