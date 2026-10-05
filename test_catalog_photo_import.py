@@ -166,6 +166,11 @@ class PhotoImportSafetyTests(unittest.TestCase):
         crops=_student_band_crops(("2.jpeg",buf.getvalue()),3)
         self.assertEqual(len(crops),3)
         self.assertTrue(all(len(data)>0 for _,data in crops))
+        last_crops=_student_band_crops(("22.jpeg",buf.getvalue()),2)
+        self.assertEqual(len(last_crops),2)
+        # Formularul păstrează 3 poziții fizice; două persoane nu trebuie să împartă pagina în jumătăți.
+        second=Image.open(io.BytesIO(last_crops[1][1]))
+        self.assertLess(second.height,800)
 
     def test_concatenated_absence_days_are_not_guessed(self):
         variants=absence_day_segmentations("193",10)
