@@ -212,3 +212,87 @@ def register_annual_closure_once(
         if not verify_annual_closure_snapshot(final_snapshot):
             raise AnnualClosureStorageError("SHA-256 al snapshotului final este invalid.")
         return final
+
+
+# Destinația privată este separată atât de catalogul primar, cât și de documentele școlare.
+ANNUAL_CLOSURE_PRIVATE_ROOT = "inchideri_anuale"
+ANNUAL_CLOSURE_PRIVATE_REGISTRY_PATH = (
+    f"{ANNUAL_CLOSURE_PRIVATE_ROOT}/registru_inchidere_anuala_2026_2027.json"
+)
+
+
+def serialize_annual_closure_registry(registry: dict[str, Any]) -> bytes:
+    """Serializează determinist registrul validat, fără a-l publica."""
+    if not isinstance(registry, dict):
+        raise AnnualClosureStorageError("Registrul anual privat este invalid.")
+    if registry.get("schema_version") != REGISTRY_SCHEMA_VERSION:
+        raise AnnualClosureStorageError("Versiune invalidă pentru registrul anual privat.")
+    if registry.get("school_year") != SCHOOL_YEAR:
+        raise AnnualClosureStorageError("An școlar invalid pentru registrul anual privat.")
+    if not isinstance(registry.get("snapshots"), dict):
+        raise AnnualClosureStorageError("Colecția de snapshoturi private este invalidă.")
+
+    for key, payload in registry["snapshots"].items():
+        if not str(key).strip() or not isinstance(payload, dict):
+            raise AnnualClosureStorageError("Înregistrare anuală privată invalidă.")
+        try:
+            snapshot = AnnualClosureSnapshot(**payload)
+        except Exception as exc:
+            raise AnnualClosureStorageError(
+                "Un snapshot din registrul privat nu poate fi reconstruit."
+            ) from exc
+        if str(snapshot.student_key).strip() != str(key).strip():
+            raise AnnualClosureStorageError(
+                "Cheia elevului nu corespunde snapshotului din registrul privat."
+            )
+        if not verify_annual_closure_snapshot(snapshot):
+            raise AnnualClosureStorageError(
+                "Un snapshot din registrul privat nu trece verificarea SHA-256."
+            )
+
+    return (
+        json.dumps(registry, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+
+def load_private_annual_closure_registry() -> tuple[dict[str, Any], str | None]:
+    """Citește exclusiv registrul anual din repository-ul privat existent."""
+    try:
+        from document_storage import private_read
+        raw, sha = private_read(ANNUAL_CLOSURE_PRIVATE_REGISTRY_PATH)
+    except Exception as exc:
+        raise AnnualClosureStorageError(
+            "Registrul privat al închiderilor anuale nu poate fi citit."
+        ) from exc
+    if raw is None:
+        return empty_annual_closure_registry(), None
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except Exception as exc:
+        raise AnnualClosureStorageError(
+            "Registrul privat al închiderilor anuale este corupt."
+        ) from exc
+    # Validarea completă include verificarea SHA-256 a fiecărui snapshot.
+    serialize_annual_closure_registry(data)
+    return data, sha
+
+
+def publish_private_annual_closure_registry(
+    registry: dict[str, Any],
+    *,
+    expected_sha: str | None,
+) -> str | None:
+    """Publică numai în zona privată dedicată, cu protecția SHA deja folosită de proiect."""
+    raw = serialize_annual_closure_registry(registry)
+    try:
+        from document_storage import private_write
+        return private_write(
+            ANNUAL_CLOSURE_PRIVATE_REGISTRY_PATH,
+            raw,
+            expected_sha=expected_sha,
+            message="Actualizare registru privat închideri anuale 2026-2027",
+        )
+    except Exception as exc:
+        raise AnnualClosureStorageError(
+            "Registrul privat al închiderilor anuale nu a putut fi publicat."
+        ) from exc
