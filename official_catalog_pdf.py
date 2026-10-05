@@ -417,6 +417,24 @@ def _draw_v6_absence_entry(
         )
 
 
+def _split_rm_page_for_v6(value: str) -> tuple[str, str]:
+    """Separă registrul matricol de pagină numai pentru formate neambigue."""
+    raw = _norm(value)
+    import re
+    patterns = (
+        r"^RM\s*([A-Za-z0-9.-]+)\s*[/;,]\s*(?:P(?:AG)?\.?\s*)?([A-Za-z0-9.-]+)$",
+        r"^([A-Za-z0-9.-]+)\s*[/;,]\s*([A-Za-z0-9.-]+)$",
+        r"^RM\s*([A-Za-z0-9.-]+)\s+P(?:AG)?\.?\s*([A-Za-z0-9.-]+)$",
+    )
+    for pattern in patterns:
+        match = re.fullmatch(pattern, raw, flags=re.IGNORECASE)
+        if match:
+            return match.group(1), match.group(2)
+    raise OfficialCatalogError(
+        f"RM/PG {raw!r} nu poate fi separat neambiguu în registru și pagină pentru V6."
+    )
+
+
 def _source_location(source_key: str) -> tuple[str, int]:
     if source_key in CG_START_COLUMNS:
         return "Cultură Generală", CG_START_COLUMNS[source_key]
@@ -1921,23 +1939,28 @@ def _draw_v6_data_overlay(
             c.setFont(PDF_FONT_BOLD, name_size)
             c.drawString(name_x, name_y, student.name)
 
-            rx, ry = out(x_right - 5.0, block.top_y - 77.0)
+            # Valorile se așază imediat după etichetele tipărite, deasupra punctelor.
+            # Coordonatele x sunt măsurate în spațiul V6, nu aliniate la marginea blocului.
             c.setFont(PDF_FONT, 5.8)
-            c.drawRightString(rx, ry, student.nr_matr)
-            rx, ry = out(x_right - 5.0, block.top_y - 97.0)
-            c.drawRightString(rx, ry, student.rm_pg)
+            nx, ny = out(83.0, block.top_y - 77.0)
+            c.drawString(nx, ny, student.nr_matr)
 
-            # Ordinea reală a celor trei rubrici din „Situația școlară”:
-            # Media generală / sfârșitul cursurilor / sfârșitul anului școlar.
-            rx, ry = out(x_right - 5.0, block.top_y - 119.0)
+            rm_value, page_value = _split_rm_page_for_v6(student.rm_pg)
+            vx, vy = out(69.0, block.top_y - 97.0)
+            c.drawString(vx, vy, rm_value)
+            px, py = out(135.0, block.top_y - 97.0)
+            c.drawString(px, py, page_value)
+
+            # Media generală și mențiunile situației școlare sunt evidențiate bold.
             c.setFont(PDF_FONT_BOLD, 5.4)
             if annual_state.general_average is not None:
-                c.drawRightString(rx, ry, _format_catalog_average(annual_state.general_average))
+                gx, gy = out(104.0, block.top_y - 119.0)
+                c.drawString(gx, gy, _format_catalog_average(annual_state.general_average))
 
-            rx, ry = out(x_right - 5.0, block.top_y - 139.0)
-            c.drawRightString(rx, ry, annual_state.end_of_courses_status)
-            rx, ry = out(x_right - 5.0, block.top_y - 159.0)
-            c.drawRightString(rx, ry, annual_state.final_status)
+            ex, ey = out(112.0, block.top_y - 139.0)
+            c.drawString(ex, ey, annual_state.end_of_courses_status)
+            fx, fy = out(112.0, block.top_y - 159.0)
+            c.drawString(fx, fy, annual_state.final_status)
         else:
             # Blocul terminal: purtare, total absențe și nemotivate.
             conduct_center = (RIGHT_CONDUCT_LEFT_X + RIGHT_CONDUCT_RIGHT_X) / 2
