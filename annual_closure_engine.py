@@ -1600,7 +1600,7 @@ def derive_reexamination_finalization(
         remaining_failed = [
             subject_name
             for subject_name, subject_average in final_averages.items()
-            if subject_average < 5
+            if Decimal(str(subject_average)) < Decimal("5")
         ]
         if remaining_failed:
             raise AnnualClosureError(
