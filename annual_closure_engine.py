@@ -1190,6 +1190,7 @@ class ReexaminationApprovalRecord:
     school_year: str
     student_key: str
     source_snapshot_sha256: str
+    corigent_session_sha256: str
     subject_name: str
     requested_at: str
     approved_at: str
@@ -1220,6 +1221,7 @@ def verify_reexamination_approval_record(record: ReexaminationApprovalRecord) ->
 def build_reexamination_approval_record(
     *,
     source_snapshot: AnnualClosureSnapshot,
+    corigent_session_record: CorigentSessionRecord,
     subject_name: str,
     requested_at: datetime,
     approved_at: datetime,
@@ -1228,6 +1230,16 @@ def build_reexamination_approval_record(
     """Construiește aprobarea; eligibilitatea școlară se verifică separat."""
     if not verify_annual_closure_snapshot(source_snapshot):
         raise AnnualClosureError("Snapshotul sursă nu trece verificarea SHA-256.")
+    if not verify_corigent_session_record(corigent_session_record):
+        raise AnnualClosureError("Actul primei corigențe nu trece verificarea SHA-256.")
+    if (
+        corigent_session_record.source_snapshot_sha256 != source_snapshot.integrity_sha256
+        or corigent_session_record.student_key != source_snapshot.student_key
+        or corigent_session_record.school_year != source_snapshot.school_year
+        or corigent_session_record.status != "REEXAMINARE_ELIGIBILA"
+        or len(corigent_session_record.failed_subjects) != 1
+    ):
+        raise AnnualClosureError("Actul primei corigențe nu justifică această reexaminare.")
     name = str(subject_name).strip()
     reference = str(director_approval_reference).strip()
     if not name or not reference:
@@ -1240,13 +1252,14 @@ def build_reexamination_approval_record(
             "cazul trebuie verificat administrativ."
         )
     return seal_reexamination_approval_record(ReexaminationApprovalRecord(
-        schema_version=1,
-        rules_version="etapa-5.6-reexaminare-2026-2027-v1",
+        schema_version=2,
+        rules_version="etapa-5.6-reexaminare-2026-2027-v2",
         generated_at=datetime.now(ZoneInfo("Europe/Bucharest")).isoformat(timespec="seconds"),
         integrity_sha256="",
         school_year=source_snapshot.school_year,
         student_key=source_snapshot.student_key,
         source_snapshot_sha256=source_snapshot.integrity_sha256,
+        corigent_session_sha256=corigent_session_record.integrity_sha256,
         subject_name=name,
         requested_at=requested_at.isoformat(timespec="seconds"),
         approved_at=approved_at.isoformat(timespec="seconds"),
@@ -1261,6 +1274,24 @@ class CorigentSessionOutcome:
     subject_annual_averages: tuple[tuple[str, int], ...]
     failed_subjects: tuple[str, ...]
     general_average: Decimal | None
+
+
+@dataclass(frozen=True)
+class CorigentSessionRecord:
+    """Act imuabil al primei corigențe, ancorat în snapshot și sigilat SHA-256."""
+    schema_version: int
+    rules_version: str
+    generated_at: str
+    integrity_sha256: str
+    school_year: str
+    student_key: str
+    source_snapshot_sha256: str
+    corigent_subjects: tuple[str, ...]
+    corigent_results: tuple[AnnualFinalizationSubjectResult, ...]
+    status: str
+    subject_annual_averages: tuple[tuple[str, int], ...]
+    failed_subjects: tuple[str, ...]
+    general_average: str | None
 
 
 def derive_corigent_session_outcome(
@@ -1343,24 +1374,86 @@ def derive_corigent_session_outcome(
     )
 
 
+def canonical_corigent_session_payload(record: CorigentSessionRecord) -> bytes:
+    payload = asdict(record)
+    payload["integrity_sha256"] = ""
+    return json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+
+
+def corigent_session_sha256(record: CorigentSessionRecord) -> str:
+    return hashlib.sha256(canonical_corigent_session_payload(record)).hexdigest()
+
+
+def seal_corigent_session_record(record: CorigentSessionRecord) -> CorigentSessionRecord:
+    return replace(record, integrity_sha256=corigent_session_sha256(record))
+
+
+def verify_corigent_session_record(record: CorigentSessionRecord) -> bool:
+    expected = str(record.integrity_sha256 or "")
+    return _is_sha256_hex(expected) and corigent_session_sha256(record) == expected
+
+
+def build_corigent_session_record(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    corigent_subjects: Sequence[str],
+    base_subject_annual_averages: Sequence[tuple[str, int]],
+    corigent_results: Sequence[AnnualFinalizationSubjectResult],
+) -> CorigentSessionRecord:
+    outcome = derive_corigent_session_outcome(
+        source_snapshot=source_snapshot,
+        corigent_subjects=corigent_subjects,
+        base_subject_annual_averages=base_subject_annual_averages,
+        corigent_results=corigent_results,
+    )
+    normalized_subjects = tuple(sorted(str(name).strip() for name in corigent_subjects))
+    record = CorigentSessionRecord(
+        schema_version=1,
+        rules_version="etapa-5.6-sesiune-corigenta-2026-2027-v1",
+        generated_at=datetime.now(ZoneInfo("Europe/Bucharest")).isoformat(timespec="seconds"),
+        integrity_sha256="",
+        school_year=source_snapshot.school_year,
+        student_key=source_snapshot.student_key,
+        source_snapshot_sha256=source_snapshot.integrity_sha256,
+        corigent_subjects=normalized_subjects,
+        corigent_results=tuple(corigent_results),
+        status=outcome.status,
+        subject_annual_averages=outcome.subject_annual_averages,
+        failed_subjects=outcome.failed_subjects,
+        general_average=None if outcome.general_average is None else str(outcome.general_average),
+    )
+    return seal_corigent_session_record(record)
+
+
 def validate_reexamination_approval_for_outcome(
     *,
     source_snapshot: AnnualClosureSnapshot,
-    outcome: CorigentSessionOutcome,
+    session_record: CorigentSessionRecord,
     approval: ReexaminationApprovalRecord,
 ) -> None:
     """Leagă aprobarea de singura disciplină rămasă nepromovată."""
-    if outcome.status != "REEXAMINARE_ELIGIBILA" or len(outcome.failed_subjects) != 1:
-        raise AnnualClosureError("Rezultatul sesiunii nu permite reexaminarea.")
+    if not verify_corigent_session_record(session_record):
+        raise AnnualClosureError("Actul primei corigențe nu trece verificarea SHA-256.")
+    if (
+        session_record.status != "REEXAMINARE_ELIGIBILA"
+        or len(session_record.failed_subjects) != 1
+        or session_record.source_snapshot_sha256 != source_snapshot.integrity_sha256
+        or session_record.student_key != source_snapshot.student_key
+        or session_record.school_year != source_snapshot.school_year
+    ):
+        raise AnnualClosureError("Actul sesiunii nu permite reexaminarea.")
     if not verify_reexamination_approval_record(approval):
         raise AnnualClosureError("Aprobarea reexaminării nu trece verificarea SHA-256.")
     if (
         approval.source_snapshot_sha256 != source_snapshot.integrity_sha256
+        or approval.corigent_session_sha256 != session_record.integrity_sha256
         or approval.student_key != source_snapshot.student_key
         or approval.school_year != source_snapshot.school_year
     ):
         raise AnnualClosureError("Aprobarea reexaminării nu aparține elevului/snapshotului.")
-    if approval.subject_name != outcome.failed_subjects[0]:
+    if approval.subject_name != session_record.failed_subjects[0]:
         raise AnnualClosureError(
             "Aprobarea reexaminării nu corespunde singurei discipline nepromovate."
         )
@@ -1369,7 +1462,7 @@ def validate_reexamination_approval_for_outcome(
 def derive_reexamination_finalization(
     *,
     source_snapshot: AnnualClosureSnapshot,
-    corigent_outcome: CorigentSessionOutcome,
+    corigent_session_record: CorigentSessionRecord,
     approval: ReexaminationApprovalRecord,
     reexamination_result: AnnualFinalizationSubjectResult,
     finalized_on: date,
@@ -1377,7 +1470,7 @@ def derive_reexamination_finalization(
     """Definitivează situația după reexaminarea aprobată, fără persistență."""
     validate_reexamination_approval_for_outcome(
         source_snapshot=source_snapshot,
-        outcome=corigent_outcome,
+        session_record=corigent_session_record,
         approval=approval,
     )
     name = str(reexamination_result.subject_name).strip()
@@ -1400,7 +1493,7 @@ def derive_reexamination_finalization(
     ):
         raise AnnualClosureError("Media rezultată la reexaminare este invalidă.")
 
-    final_averages = dict(corigent_outcome.subject_annual_averages)
+    final_averages = dict(corigent_session_record.subject_annual_averages)
     if name not in final_averages:
         raise AnnualClosureError(
             "Disciplina aprobată nu există în situația rezultată după corigență."
@@ -1435,5 +1528,5 @@ def derive_reexamination_finalization(
         final_status=final_status,
         final_general_average=general,
         finalized_on=finalized_on,
-        audit_chain_sha256=(approval.integrity_sha256,),
+        audit_chain_sha256=(corigent_session_record.integrity_sha256, approval.integrity_sha256,),
     )
