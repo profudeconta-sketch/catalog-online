@@ -25,7 +25,12 @@ from document_storage import DocumentStorageError, build_document_record, get_pa
 from conduct_storage import ConductStorageError, conduct_grades_for_student, load_conduct_registry, save_conduct_grade
 from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, IX_TH_2026_2027_CLASS_CDEOS_HOURS, build_annual_closure_snapshot, build_student_subject_inputs, preview_annual_closure
 from annual_closure_storage import AnnualClosureStorageError, load_private_annual_closure_snapshots, persist_private_annual_closure_batch_once
-from official_catalog_pdf import OfficialCatalogError, generate_official_catalog_final, official_catalog_state_from_records
+from official_catalog_pdf import (
+    OfficialCatalogError,
+    generate_official_catalog_current,
+    generate_official_catalog_final,
+    official_catalog_state_from_records,
+)
 from final_status_storage import FinalStatusStorageError, load_private_final_status_registry, persist_private_final_status_batch_once
 from leave_pass_storage import (
     STATUS_APPROVED as LEAVE_STATUS_APPROVED,
@@ -3712,6 +3717,48 @@ def build_class_annual_closure_previews(file_path):
     finally:
         wb.close()
     return tuple(results)
+
+
+# Catalogul la zi este complet separat de închiderea anuală și nu persistă nimic.
+with tab9:
+    st.divider()
+    st.subheader("Catalog oficial la zi")
+    st.caption(
+        "Generează situația existentă în acest moment: note și absențe curente. "
+        "Rubricile anuale/finale care nu există încă rămân necompletate. "
+        "Operația este strict read-only și nu modifică Excelul, gestiunea elevilor "
+        "sau registrele private."
+    )
+    if st.button(
+        "📘 Generează catalogul la zi",
+        key="generate_current_official_catalog_pdf",
+        use_container_width=True,
+    ):
+        try:
+            with st.spinner("Generez catalogul oficial la zi, fără nicio scriere..."):
+                current_catalog_pdf = generate_official_catalog_current(
+                    selected_file,
+                    load_gestiune_data(),
+                )
+            st.session_state["current_official_catalog_pdf"] = current_catalog_pdf
+            st.success(
+                "Catalogul la zi a fost generat read-only. "
+                "Nu s-a modificat nicio dată din catalog."
+            )
+        except (OfficialCatalogError, RuntimeError, OSError, ValueError) as ex:
+            st.session_state.pop("current_official_catalog_pdf", None)
+            st.error(f"Catalogul la zi nu a putut fi generat în siguranță: {ex}")
+
+    current_pdf = st.session_state.get("current_official_catalog_pdf")
+    if current_pdf:
+        st.download_button(
+            "⬇️ Descarcă catalogul oficial la zi",
+            data=current_pdf,
+            file_name="catalog_oficial_la_zi.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="download_current_official_catalog_pdf",
+        )
 
 
 # Validarea clasei este numai informativă/read-only. Nu închide și nu persistă situații.
