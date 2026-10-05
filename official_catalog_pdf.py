@@ -718,36 +718,98 @@ def _gest_by_identity(gest_data: Sequence[Mapping], students: Sequence[StudentId
     return by_rm
 
 
-def _draw_students_grid(c: canvas.Canvas, students: Sequence[StudentIdentity], page_no: int) -> None:
+def _birth_date_from_cnp(cnp_value: object) -> str:
+    """Derivă data nașterii numai dintr-un CNP valid; nu modifică sursa."""
+    cnp = _norm(cnp_value)
+    if len(cnp) != 13 or not cnp.isdigit():
+        return ""
+    sex_century = int(cnp[0])
+    year2, month, day = int(cnp[1:3]), int(cnp[3:5]), int(cnp[5:7])
+    century = {1: 1900, 2: 1900, 3: 1800, 4: 1800, 5: 2000, 6: 2000}.get(sex_century)
+    if century is None:
+        return ""
+    try:
+        born = date(century + year2, month, day)
+    except ValueError:
+        return ""
+    return born.strftime("%d.%m.%Y")
+
+
+def _draw_students_grid(
+    c: canvas.Canvas,
+    students: Sequence[StudentIdentity],
+    gest_by_rm: Mapping[str, Mapping],
+    page_no: int,
+) -> None:
+    """P29 – Date personale: numai rubricile confirmate ale tipizatului."""
     width, height = A4
-    left, right = 32, width - 32
-    top, bottom = height - 72, 55
+    left, right = 18, width - 16
+    top, bottom = height - 72, 48
     rows = 35
-    row_h = (top - bottom) / (rows + 1)
-    cols = [left, left + 24, left + 245, left + 315, right]
+    row_h = (top - bottom) / (rows + 2)
+    widths = (18, 36, 48, 112, 50, 100, 74, 74)
+    scale = (right - left) / sum(widths)
+    cols = [left]
+    for w in widths:
+        cols.append(cols[-1] + w * scale)
 
-    c.setFont(PDF_FONT_BOLD, 6.5)
-    headers = ("Nr.", "Numele și prenumele", "Nr. matr.", "RM/PG")
-    for i, text in enumerate(headers):
-        c.drawCentredString((cols[i] + cols[i + 1]) / 2, top - row_h + 4, text)
+    headers = (
+        "Nr. crt.",
+        "Nr. matricol",
+        "Registru matricol / pag.",
+        "Nume, inițiala tatălui, prenume",
+        "Data nașterii",
+        "Adresa elevului",
+        "Nume și prenume mamă",
+        "Nume și prenume tată",
+    )
+    c.setFont(PDF_FONT_BOLD, 4.1)
+    for i, label in enumerate(headers):
+        c.drawCentredString((cols[i] + cols[i + 1]) / 2, top - row_h + 4, label)
 
+    # Observațiile sunt rubrică distinctă sub tabel; aici se trec telefoanele părinților.
+    obs_h = row_h
+    grid_bottom = bottom + obs_h
     c.setLineWidth(0.35)
     for x in cols:
-        c.line(x, bottom, x, top)
+        c.line(x, grid_bottom, x, top)
     for r in range(rows + 2):
         y = top - r * row_h
         c.line(left, y, right, y)
 
-    c.setFont(PDF_FONT, 6.2)
+    c.setFont(PDF_FONT, 3.9)
+    observations = []
     for idx in range(rows):
         y = top - (idx + 2) * row_h + 4
         c.drawCentredString((cols[0] + cols[1]) / 2, y, str(idx + 1))
-        if idx < len(students):
-            s = students[idx]
-            c.drawString(cols[1] + 3, y, s.name[:50])
-            c.drawCentredString((cols[2] + cols[3]) / 2, y, s.nr_matr)
-            c.drawCentredString((cols[3] + cols[4]) / 2, y, s.rm_pg)
+        if idx >= len(students):
+            continue
+        student = students[idx]
+        p = gest_by_rm[student.rm_pg]
+        c.drawCentredString((cols[1] + cols[2]) / 2, y, student.nr_matr)
+        c.drawCentredString((cols[2] + cols[3]) / 2, y, student.rm_pg)
+        c.drawString(cols[3] + 1, y, student.name[:38])
+        birth = _birth_date_from_cnp(p.get("cnp"))
+        if birth:
+            c.drawCentredString((cols[4] + cols[5]) / 2, y, birth)
+        address = ", ".join(v for v in (
+            _norm(p.get("localitate")), _norm(p.get("judet")), _norm(p.get("strada")),
+            _norm(p.get("numar_strada")), _norm(p.get("bloc")), _norm(p.get("apartament"))
+        ) if v)
+        c.drawString(cols[5] + 1, y, address[:32])
+        c.drawString(cols[6] + 1, y, _norm(p.get("nume_mama"))[:24])
+        c.drawString(cols[7] + 1, y, _norm(p.get("nume_tata"))[:24])
+        phones = " / ".join(v for v in (
+            _norm(p.get("telefon_mama")), _norm(p.get("telefon_tata"))
+        ) if v)
+        if phones:
+            observations.append(f"{idx + 1}: {phones}")
 
+    c.rect(left, bottom, right - left, obs_h)
+    c.setFont(PDF_FONT_BOLD, 4.2)
+    c.drawString(left + 2, bottom + obs_h - 6, "Observații (telefoane părinți):")
+    c.setFont(PDF_FONT, 3.7)
+    c.drawString(left + 82, bottom + obs_h - 6, "; ".join(observations)[:160])
 
 def _draw_marks_spread_placeholder(
     c: canvas.Canvas,
@@ -1108,6 +1170,7 @@ def generate_official_catalog_prototype(
     wb = openpyxl.load_workbook(excel_path, data_only=True, read_only=True)
     try:
         students = validate_and_resolve_students(wb, gest_data)
+        gest_by_rm = _gest_by_identity(gest_data, students)
 
         out = io.BytesIO()
         c = canvas.Canvas(out, pagesize=A4, pageCompression=1, invariant=1)
@@ -1146,7 +1209,7 @@ def generate_official_catalog_prototype(
 
         # P29: date personale – 35 poziții conform planșei oficiale.
         _draw_page_frame(c, 29, "DATE PERSONALE ALE ELEVILOR")
-        _draw_students_grid(c, students, 29)
+        _draw_students_grid(c, students, gest_by_rm, 29)
         _draw_prototype_notice(c)
         c.showPage()
 
