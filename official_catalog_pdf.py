@@ -2131,53 +2131,83 @@ def _draw_personal_cell_multiline(
     preferred: float = 5.4,
     minimum: float = 3.9,
 ) -> None:
-    """Randare pe maximum două rânduri, fără trunchierea datelor din gestiune."""
+    """Randare pe maximum trei rânduri, fără trunchierea datelor din gestiune."""
     value = _norm(text)
     if not value:
         return
-    try:
-        size = _fit_text(c, value, max_width, PDF_FONT, preferred, minimum)
-        c.setFont(PDF_FONT, size)
+
+    def fitting_size(line: str) -> float | None:
+        try:
+            return _fit_text(c, line, max_width, PDF_FONT, preferred, minimum)
+        except OfficialCatalogError:
+            return None
+
+    direct_size = fitting_size(value)
+    if direct_size is not None:
+        c.setFont(PDF_FONT, direct_size)
         c.drawString(x, baseline, value)
         return
-    except OfficialCatalogError:
-        pass
 
-    # Preferă separatorii expliciți folosiți în gestiune pentru note/relații.
     import re
-    candidates = []
-    for match in re.finditer(r"\s*(?:/|;|\|)\s*", value):
-        left = value[:match.start()].strip()
-        right = value[match.end():].strip()
-        if left and right:
-            candidates.append((left, right))
-    if not candidates:
-        words = value.split()
-        candidates = [
-            (" ".join(words[:i]), " ".join(words[i:]))
-            for i in range(1, len(words))
-        ]
 
-    best = None
-    for left, right in candidates:
-        try:
-            left_size = _fit_text(c, left, max_width, PDF_FONT, preferred, minimum)
-            right_size = _fit_text(c, right, max_width, PDF_FONT, preferred, minimum)
-        except OfficialCatalogError:
+    # Generează împărțiri în 2 sau 3 linii. Separatorii expliciți (/ ; |)
+    # sunt transformați în limite preferate, apoi sunt permise și limite între cuvinte.
+    normalized = re.sub(r"\s*(?:/|;|\|)\s*", " / ", value)
+    tokens = normalized.split()
+
+    # Nu tipărim separatorul ca linie proprie; îl folosim numai ca indiciu de despărțire.
+    words = [token for token in tokens if token != "/"]
+    if len(words) < 2:
+        raise OfficialCatalogError(f"Textul nu încape în rubrica oficială: {value}")
+
+    explicit_boundaries: set[int] = set()
+    count = 0
+    for token in tokens:
+        if token == "/":
+            if 0 < count < len(words):
+                explicit_boundaries.add(count)
+        else:
+            count += 1
+
+    candidates: list[tuple[tuple[int, int, float], tuple[str, ...], tuple[float, ...]]] = []
+    # Încercăm întâi două linii, apoi trei; scorul favorizează limitele marcate prin /.
+    for line_count in (2, 3):
+        if len(words) < line_count:
             continue
-        score = min(left_size, right_size)
-        if best is None or score > best[0]:
-            best = (score, left, right, left_size, right_size)
-    if best is None:
-        raise OfficialCatalogError(f"Textul nu încape în rubrica oficială nici pe două rânduri: {value}")
+        if line_count == 2:
+            splits = [(i,) for i in range(1, len(words))]
+        else:
+            splits = [
+                (i, j)
+                for i in range(1, len(words) - 1)
+                for j in range(i + 1, len(words))
+            ]
+        for split in splits:
+            bounds = (0,) + split + (len(words),)
+            lines = tuple(
+                " ".join(words[bounds[k]:bounds[k + 1]])
+                for k in range(line_count)
+            )
+            sizes = tuple(fitting_size(line) for line in lines)
+            if any(size is None for size in sizes):
+                continue
+            numeric_sizes = tuple(float(size) for size in sizes if size is not None)
+            explicit_hits = sum(1 for point in split if point in explicit_boundaries)
+            balance = -max(len(line) for line in lines)
+            score = (explicit_hits, balance, min(numeric_sizes))
+            candidates.append((score, lines, numeric_sizes))
 
-    _, left, right, left_size, right_size = best
-    line_gap = 5.2
-    c.setFont(PDF_FONT, left_size)
-    c.drawString(x, baseline + line_gap / 2, left)
-    c.setFont(PDF_FONT, right_size)
-    c.drawString(x, baseline - line_gap / 2, right)
+    if not candidates:
+        raise OfficialCatalogError(
+            f"Textul nu încape în rubrica oficială nici pe trei rânduri: {value}"
+        )
 
+    _score, lines, sizes = max(candidates, key=lambda item: item[0])
+    line_gap = 4.8
+    start_y = baseline + (len(lines) - 1) * line_gap / 2
+    for index, (line, size) in enumerate(zip(lines, sizes)):
+        c.setFont(PDF_FONT, size)
+        c.drawString(x, start_y - index * line_gap, line)
 
 def _draw_official_personal_data_overlay(
     c: canvas.Canvas,
