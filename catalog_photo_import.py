@@ -74,6 +74,46 @@ def parse_absence_month_group(value, year=2026):
     return out
 
 
+
+def absence_day_segmentations(token, month, previous_day=None, next_day=None):
+    """Enumeră segmentările calendaristic valide ale unui grup de cifre lipite.
+    Contextul cronologic poate elimina variante imposibile, dar nu inventează o
+    ordine dacă fotografia arată explicit o înscriere necronologică.
+    """
+    raw=str(token or "").strip()
+    if not raw.isdigit() or len(raw)<2:
+        return []
+    max_day=(dt.date(2027 if month==12 else 2026, 1 if month==12 else month+1, 1)-dt.timedelta(days=1)).day
+    candidates=[]
+    def walk(pos, parts):
+        if pos==len(raw):
+            candidates.append(tuple(parts)); return
+        for width in (1,2):
+            piece=raw[pos:pos+width]
+            if not piece or (len(piece)>1 and piece.startswith("0")): continue
+            day=int(piece)
+            if 1<=day<=max_day:
+                walk(pos+width,parts+[day])
+    walk(0,[])
+    candidates=list(dict.fromkeys(candidates))
+    # Vecinii sunt filtre numai când pot demonstra ordinea locală.
+    if previous_day is not None:
+        monotone=[c for c in candidates if c and c[0]>=previous_day]
+        if monotone: candidates=monotone
+    if next_day is not None:
+        monotone=[c for c in candidates if c and c[-1]<=next_day]
+        if monotone: candidates=monotone
+    return candidates
+
+def resolve_concatenated_absence_days(token, month, previous_day=None, next_day=None):
+    candidates=absence_day_segmentations(token,month,previous_day,next_day)
+    if len(candidates)!=1:
+        raise PhotoImportError(
+            f"Grup de zile lipite ambiguu: {token!r}; variante valide: {candidates}. "
+            "Este necesară reverificarea vizuală, nu o presupunere."
+        )
+    return list(candidates[0])
+
 def safe_zip_images(data):
     if len(data)>80*1024*1024: raise PhotoImportError("Arhiva depășește 80 MB.")
     out=[]
