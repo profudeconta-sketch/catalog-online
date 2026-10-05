@@ -10,6 +10,7 @@ class PhotoImportError(RuntimeError): pass
 class ImportProposal:
     student_index:int; category:str; subject:str; kind:str; value:str; date:str
     motivated:bool=False; confidence:float=0.0; source_image:str=""
+    verifiable:bool=True; verification_reason:str=""
 
 def normalize_ddmm(value, year=2026):
     raw=str(value or "").strip().replace("/",".").replace("-",".")
@@ -63,7 +64,9 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
       "Nu ghici și nu completa valori incerte. Răspunde STRICT JSON cu cheia records; fiecare record are "
       "student_index (0..2), category exact 'Cultură Generală' sau 'Module Tehnologice', subject, "
       "kind 'grade' sau 'absence', value (1..10 pentru grade), date DD.MM, motivated boolean, "
-      "confidence 0..1, source_image 'left' sau 'right'.")
+      "confidence 0..1, source_image 'left' sau 'right', legible boolean. "
+      "legible=true NUMAI dacă studentul, disciplina, tipul, valoarea și data pot fi citite direct din fotografie, fără presupuneri. "
+      "Dacă există orice dubiu, păstrează recordul, pune legible=false și confidence corespunzător; nu inventa valoarea.")
     payload={"model":"gpt-6-luna","input":[{"role":"user","content":[
       {"type":"input_text","text":prompt},
       {"type":"input_image","image_url":_data_url(left[0],left[1]),"detail":"high"},
@@ -83,10 +86,13 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
     for r in rows:
         try:
             idx=int(r["student_index"]); kind=str(r["kind"]); date=normalize_ddmm(r["date"],start.year); conf=float(r.get("confidence",0))
-            if not(0<=idx<len(student_names)) or kind not in {"grade","absence"} or conf<0.70 or not date_in_period(date,start,end): continue
+            if not(0<=idx<len(student_names)) or kind not in {"grade","absence"} or not date_in_period(date,start,end): continue
             val=str(r.get("value","")).strip()
             if kind=="grade" and (not val.isdigit() or not 1<=int(val)<=10): continue
-            out.append(ImportProposal(idx,str(r["category"]).strip(),str(r["subject"]).strip(),kind,val,date,bool(r.get("motivated",False)),conf,str(r.get("source_image",""))))
+            legible=bool(r.get("legible",False))
+            verifiable=legible and conf>=0.90
+            reason="" if verifiable else "Citirea nu este suficient de clară pentru scriere automată; necesită verificare."
+            out.append(ImportProposal(idx,str(r["category"]).strip(),str(r["subject"]).strip(),kind,val,date,bool(r.get("motivated",False)),conf,str(r.get("source_image","")),verifiable,reason))
         except Exception: continue
     return out
 
@@ -100,7 +106,9 @@ def deduplicate_proposals(items):
     for rows in groups.values():
         semantics={(p.value if p.kind=="grade" else "", p.motivated) for p in rows}
         if len(semantics)!=1:
-            # Două citiri diferite pentru aceeași rubrică și dată = nu ghicim.
+            # Două citiri diferite pentru aceeași rubrică și dată rămân vizibile, dar sunt blocate.
+            best=max(rows,key=lambda p:p.confidence)
+            out.append(ImportProposal(best.student_index,best.category,best.subject,best.kind,best.value,best.date,best.motivated,best.confidence,best.source_image,False,"Citiri contradictorii pentru aceeași rubrică; nu se poate demonstra valoarea."))
             continue
         out.append(max(rows,key=lambda p:p.confidence))
     return out
@@ -112,6 +120,8 @@ def compare_with_workbook(path,elevi,cg,th,resolve,items):
     wb=openpyxl.load_workbook(path,data_only=False); lookup=_lookup(cg,th); out=[]
     try:
       for p in deduplicate_proposals(items):
+        if not p.verifiable:
+          out.append((p,"NECESITĂ_VERIFICARE",p.verification_reason or "Informația nu poate fi demonstrată ca lizibilă.")); continue
         mapped=lookup.get((p.category.casefold(),p.subject.casefold()))
         if not mapped: out.append((p,"NECUNOSCUT","Disciplina/modulul nu corespunde exact.")); continue
         cat,_,col=mapped; ws=wb[cat]; row=resolve(wb,elevi[p.student_index])
@@ -130,7 +140,10 @@ def compare_with_workbook(path,elevi,cg,th,resolve,items):
     return out
 
 def apply_confirmed_import(path,elevi,cg,th,resolve,approved):
-    approved=[x for x in approved if x[1]=="NOU"]
+    # Barieră de siguranță la nivel de scriere: UI-ul nu poate ocoli regula adevărului demonstrabil.
+    unsafe=[x for x in approved if x[1]!="NOU" or not x[0].verifiable]
+    if unsafe: raise PhotoImportError("Scriere blocată: există înregistrări care nu sunt NOI și demonstrabil lizibile.")
+    approved=[x for x in approved if x[1]=="NOU" and x[0].verifiable]
     if not approved:return 0,None
     backup=path+".photo-import.bak"; temp=path+".photo-import.tmp.xlsx"
     shutil.copy2(path,backup); shutil.copy2(path,temp); wb=openpyxl.load_workbook(temp); lookup=_lookup(cg,th); changed=0
