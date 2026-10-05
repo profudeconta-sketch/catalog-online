@@ -361,7 +361,7 @@ class PhotoImportSafetyTests(unittest.TestCase):
              patch("catalog_photo_import.time.sleep") as sleep:
             with self.assertRaises(PhotoImportError) as ctx:
                 _openai_json_request(object(), "Test", max_attempts=3)
-        self.assertIn("credit/cotă", str(ctx.exception))
+        self.assertIn("insufficient_quota", str(ctx.exception))
         self.assertEqual(call.call_count, 1)
         sleep.assert_not_called()
 
