@@ -1842,17 +1842,14 @@ def _draw_v6_data_overlay(
             x_right = LEFT_IDENTITY_RIGHT_X
             name_x, name_y = out(31.0, block.top_y - 20.0)
             c.setFont(PDF_FONT_BOLD, 7.2); c.drawString(name_x, name_y, student.name)
-            rx, ry = out(x_right - 5.0, block.top_y - 66.0)
+            rx, ry = out(x_right - 5.0, block.top_y - 77.0)
             c.setFont(PDF_FONT, 5.8); c.drawRightString(rx, ry, student.nr_matr)
-            rx, ry = out(x_right - 5.0, block.top_y - 80.0)
+            rx, ry = out(x_right - 5.0, block.top_y - 97.0)
             c.drawRightString(rx, ry, student.rm_pg)
-            rx, ry = out(x_right - 5.0, block.top_y - 116.0)
+            rx, ry = out(x_right - 5.0, block.top_y - 139.0)
             c.setFont(PDF_FONT_BOLD, 5.4); c.drawRightString(rx, ry, annual_state.end_of_courses_status)
-            rx, ry = out(x_right - 5.0, block.top_y - 130.0)
+            rx, ry = out(x_right - 5.0, block.top_y - 159.0)
             c.drawRightString(rx, ry, annual_state.final_status)
-            if annual_state.general_average is not None:
-                rx, ry = out(x_right - 5.0, block.top_y - 145.0)
-                c.drawRightString(rx, ry, _norm(annual_state.general_average))
         else:
             # Blocul terminal: purtare, total absențe și nemotivate.
             terminal_left = edges[-1]
