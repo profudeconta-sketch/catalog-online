@@ -25,6 +25,13 @@ from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
+from annual_closure_engine import (
+    AnnualClosureSnapshot,
+    AnnualFinalizationRecord,
+    verify_annual_closure_snapshot,
+    verify_annual_finalization_record,
+)
+
 
 REQUIRED_SHEETS = (
     "Cultură Generală",
@@ -432,6 +439,64 @@ class OfficialCatalogAnnualState:
     def subject_average(self, source_key: str) -> object | None:
         values = dict(self.subject_annual_averages)
         return values.get(source_key)
+
+
+def official_catalog_state_from_records(
+    snapshot: AnnualClosureSnapshot,
+    finalization: AnnualFinalizationRecord | None = None,
+) -> OfficialCatalogAnnualState:
+    """Adaptează numai înregistrări SHA-256 valide la modelul read-only de tipărire."""
+    if not verify_annual_closure_snapshot(snapshot):
+        raise OfficialCatalogError("Snapshotul anual nu trece verificarea SHA-256.")
+
+    subject_values: dict[str, int] = {}
+    for row in snapshot.subjects:
+        if len(row) != 5:
+            raise OfficialCatalogError("Structura disciplinelor din snapshot este invalidă.")
+        name = str(row[0]).strip()
+        average = row[2]
+        if (
+            not name
+            or name in subject_values
+            or name not in OFFICIAL_SUBJECT_NAMES
+            or not isinstance(average, int)
+            or isinstance(average, bool)
+            or not 1 <= average <= 10
+        ):
+            raise OfficialCatalogError("Snapshotul conține o disciplină sau o medie invalidă.")
+        subject_values[name] = average
+
+    final_status = snapshot.final_status
+    general_average = snapshot.general_average
+
+    if finalization is not None:
+        if not verify_annual_finalization_record(finalization):
+            raise OfficialCatalogError("Actul de definitivare nu trece verificarea SHA-256.")
+        if (
+            finalization.source_snapshot_sha256 != snapshot.integrity_sha256
+            or finalization.student_key != snapshot.student_key
+            or finalization.school_year != snapshot.school_year
+            or finalization.source_status != snapshot.final_status
+        ):
+            raise OfficialCatalogError("Actul de definitivare nu aparține snapshotului anual.")
+        for result in finalization.subject_results:
+            name = str(result.subject_name).strip()
+            if name not in subject_values:
+                raise OfficialCatalogError(
+                    f"Actul de definitivare conține disciplina necunoscută {name!r}."
+                )
+            subject_values[name] = result.resulting_annual_average
+        final_status = finalization.final_status
+        general_average = finalization.final_general_average
+
+    return OfficialCatalogAnnualState(
+        student_key=str(snapshot.student_key).strip(),
+        subject_annual_averages=tuple(sorted(subject_values.items())),
+        conduct_annual_average=snapshot.conduct_annual_average,
+        general_average=general_average,
+        end_of_courses_status=snapshot.final_status,
+        final_status=final_status,
+    )
 
 
 def validate_official_catalog_annual_states(
@@ -866,6 +931,10 @@ class GeneralStatistics:
     departed_dated_students: int
     total_absences: int
     unmotivated_absences: int
+    promoted_students: int | None = None
+    corigent_students: int | None = None
+    repeat_students: int | None = None
+    deferred_students: int | None = None
 
 
 def extract_general_statistics(wb, students: Sequence[StudentIdentity], gest_by_rm: Mapping[str, Mapping]) -> GeneralStatistics:
@@ -928,10 +997,10 @@ def _draw_general_statistics(c: canvas.Canvas, stats: GeneralStatistics) -> None
         ("Din care nemotivate", stats.unmotivated_absences),
         ("Elevi veniți – evenimente ADAUGAT datate", stats.added_dated_students),
         ("Elevi plecați – evenimente TRANSFERAT/RETRAS datate", stats.departed_dated_students),
-        ("Promovați", None),
-        ("Corigenți", None),
-        ("Repetenți", None),
-        ("Amânați", None),
+        ("Promovați", stats.promoted_students),
+        ("Corigenți", stats.corigent_students),
+        ("Repetenți", stats.repeat_students),
+        ("Amânați", stats.deferred_students),
         ("Abandon școlar", None),
     )
     c.setFont(PDF_FONT, 7)
@@ -1449,7 +1518,24 @@ def generate_official_catalog_final(
             30,
             "Situația generală asupra mișcării și frecvenței elevilor și a rezultatelor obținute",
         )
-        general_stats = extract_general_statistics(wb, students, gest_by_rm)
+        base_stats = extract_general_statistics(wb, students, gest_by_rm)
+        final_counts = {"PROMOVAT": 0, "CORIGENT": 0, "REPETENT": 0, "AMANAT": 0}
+        for student in students:
+            final_counts[annual_states[student.rm_pg].final_status] += 1
+        general_stats = GeneralStatistics(
+            recorded_students=base_stats.recorded_students,
+            active_students=base_stats.active_students,
+            transferred_students=base_stats.transferred_students,
+            withdrawn_students=base_stats.withdrawn_students,
+            added_dated_students=base_stats.added_dated_students,
+            departed_dated_students=base_stats.departed_dated_students,
+            total_absences=base_stats.total_absences,
+            unmotivated_absences=base_stats.unmotivated_absences,
+            promoted_students=final_counts["PROMOVAT"],
+            corigent_students=final_counts["CORIGENT"],
+            repeat_students=final_counts["REPETENT"],
+            deferred_students=final_counts["AMANAT"],
+        )
         _draw_general_statistics(c, general_stats)
         c.showPage()
 
