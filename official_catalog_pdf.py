@@ -747,7 +747,7 @@ def _draw_students_grid(
     top, bottom = height - 72, 48
     rows = 35
     row_h = (top - bottom) / (rows + 2)
-    widths = (18, 36, 48, 112, 50, 100, 74, 74)
+    widths = (18, 34, 45, 100, 46, 90, 66, 66, 70)
     scale = (right - left) / sum(widths)
     cols = [left]
     for w in widths:
@@ -762,23 +762,20 @@ def _draw_students_grid(
         "Adresa elevului",
         "Nume și prenume mamă",
         "Nume și prenume tată",
+        "Observații",
     )
     c.setFont(PDF_FONT_BOLD, 4.1)
     for i, label in enumerate(headers):
         c.drawCentredString((cols[i] + cols[i + 1]) / 2, top - row_h + 4, label)
 
-    # Observațiile sunt rubrică distinctă sub tabel; aici se trec telefoanele părinților.
-    obs_h = row_h
-    grid_bottom = bottom + obs_h
     c.setLineWidth(0.35)
     for x in cols:
-        c.line(x, grid_bottom, x, top)
+        c.line(x, bottom, x, top)
     for r in range(rows + 2):
         y = top - r * row_h
         c.line(left, y, right, y)
 
     c.setFont(PDF_FONT, 3.9)
-    observations = []
     for idx in range(rows):
         y = top - (idx + 2) * row_h + 4
         c.drawCentredString((cols[0] + cols[1]) / 2, y, str(idx + 1))
@@ -803,13 +800,7 @@ def _draw_students_grid(
             _norm(p.get("telefon_mama")), _norm(p.get("telefon_tata"))
         ) if v)
         if phones:
-            observations.append(f"{idx + 1}: {phones}")
-
-    c.rect(left, bottom, right - left, obs_h)
-    c.setFont(PDF_FONT_BOLD, 4.2)
-    c.drawString(left + 2, bottom + obs_h - 6, "Observații (telefoane părinți):")
-    c.setFont(PDF_FONT, 3.7)
-    c.drawString(left + 82, bottom + obs_h - 6, "; ".join(observations)[:160])
+            c.drawString(cols[8] + 1, y, phones[:24])
 
 def _draw_marks_spread_placeholder(
     c: canvas.Canvas,
