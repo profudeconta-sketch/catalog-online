@@ -42,7 +42,9 @@ class PhotoImportSafetyTests(unittest.TestCase):
 
     def test_absence_roman_month_group(self):
         self.assertEqual(parse_absence_month_group("X: 1, 2, 5"),["01.10","02.10","05.10"])
-        self.assertEqual(parse_absence_month_group("X: 1 2 5"),["01.10","02.10","05.10"])\n        self.assertEqual(parse_absence_month_group("X: 1;2;5"),["01.10","02.10","05.10"])\n        self.assertEqual(parse_absence_month_group("X: 1.2.5"),["01.10","02.10","05.10"])
+        self.assertEqual(parse_absence_month_group("X: 1 2 5"),["01.10","02.10","05.10"])
+        self.assertEqual(parse_absence_month_group("X: 1;2;5"),["01.10","02.10","05.10"])
+        self.assertEqual(parse_absence_month_group("X: 1.2.5"),["01.10","02.10","05.10"])
         self.assertEqual(parse_absence_month_group(" IX : 30 "),["30.09"])
         self.assertEqual(parse_absence_month_group("XI: 3,7 12"),["03.11","07.11","12.11"])
 
