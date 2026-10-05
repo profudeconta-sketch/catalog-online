@@ -1295,6 +1295,7 @@ class CorigentSessionRecord:
     school_year: str
     student_key: str
     source_snapshot_sha256: str
+    upstream_audit_chain_sha256: tuple[str, ...]
     corigent_subjects: tuple[str, ...]
     corigent_results: tuple[AnnualFinalizationSubjectResult, ...]
     status: str
@@ -1410,7 +1411,16 @@ def build_corigent_session_record(
     corigent_subjects: Sequence[str],
     base_subject_annual_averages: Sequence[tuple[str, int]],
     corigent_results: Sequence[AnnualFinalizationSubjectResult],
+    upstream_audit_chain_sha256: Sequence[str] = (),
 ) -> CorigentSessionRecord:
+    upstream_chain = tuple(str(value).strip() for value in upstream_audit_chain_sha256)
+    if (
+        any(not _is_sha256_hex(value) for value in upstream_chain)
+        or len(set(upstream_chain)) != len(upstream_chain)
+    ):
+        raise AnnualClosureError(
+            "Lanțul SHA-256 anterior sesiunii de corigență este invalid sau duplicat."
+        )
     outcome = derive_corigent_session_outcome(
         source_snapshot=source_snapshot,
         corigent_subjects=corigent_subjects,
@@ -1433,6 +1443,7 @@ def build_corigent_session_record(
         school_year=source_snapshot.school_year,
         student_key=source_snapshot.student_key,
         source_snapshot_sha256=source_snapshot.integrity_sha256,
+        upstream_audit_chain_sha256=upstream_chain,
         corigent_subjects=normalized_subjects,
         corigent_results=tuple(corigent_results),
         status=outcome.status,
@@ -1544,5 +1555,9 @@ def derive_reexamination_finalization(
         final_status=final_status,
         final_general_average=general,
         finalized_on=finalized_on,
-        audit_chain_sha256=(corigent_session_record.integrity_sha256, approval.integrity_sha256,),
+        audit_chain_sha256=(
+            *corigent_session_record.upstream_audit_chain_sha256,
+            corigent_session_record.integrity_sha256,
+            approval.integrity_sha256,
+        ),
     )
