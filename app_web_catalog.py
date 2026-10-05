@@ -1880,7 +1880,7 @@ with tab_photo:
                 )
                 st.session_state["photo_import_comparison"] = comparison
                 st.session_state["photo_import_period"] = (str(import_start), str(import_end))
-                blocked = sum(1 for _, status, _ in comparison if status == "NECESITĂ_VERIFICARE")
+                blocked = sum(1 for _, status, _ in comparison if status == "NECESITĂ_VERIFICARE_UMANĂ")
                 if blocked:
                     st.warning(f"Analiza automată s-a încheiat. {blocked} caz(uri) au rămas nedemonstrate după a doua citire și sunt blocate.")
                 else:
@@ -1901,7 +1901,7 @@ with tab_photo:
                     if status == "NOU" and p.verifiable:
                         if st.checkbox(label, value=False, key=f"photo_approve_{i}"):
                             approved.append(item)
-                    elif status == "NECESITĂ_VERIFICARE":
+                    elif status == "NECESITĂ_VERIFICARE_UMANĂ":
                         st.error(label + " — BLOCAT LA SCRIERE. " + msg)
                     elif status == "DEJA_EXISTENT":
                         st.info(label + " — nu se dublează.")
