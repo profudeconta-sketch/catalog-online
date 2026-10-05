@@ -923,7 +923,7 @@ def _draw_labeled_line(c: canvas.Canvas, label: str, value: str, y: float, x: fl
 
 
 def _draw_admin_page(c: canvas.Canvas) -> None:
-    """Pagina 2, construită după geometria tipizatului oficial."""
+    """P3 – date administrative și profesori, pe geometria tipizatului oficial."""
     width, height = OFFICIAL_CATALOG_PAGE_SIZE
 
     c.setFont(PDF_FONT_BOLD, 23)
@@ -1007,7 +1007,13 @@ def _draw_admin_page(c: canvas.Canvas) -> None:
     for i, header in enumerate(headers):
         c.drawCentredString((col_x[i] + col_x[i + 1]) / 2, top - 15, header)
 
-    entries = list(PROFESSORS.items())
+    # Cele 20 de discipline active sunt tipărite explicit; rubricile fizice
+    # neutilizate din tipizat nu sunt transformate în discipline ale clasei.
+    entries = tuple(PROFESSORS.items())
+    if len(entries) != 20:
+        raise OfficialCatalogError("Tabelul profesorilor trebuie să conțină exact cele 20 de discipline active.")
+    if set(PROFESSORS) != set(OFFICIAL_SUBJECT_NAMES.values()):
+        raise OfficialCatalogError("Tabelul profesorilor nu corespunde exact disciplinelor active ale clasei.")
     c.setFont(PDF_FONT, 5.5)
     for row in range(10):
         y = top - header_h - (row + 0.67) * row_h
