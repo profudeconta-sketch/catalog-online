@@ -2301,10 +2301,12 @@ def generate_official_catalog_current(
     excel_path: str,
     gest_data: Sequence[Mapping],
 ) -> bytes:
-    """Generează P1-P32 la zi, strict read-only, fără a inventa situații anuale."""
+    """Generează P1-P32 la zi fără scrieri și fără a inventa situații anuale."""
     _register_unicode_fonts()
     _validate_physical_source_mapping()
-    wb = openpyxl.load_workbook(excel_path, data_only=True, read_only=True)
+    # Modul normal de citire evită costul foarte mare al accesului aleator repetat
+    # prin worksheet.cell() din read_only=True. Workbook-ul nu este niciodată salvat.
+    wb = openpyxl.load_workbook(excel_path, data_only=True, read_only=False)
     try:
         students = validate_and_resolve_students(wb, gest_data)
         gest_by_rm = _gest_by_identity(gest_data, students)
