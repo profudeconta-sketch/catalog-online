@@ -1802,31 +1802,29 @@ def _draw_v6_data_overlay(
                 continue
             x0, x1 = edges[j], edges[j + 1]
             pair_w = x1 - x0
-            abs_x = x0 + pair_w * 0.25
-            note_x = x0 + pair_w * 0.75
-            ox, oy = out(note_x, body_bottom + 2.0)
-            c.saveState(); c.translate(ox, oy); c.rotate(90); c.setFont(PDF_FONT, 4.9)
-            cursor = 0.0
+            abs_left = x0 + 1.5
+            note_left = x0 + pair_w * 0.50 + 1.5
+            # În tipizat, textul din ambele subcoloane se citește normal:
+            # stânga -> dreapta, iar înregistrările se succed de sus în jos.
+            grade_y = body_top - 15.0
+            c.setFont(PDF_FONT, 4.9)
             for entry in subject.grades:
                 txt = format_catalog_grade(entry)
-                c.drawString(cursor, 0, txt)
-                cursor += pdfmetrics.stringWidth(txt, PDF_FONT, 4.9) + 2.8
-            c.restoreState()
+                ox, oy = out(note_left, grade_y)
+                c.drawString(ox, oy, txt)
+                grade_y -= 10.0
 
             by_month: dict[int, list[AbsenceEntry]] = {}
             for entry in subject.absences:
                 by_month.setdefault(entry.date.month, []).append(entry)
-            ox, oy = out(abs_x, body_bottom + 2.0)
-            c.saveState(); c.translate(ox, oy); c.rotate(90)
-            cursor = 0.0
+            absence_y = body_top - 15.0
             for month in sorted(by_month):
-                if cursor:
-                    cursor += 2.8
-                cursor = draw_catalog_absence_line(
+                ox, oy = out(abs_left, absence_y)
+                draw_catalog_absence_line(
                     c, sorted(by_month[month], key=lambda item: item.date.day),
-                    cursor, 0, font_size=4.9,
+                    ox, oy, font_size=4.9,
                 )
-            c.restoreState()
+                absence_y -= 10.0
 
             print_state = annual_state.subject_print_state(subject.source_key, subject.average)
             row_values = (
