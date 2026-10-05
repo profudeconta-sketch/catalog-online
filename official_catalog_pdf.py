@@ -1150,7 +1150,7 @@ def _draw_marks_spread_placeholder(
     width, height = A4
     left, right = 18, width - 16
     top, bottom = height - 47, 47
-    header_h = 48
+    header_h = 108
     gap = 5
     usable_h = top - bottom - header_h - 2 * gap
     block_h = usable_h / 3
@@ -1227,14 +1227,23 @@ def _draw_marks_spread_placeholder(
         c.rect(grid_left, top - header_h, right - grid_left, header_h)
         c.setFont(PDF_FONT_BOLD, 7.8)
         c.drawRightString(right - 4, top - 10, "DISCIPLINELE/MODULELE***  DE")
-        c.line(grid_left, top - 27, right, top - 27)
-        for j in range(len(slots)):
+        subject_header_bottom = top - header_h + 18
+        c.line(grid_left, subject_header_bottom, right, subject_header_bottom)
+        for j, slot in enumerate(slots):
             gx = grid_left + j * pair_w
-            c.line(gx, top - header_h, gx, top - 27)
-            c.line(gx + pair_w / 2, top - header_h, gx + pair_w / 2, top - 27)
+            c.line(gx, top - header_h, gx, top)
+            c.line(gx + pair_w / 2, top - header_h, gx + pair_w / 2, subject_header_bottom)
+            if slot:
+                c.saveState()
+                c.translate(gx + pair_w / 2 + 1.2, subject_header_bottom + 4)
+                c.rotate(90)
+                size = _fit_text(c, slot, header_h - 34, PDF_FONT_BOLD, 4.4, 2.7)
+                c.setFont(PDF_FONT_BOLD, size)
+                c.drawString(0, 0, slot)
+                c.restoreState()
             c.setFont(PDF_FONT, 2.8)
-            c.drawCentredString(gx + pair_w * .25, top - 38, "Absențe")
-            c.drawCentredString(gx + pair_w * .75, top - 38, "Note")
+            c.drawCentredString(gx + pair_w * .25, top - header_h + 6, "Absențe")
+            c.drawCentredString(gx + pair_w * .75, top - header_h + 6, "Note")
         c.line(right, top - header_h, right, top - 27)
     else:
         slots = CATALOG_P4_SLOTS
@@ -1247,14 +1256,23 @@ def _draw_marks_spread_placeholder(
         c.drawString(left + 16, top - 10, "ÎNVĂȚĂMÂNT")
         c.setFont(PDF_FONT_BOLD, 5.0)
         c.drawCentredString(grid_right + terminal_w * .72, top - 10, "ABSENȚE")
-        c.line(left, top - 25, grid_right, top - 27)
-        for j in range(len(slots)):
+        subject_header_bottom = top - header_h + 18
+        c.line(left, subject_header_bottom, grid_right, subject_header_bottom)
+        for j, slot in enumerate(slots):
             gx = left + j * pair_w
-            c.line(gx, top - header_h, gx, top - 27)
-            c.line(gx + pair_w / 2, top - header_h, gx + pair_w / 2, top - 27)
+            c.line(gx, top - header_h, gx, top)
+            c.line(gx + pair_w / 2, top - header_h, gx + pair_w / 2, subject_header_bottom)
+            if slot:
+                c.saveState()
+                c.translate(gx + pair_w / 2 + 1.2, subject_header_bottom + 4)
+                c.rotate(90)
+                size = _fit_text(c, slot, header_h - 34, PDF_FONT_BOLD, 4.4, 2.7)
+                c.setFont(PDF_FONT_BOLD, size)
+                c.drawString(0, 0, slot)
+                c.restoreState()
             c.setFont(PDF_FONT, 2.8)
-            c.drawCentredString(gx + pair_w * .25, top - 38, "Absențe")
-            c.drawCentredString(gx + pair_w * .75, top - 38, "Note")
+            c.drawCentredString(gx + pair_w * .25, top - header_h + 6, "Absențe")
+            c.drawCentredString(gx + pair_w * .75, top - header_h + 6, "Note")
         c.line(grid_right, top - header_h, grid_right, top)
 
     for idx in range(3):
@@ -1320,13 +1338,6 @@ def _draw_marks_spread_placeholder(
                 # Separarea Absențe/Note aparține numai corpului de înregistrare.
                 # Zona mediilor rămâne o singură celulă pe lățimea disciplinei.
                 c.line(gx + pair_w / 2, y_bottom + mean_h, gx + pair_w / 2, y_top)
-                if slot:
-                    c.saveState()
-                    c.translate(gx + pair_w * .55, y_bottom + mean_h + 5)
-                    c.rotate(90)
-                    c.setFont(PDF_FONT, 3.0)
-                    c.drawString(0, 0, slot)
-                    c.restoreState()
             c.line(right, y_bottom, right, y_top)
             draw_recording_body(
                 student,
@@ -1386,13 +1397,6 @@ def _draw_marks_spread_placeholder(
                 # Separarea Absențe/Note aparține numai corpului de înregistrare.
                 # Zona mediilor rămâne o singură celulă pe lățimea disciplinei.
                 c.line(gx + pair_w / 2, y_bottom + mean_h, gx + pair_w / 2, y_top)
-                if slot:
-                    c.saveState()
-                    c.translate(gx + pair_w * .55, y_bottom + mean_h + 5)
-                    c.rotate(90)
-                    c.setFont(PDF_FONT, 2.9)
-                    c.drawString(0, 0, slot)
-                    c.restoreState()
             c.line(grid_right, y_bottom, grid_right, y_top)
             draw_recording_body(
                 student,
