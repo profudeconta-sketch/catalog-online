@@ -342,10 +342,23 @@ def build_annual_closure_snapshot(
     key = str(student_key).strip()
     if not key:
         raise AnnualClosureError("Snapshotul anual necesită identificatorul stabil al elevului.")
-    if not preview.ready_for_final_closure:
+    # Snapshotul de sfârșit de cursuri este o captură auditabilă, nu înseamnă
+    # automat situație școlară definitivă. AMÂNAT trebuie să poată fi capturat
+    # pentru a ancora criptografic etapele ulterioare.
+    if not preview.ready_for_final_closure and preview.final_status != "AMÂNAT":
         raise AnnualClosureError(
             "Snapshotul anual nu poate fi construit cât timp există blocaje de închidere."
         )
+    if preview.final_status == "AMÂNAT":
+        non_deferred_blockers = tuple(
+            blocker for blocker in preview.readiness_blockers
+            if "AMÂNAT" not in blocker
+        )
+        if non_deferred_blockers:
+            raise AnnualClosureError(
+                "Snapshotul AMÂNAT nu poate fi construit cât timp există și alte "
+                "blocaje de validare: " + " | ".join(non_deferred_blockers)
+            )
     if len(interval_conduct_grades) != len(CLJ_2026_2027_COURSE_INTERVALS):
         raise AnnualClosureError("Snapshotul necesită toate cele 5 note la purtare.")
     conduct_grades = tuple(
