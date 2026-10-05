@@ -2145,17 +2145,21 @@ def _draw_official_personal_data_overlay(
     c.drawString(523.0, h - 1138.0, "16")
 
 
-def _draw_official_statistics_overlay(c: canvas.Canvas, stats: GeneralStatistics) -> None:
+def _draw_official_statistics_overlay(
+    c: canvas.Canvas,
+    stats: GeneralStatistics,
+    corigent_one_subject: int,
+    corigent_two_subjects: int,
+) -> None:
     """Valorile anuale peste tabelul statistic oficial; rubricile fara sursa raman goale."""
     h = OFFICIAL_CATALOG_PAGE_SIZE[1]
     x = 439.5
 
     # Coordonatele urmeaza exact sub-randurile tipizatului oficial.
-    # Pentru corigenti nu inventam repartizarea pe una/doua discipline:
-    # daca totalul este zero, ambele sub-randuri pot fi completate sigur cu 0;
-    # altfel totalul se inscrie pe primul sub-rand numai ca valoare agregata.
-    corigent_first = stats.corigent_students
-    corigent_second = 0 if stats.corigent_students == 0 else None
+    # Corigentii sunt repartizati numai din mediile anuale validate: o disciplina
+    # sau doua discipline. Generatorul nu deduce aceasta repartizare din total.
+    if corigent_one_subject + corigent_two_subjects != (stats.corigent_students or 0):
+        raise OfficialCatalogError("Repartizarea corigentilor nu corespunde totalului validat.")
 
     # La amanati, totalul are propriul rand. Cauza (medical/abandon/alte situatii)
     # nu este dedusa de generator. Sub-randurile pot primi 0 numai cand totalul este 0.
@@ -2166,8 +2170,8 @@ def _draw_official_statistics_overlay(c: canvas.Canvas, stats: GeneralStatistics
         (269.0, stats.departed_dated_students),
         (306.0, stats.active_students),
         (343.0, stats.promoted_students),
-        (375.0, corigent_first),
-        (404.0, corigent_second),
+        (375.0, corigent_one_subject),
+        (404.0, corigent_two_subjects),
         (455.0, stats.repeat_students),
         (514.0, deferred_detail),
         (562.0, deferred_detail),
@@ -2255,6 +2259,27 @@ def generate_official_catalog_final(
             if status not in final_counts:
                 raise OfficialCatalogError(f"Situatie finala necunoscuta: {status!r}.")
             final_counts[status] += 1
+        corigent_one_subject = 0
+        corigent_two_subjects = 0
+        for student in students:
+            state = annual_states[student.rm_pg]
+            if state.final_status != "CORIGENT":
+                continue
+            failed_subjects = sum(
+                1
+                for _subject, average in state.subject_annual_averages
+                if int(average) < 5
+            )
+            if failed_subjects == 1:
+                corigent_one_subject += 1
+            elif failed_subjects == 2:
+                corigent_two_subjects += 1
+            else:
+                raise OfficialCatalogError(
+                    f"Elevul {student.rm_pg!r} este CORIGENT, dar are {failed_subjects} "
+                    "discipline cu medie anuala sub 5."
+                )
+
         general_stats = GeneralStatistics(
             recorded_students=base_stats.recorded_students,
             active_students=base_stats.active_students,
@@ -2287,7 +2312,9 @@ def generate_official_catalog_final(
             p31 = merge_official_page_with_overlay(
                 5,
                 _build_official_overlay(
-                    lambda c: _draw_official_statistics_overlay(c, general_stats)
+                    lambda c: _draw_official_statistics_overlay(
+                        c, general_stats, corigent_one_subject, corigent_two_subjects
+                    )
                 ),
             )
             p32 = merge_official_page_with_overlay(
