@@ -964,3 +964,130 @@ def build_annual_deferred_situation_record(
         deferred_subjects=tuple(normalized),
     )
     return seal_annual_deferred_situation_record(record)
+
+
+@dataclass(frozen=True)
+class DeferredResolution:
+    """Rezultatul pur al încheierii situației unui elev AMÂNAT."""
+    status: str
+    subject_annual_averages: tuple[tuple[str, int], ...]
+    general_average: Decimal | None
+
+
+def derive_deferred_resolution(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    deferred_record: AnnualDeferredSituationRecord,
+    subject_results: Sequence[AnnualFinalizationSubjectResult],
+) -> DeferredResolution:
+    """Derivă situația după examenele de încheiere, fără persistență.
+
+    Dacă rămân una sau două discipline sub 5, rezultatul este CORIGENT și nu se
+    emite încă AnnualFinalizationRecord, deoarece situația anuală nu este definitivă.
+    """
+    if not verify_annual_closure_snapshot(source_snapshot):
+        raise AnnualClosureError("Snapshotul sursă nu trece verificarea SHA-256.")
+    if source_snapshot.final_status != "AMANAT":
+        raise AnnualClosureError("Funcția este permisă numai pentru un snapshot AMÂNAT.")
+    if not verify_annual_deferred_situation_record(deferred_record):
+        raise AnnualClosureError("Anexa AMÂNAT nu trece verificarea SHA-256.")
+    if deferred_record.source_snapshot_sha256 != source_snapshot.integrity_sha256:
+        raise AnnualClosureError("Anexa AMÂNAT nu aparține snapshotului furnizat.")
+    if (
+        deferred_record.student_key != source_snapshot.student_key
+        or deferred_record.school_year != source_snapshot.school_year
+    ):
+        raise AnnualClosureError("Identitatea anexei AMÂNAT nu corespunde snapshotului.")
+
+    source_subjects = {}
+    for row in source_snapshot.subjects:
+        if len(row) != 5:
+            raise AnnualClosureError("Structura disciplinelor din snapshot este invalidă.")
+        name = str(row[0]).strip()
+        if not name or name in source_subjects:
+            raise AnnualClosureError("Snapshotul conține discipline invalide sau duplicate.")
+        source_subjects[name] = int(row[2])
+
+    required = {item.subject_name for item in deferred_record.deferred_subjects}
+    replacements = {}
+    for item in subject_results:
+        name = str(item.subject_name).strip()
+        if item.source_status != "AMANAT":
+            raise AnnualClosureError(f"{name}: rezultatul nu are starea sursă AMANAT.")
+        if item.result_type != "INCHEIERE_SITUATIE":
+            raise AnnualClosureError(
+                f"{name}: pentru etapa AMÂNAT este permis numai INCHEIERE_SITUATIE."
+            )
+        if name not in required:
+            raise AnnualClosureError(
+                f"{name}: disciplina nu este declarată neîncheiată în anexa AMÂNAT."
+            )
+        if name in replacements:
+            raise AnnualClosureError(f"{name}: rezultat ulterior duplicat.")
+        if not isinstance(item.resulting_annual_average, int) or isinstance(
+            item.resulting_annual_average, bool
+        ) or not 1 <= item.resulting_annual_average <= 10:
+            raise AnnualClosureError(
+                f"{name}: media anuală rezultată trebuie să fie un întreg între 1 și 10."
+            )
+        replacements[name] = item.resulting_annual_average
+
+    missing = sorted(required.difference(replacements))
+    if missing:
+        raise AnnualClosureError(
+            "Situația AMÂNAT nu poate fi încheiată; lipsesc rezultatele pentru: "
+            + ", ".join(missing)
+            + "."
+        )
+
+    final_averages = dict(source_subjects)
+    final_averages.update(replacements)
+    failed = sorted(name for name, average in final_averages.items() if average < 5)
+    conduct = Decimal(str(source_snapshot.conduct_annual_average))
+
+    if conduct < Decimal("6") or len(failed) > 2:
+        status = "REPETENT"
+        general = None
+    elif failed:
+        status = "CORIGENT"
+        general = None
+    else:
+        status = "PROMOVAT"
+        values = [Decimal(value) for value in final_averages.values()]
+        values.append(conduct)
+        general = (
+            sum(values, Decimal("0")) / Decimal(len(values))
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    return DeferredResolution(
+        status=status,
+        subject_annual_averages=tuple(sorted(final_averages.items())),
+        general_average=general,
+    )
+
+
+def derive_deferred_finalization(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    deferred_record: AnnualDeferredSituationRecord,
+    subject_results: Sequence[AnnualFinalizationSubjectResult],
+    finalized_on: date,
+) -> AnnualFinalizationRecord:
+    """Emite act definitiv numai dacă etapa AMÂNAT nu conduce la CORIGENT."""
+    resolution = derive_deferred_resolution(
+        source_snapshot=source_snapshot,
+        deferred_record=deferred_record,
+        subject_results=subject_results,
+    )
+    if resolution.status == "CORIGENT":
+        raise AnnualClosureError(
+            "Elevul AMÂNAT a rămas cu una sau două discipline sub 5 și devine CORIGENT; "
+            "situația nu este încă definitivă și necesită etapa de corigență."
+        )
+    return build_annual_finalization_record(
+        source_snapshot=source_snapshot,
+        subject_results=tuple(subject_results),
+        final_status=resolution.status,
+        final_general_average=resolution.general_average,
+        finalized_on=finalized_on,
+    )
