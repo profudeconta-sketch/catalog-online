@@ -45,8 +45,8 @@ from leave_pass_storage import (
 from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
     PhotoImportError, ImportProposal, safe_zip_images, pair_catalog_images,
-    analyze_pair_with_vision, recover_uncertain_proposals,
     compare_with_workbook, apply_confirmed_import,
+
 )
 
 
@@ -1785,26 +1785,20 @@ tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7, tab8, tab9, tab_photo = st.ta
 
 elev_options = [f"{e[0]}. {e[1]} (Matr. {e[3]})" for e in ELEVI]
 
-# --- IMPORT FOTO CATALOG FIZIC ---
+# --- IMPORT FOTO CATALOG FIZIC (FĂRĂ AI EXTERN) ---
 with tab_photo:
-    st.subheader("📷 Import note și absențe din catalogul fizic")
+    st.subheader("📷 Import note și absențe din catalogul fizic — fără AI")
     st.caption(
-        "Flux protejat: fotografii → analiză → comparație → confirmare → backup → scriere. "
-        "Nicio valoare nu este salvată înainte de confirmarea explicită."
+        "Fotografiile sunt validate și afișate local. Datele sunt transcrise numai după verificare vizuală directă, "
+        "apoi sunt comparate automat cu Excelul. Nicio valoare nu este salvată înainte de confirmarea explicită."
     )
     c1, c2 = st.columns(2)
     with c1:
-        import_start = st.date_input(
-            "Prima zi inclusă", value=datetime.date(2026, 9, 30),
-            min_value=datetime.date(2026, 9, 1), max_value=datetime.date(2027, 8, 31),
-            key="photo_import_start"
-        )
+        import_start = st.date_input("Prima zi inclusă", value=datetime.date(2026, 9, 30),
+            min_value=datetime.date(2026, 9, 1), max_value=datetime.date(2027, 8, 31), key="photo_import_start")
     with c2:
-        import_end = st.date_input(
-            "Ultima zi inclusă", value=datetime.date(2026, 10, 2),
-            min_value=datetime.date(2026, 9, 1), max_value=datetime.date(2027, 8, 31),
-            key="photo_import_end"
-        )
+        import_end = st.date_input("Ultima zi inclusă", value=datetime.date(2026, 10, 2),
+            min_value=datetime.date(2026, 9, 1), max_value=datetime.date(2027, 8, 31), key="photo_import_end")
     if import_start > import_end:
         st.error("Perioada este invalidă: prima zi este după ultima zi.")
     elif (import_end - import_start).days > 6:
@@ -1814,34 +1808,32 @@ with tab_photo:
         "Încarcă arhiva ZIP cu fotografiile în ordine: copertă (opțional), apoi stânga/dreapta pentru fiecare 3 elevi",
         type=["zip"], key="photo_catalog_zip"
     )
-
     if photo_zip is not None and import_start <= import_end:
-        has_cover = st.checkbox(
-            "Prima fotografie este coperta catalogului",
-            value=True,
-            help="Bifează numai dacă prima imagine nu este o pagină stânga/dreapta cu elevi."
-        )
+        has_cover = st.checkbox("Prima fotografie este coperta catalogului", value=True)
         try:
             images = safe_zip_images(photo_zip.getvalue())
             pairs = pair_catalog_images(images, skip_cover=has_cover)
             expected_pairs = (len(ELEVI) + 2) // 3
             if len(pairs) != expected_pairs:
                 raise PhotoImportError(
-                    f"Structură incompletă sau excedentară: au fost găsite {len(pairs)} perechi "
-                    f"pentru {len(ELEVI)} elevi, dar clasa necesită exact {expected_pairs}. "
-                    "Analiza și orice scriere sunt blocate până la încărcarea arhivei complete."
+                    f"Structură incompletă sau excedentară: {len(pairs)} perechi pentru {len(ELEVI)} elevi; "
+                    f"sunt necesare exact {expected_pairs}. Orice scriere este blocată."
                 )
-            st.success(f"Structură validată: {len(images)} fotografii, {len(pairs)} perechi stânga/dreapta.")
+            st.success(f"Structură validată local: {len(images)} fotografii, {len(pairs)} perechi. Nu se apelează niciun serviciu AI.")
             import_flash = st.session_state.pop("photo_import_success_flash", None)
             if import_flash:
                 st.success(import_flash)
 
-            zoom = st.slider("Zoom pentru verificarea scrisului olograf", 100, 250, 150, 25, key="photo_zoom")
-            pair_no = st.selectbox(
-                "Pereche pentru verificare vizuală", range(len(pairs)),
-                format_func=lambda i: f"Perechea {i+1}: elevii {i*3+1}–{min(i*3+3, len(ELEVI))}",
-                key="photo_pair_preview"
-            )
+            archive_id = __import__("hashlib").sha256(photo_zip.getvalue()).hexdigest()
+            run_key = (archive_id, str(import_start), str(import_end), bool(has_cover), "manual-v1")
+            if st.session_state.get("photo_manual_run_key") != run_key:
+                st.session_state["photo_manual_run_key"] = run_key
+                st.session_state["photo_manual_proposals"] = []
+                st.session_state.pop("photo_import_comparison", None)
+
+            zoom = st.slider("Zoom pentru verificarea scrisului olograf", 100, 250, 175, 25, key="photo_zoom")
+            pair_no = st.selectbox("Pereche pentru verificare vizuală", range(len(pairs)),
+                format_func=lambda i: f"Perechea {i+1}: elevii {i*3+1}–{min(i*3+3, len(ELEVI))}", key="photo_pair_preview")
             left, right = pairs[pair_no]
             pc1, pc2 = st.columns(2)
             with pc1:
@@ -1851,70 +1843,70 @@ with tab_photo:
                 st.caption(f"Dreapta — {right[0]}")
                 st.image(right[1], width=int(420 * zoom / 100))
 
-            if st.button("🔎 Analizează fotografiile pentru perioada selectată", type="primary", key="photo_analyze"):
-                allowed = [name for name, _ in DISCIPLINE_CG] + [name for name, _ in MODULE_TH]
-                archive_id = __import__("hashlib").sha256(photo_zip.getvalue()).hexdigest()
-                run_key = (archive_id, str(import_start), str(import_end), bool(has_cover))
-                if st.session_state.get("photo_import_run_key") != run_key:
-                    st.session_state["photo_import_run_key"] = run_key
-                    st.session_state["photo_import_pair_results"] = {}
-                    st.session_state.pop("photo_import_comparison", None)
-                pair_results = st.session_state.setdefault("photo_import_pair_results", {})
-                all_proposals = []
-                progress = st.progress(0.0, text="Analizez perechile fără a modifica Excelul...")
-                for pair_idx, (left_img, right_img) in enumerate(pairs):
-                    start_idx = pair_idx * 3
-                    if start_idx >= len(ELEVI):
-                        break
-                    names = [ELEVI[i][1] for i in range(start_idx, min(start_idx + 3, len(ELEVI)))]
-                    if pair_idx in pair_results:
-                        local = pair_results[pair_idx]
-                        progress.progress((pair_idx + 1) / len(pairs), text=f"Reutilizez perechea {pair_idx+1}/{len(pairs)} deja verificată...")
-                        for p in local:
-                            all_proposals.append(ImportProposal(
-                                student_index=start_idx + p.student_index,
-                                category=p.category, subject=p.subject, kind=p.kind,
-                                value=p.value, date=p.date, motivated=p.motivated,
-                                confidence=p.confidence, source_image=p.source_image,
-                                verifiable=p.verifiable, verification_reason=p.verification_reason,
-                            ))
-                        continue
-                    progress.progress(pair_idx / len(pairs), text=f"Analizez perechea {pair_idx+1}/{len(pairs)}...")
-                    local = analyze_pair_with_vision(
-                        left_img, right_img, names, import_start, import_end, allowed
-                    )
-                    # A doua citire independentă verifică acoperirea completă a paginilor;
-                    # o a treia citire focalizată rulează automat doar pentru cazurile fără consens.
-                    local = recover_uncertain_proposals(
-                        left_img, right_img, names, import_start, import_end, allowed, local
-                    )
-                    pair_results[pair_idx] = local
-                    st.session_state["photo_import_pair_results"] = pair_results
-                    for p in local:
-                        all_proposals.append(ImportProposal(
-                            student_index=start_idx + p.student_index,
-                            category=p.category, subject=p.subject, kind=p.kind,
-                            value=p.value, date=p.date, motivated=p.motivated,
-                            confidence=p.confidence, source_image=p.source_image,
-                            verifiable=p.verifiable, verification_reason=p.verification_reason,
-                        ))
-                    progress.progress((pair_idx + 1) / len(pairs))
-                if len(pair_results) != len(pairs):
-                    raise PhotoImportError(
-                        f"Analiza este incompletă: {len(pair_results)}/{len(pairs)} perechi finalizate. "
-                        "Rezultatele finalizate sunt păstrate; apasă din nou Analizează pentru reluare."
-                    )
-                comparison = compare_with_workbook(
-                    selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
-                    resolve_student_row, all_proposals
-                )
-                st.session_state["photo_import_comparison"] = comparison
-                st.session_state["photo_import_period"] = (str(import_start), str(import_end))
-                blocked = sum(1 for _, status, _ in comparison if status == "NECESITĂ_VERIFICARE_UMANĂ")
-                if blocked:
-                    st.warning(f"Analiza automată s-a încheiat. {blocked} caz(uri) au rămas nedemonstrate după a doua citire și sunt blocate.")
+            st.markdown("#### Transcriere verificată din fotografia afișată")
+            start_idx = pair_no * 3
+            student_indices = list(range(start_idx, min(start_idx + 3, len(ELEVI))))
+            fc1, fc2 = st.columns(2)
+            with fc1:
+                student_idx = st.selectbox("Elev", student_indices,
+                    format_func=lambda i: ELEVI[i][1], key="photo_manual_student")
+                category = st.selectbox("Categorie", ["Cultură Generală", "Module Tehnologice"], key="photo_manual_category")
+                subject_items = DISCIPLINE_CG if category == "Cultură Generală" else MODULE_TH
+                subject = st.selectbox("Disciplina / modulul", [x[0] for x in subject_items], key="photo_manual_subject")
+            with fc2:
+                kind_label = st.selectbox("Tip înregistrare", ["Absență", "Notă"], key="photo_manual_kind")
+                record_date = st.date_input("Data demonstrabilă din rubrică", value=import_start,
+                    min_value=import_start, max_value=import_end, key="photo_manual_date")
+                if kind_label == "Notă":
+                    grade_value = st.selectbox("Nota", list(range(1, 11)), index=9, key="photo_manual_grade")
+                    motivated = False
                 else:
-                    st.success("Analiza automată s-a încheiat fără cazuri care necesită verificare umană.")
+                    grade_value = ""
+                    motivated = st.checkbox("Absența este marcată ca motivată în fotografia catalogului", key="photo_manual_motivated")
+
+            direct_check = st.checkbox(
+                "Confirm că am verificat direct fotografia afișată și că elevul, disciplina, valoarea/starea și data sunt lizibile fără presupuneri.",
+                key="photo_manual_direct_check"
+            )
+            if st.button("➕ Adaugă în lista de verificare", disabled=not direct_check, key="photo_manual_add"):
+                proposal = ImportProposal(
+                    student_index=student_idx, category=category, subject=subject,
+                    kind="grade" if kind_label == "Notă" else "absence",
+                    value=str(grade_value) if kind_label == "Notă" else "",
+                    date=record_date.strftime("%d.%m"), motivated=motivated,
+                    confidence=1.0, source_image=f"manual:{archive_id[:12]}:pair-{pair_no+1}",
+                    verifiable=True,
+                    verification_reason="Transcriere confirmată direct de operator din fotografia afișată."
+                )
+                current = list(st.session_state.get("photo_manual_proposals", []))
+                semantic = (proposal.student_index, proposal.category, proposal.subject, proposal.kind,
+                            proposal.value, proposal.date, proposal.motivated)
+                if any((p.student_index,p.category,p.subject,p.kind,p.value,p.date,p.motivated)==semantic for p in current):
+                    st.info("Aceeași transcriere este deja în lista de verificare; nu a fost duplicată.")
+                else:
+                    current.append(proposal)
+                    st.session_state["photo_manual_proposals"] = current
+                    st.session_state.pop("photo_import_comparison", None)
+                    st.success("Înregistrarea a fost adăugată numai în lista temporară; Excelul nu a fost modificat.")
+
+            proposals = st.session_state.get("photo_manual_proposals", [])
+            if proposals:
+                st.markdown("#### Lista temporară")
+                remove_index = st.selectbox("Înregistrare de eliminat (opțional)", [-1] + list(range(len(proposals))),
+                    format_func=lambda i: "— nu elimina —" if i == -1 else
+                    f"{i+1}. {ELEVI[proposals[i].student_index][1]} — {proposals[i].subject} — {proposals[i].date}",
+                    key="photo_manual_remove")
+                if st.button("🗑️ Elimină din lista temporară", disabled=remove_index < 0, key="photo_manual_remove_btn"):
+                    current = list(proposals); current.pop(remove_index)
+                    st.session_state["photo_manual_proposals"] = current
+                    st.session_state.pop("photo_import_comparison", None)
+                    st.rerun()
+
+                if st.button("🔎 Compară lista cu catalogul electronic", type="primary", key="photo_manual_compare"):
+                    comparison = compare_with_workbook(selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
+                        resolve_student_row, proposals)
+                    st.session_state["photo_import_comparison"] = comparison
+                    st.session_state["photo_import_period"] = (str(import_start), str(import_end))
 
             comparison = st.session_state.get("photo_import_comparison")
             if comparison:
@@ -1924,57 +1916,44 @@ with tab_photo:
                     p, status, msg = item
                     elev_name = ELEVI[p.student_index][1]
                     value_text = f"nota {p.value}" if p.kind == "grade" else ("absență motivată" if p.motivated else "absență")
-                    label = (
-                        f"{status} — {elev_name} — {p.subject} — {value_text} — "
-                        f"{p.date} — încredere {p.confidence:.0%}"
-                    )
+                    label = f"{status} — {elev_name} — {p.subject} — {value_text} — {p.date}"
                     if status == "NOU" and p.verifiable:
                         if st.checkbox(label, value=False, key=f"photo_approve_{i}"):
                             approved.append(item)
-                    elif status == "NECESITĂ_VERIFICARE_UMANĂ":
-                        st.error(label + " — BLOCAT LA SCRIERE. " + msg)
                     elif status == "DEJA_EXISTENT":
                         st.info(label + " — nu se dublează.")
+                    elif status == "NECESITĂ_VERIFICARE_UMANĂ":
+                        st.error(label + " — BLOCAT LA SCRIERE. " + msg)
                     else:
                         st.warning(label + " — " + msg)
 
-                st.warning(
-                    "Butonul de mai jos este singurul pas care poate modifica Excelul. "
-                    "Se creează backup înainte de scriere și se reverifică datele."
-                )
+                st.warning("Numai înregistrările NOI bifate pot fi scrise. La salvare se creează backup și se reverifică anti-duplicarea.")
                 if st.button("✅ Confirmă și actualizează catalogul", disabled=not approved, key="photo_apply"):
-                    changed, backup = apply_confirmed_import(
-                        selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
-                        resolve_student_row, approved
-                    )
+                    changed, backup = apply_confirmed_import(selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
+                        resolve_student_row, approved)
                     if changed:
                         if not update_excel_computed_values(selected_file):
-                            if backup and os.path.exists(backup):
-                                shutil.copy2(backup, selected_file)
+                            if backup and os.path.exists(backup): shutil.copy2(backup, selected_file)
                             raise PhotoImportError("Recalcularea post-import a eșuat; backup-ul a fost restaurat.")
-                        # Reverificare fail-closed: după scriere, aceleași propuneri trebuie să fie deja existente.
-                        post = compare_with_workbook(
-                            selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
-                            resolve_student_row, [x[0] for x in approved]
-                        )
+                        post = compare_with_workbook(selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
+                            resolve_student_row, [x[0] for x in approved])
                         if any(status != "DEJA_EXISTENT" for _, status, _ in post):
-                            if backup and os.path.exists(backup):
-                                shutil.copy2(backup, selected_file)
+                            if backup and os.path.exists(backup): shutil.copy2(backup, selected_file)
                             raise PhotoImportError("Verificarea post-scriere a eșuat; backup-ul a fost restaurat.")
                         if not push_to_github(selected_file):
-                            if backup and os.path.exists(backup):
-                                shutil.copy2(backup, selected_file)
+                            if backup and os.path.exists(backup): shutil.copy2(backup, selected_file)
                             raise PhotoImportError("Sincronizarea privată nu a fost confirmată; backup-ul local a fost restaurat.")
                         st.session_state.pop("photo_import_comparison", None)
+                        st.session_state["photo_manual_proposals"] = []
                         st.session_state["photo_import_success_flash"] = (
-                            f"Import finalizat cu succes: {changed} înregistrări noi. "
-                            "Backup-ul a fost creat, catalogul a fost recalculat, "
-                            "verificarea post-import a confirmat înregistrările ca DEJA_EXISTENT, "
-                            "iar copia privată a fost sincronizată. Suprapunerile nu au fost duplicate."
+                            f"Import finalizat cu succes: {changed} înregistrări noi. Backup creat, catalog recalculat, "
+                            "verificare post-import trecută și copie privată sincronizată. Suprapunerile nu au fost duplicate."
                         )
                         st.rerun()
                     else:
                         st.info("Nu a fost necesară nicio modificare.")
+            elif not proposals:
+                st.info("Nu există încă înregistrări în lista temporară. Excelul nu este modificat.")
         except PhotoImportError as ex:
             st.error(str(ex))
         except Exception as ex:
