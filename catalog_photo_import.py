@@ -191,8 +191,12 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
     def read_pass(pass_no, targets, complete=False):
         scope=("o citire COMPLETĂ a ambelor pagini, inclusiv înscrieri omise anterior"
                if complete else "o reverificare focalizată a candidaților nerezolvați")
+        target_hint="" if complete else (
+          "Reverifică numai aceste poziții structurale, FĂRĂ a primi valoarea sau data citită anterior: "
+          + json.dumps(targets,ensure_ascii=False) + ". "
+        )
         prompt=(f"Efectuează a {pass_no}-a citire independentă: {scope}. "
-          f"Candidați nerezolvați: {json.dumps(targets,ensure_ascii=False)}. "
+          f"{target_hint}"
           f"Elevii de sus în jos sunt {json.dumps(student_names,ensure_ascii=False)}. "
           f"Discipline permise: {json.dumps(allowed_subjects,ensure_ascii=False)}. "
           f"Perioada permisă: {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
@@ -219,7 +223,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
         return out
 
     targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
-              "kind":p.kind,"value":p.value,"date":p.date,"motivated":p.motivated} for p in items if not p.verifiable]
+              "kind":p.kind,"source_image":p.source_image} for p in items if not p.verifiable]
     second=read_pass(2,targets,complete=True)
     passes=[items,second]
 
@@ -239,7 +243,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
     unresolved=[p for k,p in examples.items() if votes.get(k,0)<2]
     if unresolved:
         third_targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
-                        "kind":p.kind,"value":p.value,"date":p.date,"motivated":p.motivated}
+                        "kind":p.kind,"source_image":p.source_image}
                        for p in unresolved]
         third=read_pass(3,third_targets,complete=False)
         passes.append(third)
