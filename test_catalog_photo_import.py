@@ -339,6 +339,23 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertEqual(call.call_count, 2)
         sleep.assert_called_once()
 
+    def test_retry_after_is_bounded_for_responsive_ui(self):
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{"ok": true}'
+        err = urllib.error.HTTPError(
+            "https://api.openai.com/v1/responses", 429, "Too Many Requests",
+            {"Retry-After": "120"}, None
+        )
+        err.read = lambda: b'{"error":{"code":"rate_limit_exceeded","message":"Rate limit reached."}}'
+        with patch("catalog_photo_import.urllib.request.urlopen", side_effect=[err, Response()]), \
+             patch("catalog_photo_import.time.sleep") as sleep, \
+             patch("catalog_photo_import.random.uniform", return_value=0):
+            result = _openai_json_request(object(), "Test")
+        self.assertTrue(result["ok"])
+        sleep.assert_called_once_with(15.0)
+
     def test_rate_limit_exceeded_is_retryable_even_if_message_mentions_billing(self):
         class Response:
             def __enter__(self): return self
