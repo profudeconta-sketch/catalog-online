@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 from openpyxl import Workbook, load_workbook
-from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, pair_catalog_images, deduplicate_proposals, compare_with_workbook, apply_confirmed_import
+from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, pair_catalog_images, deduplicate_proposals, compare_with_workbook, apply_confirmed_import, _student_band_crops
 
 CG=[("Matematică",8)]
 TH=[]
@@ -153,8 +153,19 @@ class PhotoImportSafetyTests(unittest.TestCase):
         try:
             p=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.99,verifiable=False)
             result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
-            self.assertEqual(result[0][1],"NECESITĂ_VERIFICARE")
+            self.assertEqual(result[0][1],"NECESITĂ_VERIFICARE_UMANĂ")
         finally: os.remove(path)
+
+    def test_student_band_crops_preserve_count(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow indisponibil")
+        import io
+        im=Image.new("RGB",(1500,2000),"white"); buf=io.BytesIO(); im.save(buf,format="JPEG")
+        crops=_student_band_crops(("2.jpeg",buf.getvalue()),3)
+        self.assertEqual(len(crops),3)
+        self.assertTrue(all(len(data)>0 for _,data in crops))
 
     def test_write_gate_rejects_unverifiable(self):
         path=workbook()
