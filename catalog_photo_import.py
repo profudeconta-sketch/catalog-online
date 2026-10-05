@@ -403,8 +403,9 @@ def compare_with_workbook(path,elevi,cg,th,resolve,items):
           else: status,msg="NOU","Poate fi adăugată după confirmare."
         else:
           target=p.date+("m" if p.motivated else ""); existing=[str(ws.cell(row,col+21+k).value or "").strip() for k in range(30)]
-          if target in existing or (p.date in existing and not p.motivated): status,msg="DEJA_EXISTENT","Aceeași absență există deja; nu va fi dublată."
-          elif p.motivated and p.date in existing: status,msg="CONFLICT","Absența există nemotivată; verifică motivarea."
+          same_date=[x for x in existing if x==p.date or x==p.date+"m"]
+          if target in existing: status,msg="DEJA_EXISTENT","Aceeași absență există deja; nu va fi dublată."
+          elif same_date: status,msg="CONFLICT","Absența există deja la aceeași dată cu altă stare de motivare; nu se creează o a doua absență."
           else: status,msg="NOU","Poate fi adăugată după confirmare."
         out.append((p,status,msg))
     finally: wb.close()
@@ -431,7 +432,9 @@ def apply_confirmed_import(path,elevi,cg,th,resolve,approved):
           else: raise PhotoImportError("Nu există slot liber pentru notă.")
         else:
           target=p.date+("m" if p.motivated else ""); existing=[str(ws.cell(row,col+21+k).value or "").strip() for k in range(30)]
-          if target in existing or (p.date in existing and not p.motivated): continue
+          if target in existing: continue
+          if any(x==p.date or x==p.date+"m" for x in existing):
+            raise PhotoImportError("Conflict de motivare apărut înainte de salvare; absența nu se dublează.")
           for k in range(30):
             if ws.cell(row,col+21+k).value in (None,""):
               ws.cell(row,col+21+k).value=target; ws.cell(row,col+21+k).number_format="@"; changed+=1; break
