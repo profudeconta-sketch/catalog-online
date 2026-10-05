@@ -89,8 +89,10 @@ def safe_zip_images(data):
     return out
 
 def pair_catalog_images(images,skip_cover=True):
-    work=images[1:] if skip_cover and len(images)%2==1 else images
-    if len(work)%2: raise PhotoImportError("Numărul fotografiilor stânga/dreapta nu este par.")
+    # Coperta este o alegere explicită a fluxului, nu o deducție din paritatea numărului de imagini.
+    work=images[1:] if skip_cover else images
+    if len(work)%2:
+        raise PhotoImportError("După tratarea explicită a copertei, numărul fotografiilor stânga/dreapta nu este par.")
     return [(work[i],work[i+1]) for i in range(0,len(work),2)]
 
 def _api_key():
