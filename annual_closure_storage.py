@@ -303,6 +303,30 @@ def publish_private_annual_closure_registry(
         ) from exc
 
 
+
+def load_private_annual_closure_snapshots() -> dict[str, AnnualClosureSnapshot]:
+    """Încarcă read-only snapshoturile private deja validate pentru consumatori precum PDF-ul."""
+    registry, _registry_sha = load_private_annual_closure_registry()
+    snapshots: dict[str, AnnualClosureSnapshot] = {}
+    for key, payload in registry["snapshots"].items():
+        try:
+            snapshot = AnnualClosureSnapshot(**payload)
+        except Exception as exc:
+            raise AnnualClosureStorageError(
+                f"Snapshotul elevului {key!r} nu poate fi reconstruit."
+            ) from exc
+        if str(snapshot.student_key).strip() != str(key).strip():
+            raise AnnualClosureStorageError(
+                f"Cheia elevului {key!r} nu corespunde snapshotului privat."
+            )
+        if not verify_annual_closure_snapshot(snapshot):
+            raise AnnualClosureStorageError(
+                f"Snapshotul elevului {key!r} nu trece verificarea SHA-256."
+            )
+        snapshots[str(key).strip()] = snapshot
+    return snapshots
+
+
 def persist_private_annual_closure_once(
     snapshot: AnnualClosureSnapshot,
 ) -> dict[str, Any]:
