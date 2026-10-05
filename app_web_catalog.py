@@ -3622,6 +3622,48 @@ with tab9:
                     st.error(f"Nota la purtare nu a fost salvată: {ex}")
 
 
+def build_class_annual_closure_previews(file_path):
+    """Construiește read-only situația anuală pentru întreaga clasă.
+
+    Nu scrie în Excel, gestiune sau registrul de purtare. Pentru fiecare elev
+    întoarce fie preview-ul valid, fie eroarea concretă care blochează calculul.
+    """
+    results = []
+    wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+    try:
+        for elev_info in ELEVI:
+            student_key = str(elev_info[3]).strip()
+            try:
+                subjects = build_student_subject_inputs(
+                    wb,
+                    elev_info,
+                    resolve_student_row,
+                    IX_TH_2026_2027_CLASS_CDEOS_HOURS,
+                )
+                conduct_values = conduct_grades_for_student(student_key)
+                preview = preview_annual_closure(
+                    subjects,
+                    sum(item.motivated_absences for item in subjects),
+                    conduct_values,
+                )
+                results.append({
+                    "student_key": student_key,
+                    "name": str(elev_info[1]).strip(),
+                    "preview": preview,
+                    "error": None,
+                })
+            except (ConductStorageError, AnnualClosureError, RuntimeError, ValueError) as ex:
+                results.append({
+                    "student_key": student_key,
+                    "name": str(elev_info[1]).strip(),
+                    "preview": None,
+                    "error": str(ex),
+                })
+    finally:
+        wb.close()
+    return tuple(results)
+
+
 # Preview-ul anual rămâne read-only; este disponibil doar când registrul are toate cele 5 note.
 with tab9:
     st.divider()
@@ -3632,7 +3674,7 @@ with tab9:
             wb_preview = openpyxl.load_workbook(selected_file, read_only=True, data_only=True)
             try:
                 subjects = build_student_subject_inputs(
-                    wb_preview, ELEVI[elev_idx_p], resolve_student_row, {"M5": 120, "M6": 120}
+                    wb_preview, ELEVI[elev_idx_p], resolve_student_row, IX_TH_2026_2027_CLASS_CDEOS_HOURS
                 )
             finally:
                 wb_preview.close()
