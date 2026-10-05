@@ -238,6 +238,27 @@ class PhotoImportSafetyTests(unittest.TestCase):
             wb=load_workbook(path); self.assertIsNone(wb["Cultură Generală"].cell(13,8).value); wb.close()
         finally: os.remove(path)
 
+    def test_write_gate_rechecks_duplicate_grade_even_with_stale_new_status(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            ws.cell(13,8).value=8; ws.cell(13,9).value="02.10"; wb.save(path); wb.close()
+            stale=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.99,verifiable=True)
+            changed,backup=apply_confirmed_import(path,ELEVI,CG,TH,resolve,[(stale,"NOU","stare veche")])
+            self.assertEqual(changed,0)
+            if backup and os.path.exists(backup): os.remove(backup)
+        finally: os.remove(path)
+
+    def test_write_gate_rechecks_grade_date_conflict_with_stale_new_status(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            ws.cell(13,8).value=8; ws.cell(13,9).value="02.10"; wb.save(path); wb.close()
+            stale=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",confidence=.99,verifiable=True)
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,[(stale,"NOU","stare veche")])
+        finally: os.remove(path)
+
     def test_write_then_duplicate_detection(self):
         path=workbook()
         try:
