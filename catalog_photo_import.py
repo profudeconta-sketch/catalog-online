@@ -56,10 +56,17 @@ def parse_absence_month_group(value, year=2026):
     # Nu concatenăm cifre separate: "1 2" înseamnă zilele 1 și 2, nu ziua 12.
     if re.search(r"[^\d,;\.\s]",days_raw):
         raise PhotoImportError(f"Separator sau caracter invalid în grupul de absențe: {value!r}")
-    tokens=re.findall(r"\d{1,2}",days_raw)
-    residue=re.sub(r"\d{1,2}|[,;\.\s]","",days_raw)
-    if residue or not tokens:
+    chunks=[x for x in re.split(r"[,;\.\s]+",days_raw) if x]
+    if not chunks:
         raise PhotoImportError(f"Zile invalide în grupul de absențe: {value!r}")
+    tokens=[]
+    for chunk in chunks:
+        if len(chunk)<=2:
+            tokens.append(chunk)
+        else:
+            # Un bloc lipit (ex. 193) nu este tăiat arbitrar în 19,3.
+            # Fără context suficient, dezambiguizarea trebuie să rămână blocată.
+            tokens.extend(str(day) for day in resolve_concatenated_absence_days(chunk,month))
     out=[]
     seen=set()
     for token in tokens:
