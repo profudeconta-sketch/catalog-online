@@ -187,7 +187,7 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
       "confidence 0..1, source_image 'left' sau 'right', legible boolean. "
       "legible=true NUMAI dacă studentul, disciplina, tipul, valoarea și data pot fi citite direct din fotografie, fără presupuneri. "
       "Pentru ABSENȚE, catalogul fizic poate scrie luna o singură dată cu cifre romane urmată de două puncte, de exemplu 'X: 1, 2 5'. "
-      "În acest caz X este luna octombrie, iar 1, 2 și 5 sunt trei zile distincte; spațiul dintre 2 și 5 este separator, nu formează 25. "
+      "În acest caz X este luna octombrie, iar zilele pot fi separate prin spațiu, virgulă, punct și virgulă sau punct; de exemplu 'X: 1 2', 'X: 1;2' și 'X: 1.2' înseamnă 01.10 și 02.10, NU 12.10. "
       "Emite câte un record separat pentru fiecare zi, cu data normalizată DD.MM. "
       "Pentru NOTE, înscrierea fizică poate avea forma NOTĂ/ZI, iar luna poate fi indicată contextual în ACEEAȘI rubrică. "
       "Acceptă data numai dacă luna este demonstrabilă vizual în aceeași rubrică; nu transfera luna de la alt elev, altă disciplină sau altă rubrică. "
