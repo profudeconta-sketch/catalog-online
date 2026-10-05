@@ -363,6 +363,73 @@ def persist_private_annual_closure_once(
     return final
 
 
+
+def persist_private_annual_closure_batch_once(
+    snapshots: list[AnnualClosureSnapshot] | tuple[AnnualClosureSnapshot, ...],
+) -> dict[str, Any]:
+    """Publică atomic logic snapshoturile unei clase într-o singură scriere privată.
+
+    Toate snapshoturile sunt validate și toate conflictele sunt detectate înainte
+    de publicare. Snapshoturile identice deja existente sunt tratate idempotent.
+    """
+    if not snapshots:
+        raise AnnualClosureStorageError("Lista snapshoturilor clasei este goală.")
+
+    payloads: dict[str, dict[str, Any]] = {}
+    for snapshot in snapshots:
+        key = str(snapshot.student_key).strip()
+        if not key:
+            raise AnnualClosureStorageError("Un snapshot nu are identificator stabil de elev.")
+        if key in payloads:
+            raise AnnualClosureStorageError(
+                f"Elevul {key!r} apare de mai multe ori în lotul de închidere."
+            )
+        payloads[key] = _snapshot_dict(snapshot)
+
+    registry, registry_sha = load_private_annual_closure_registry()
+    existing = registry["snapshots"]
+
+    conflicts = [
+        key for key, payload in payloads.items()
+        if key in existing and existing[key] != payload
+    ]
+    if conflicts:
+        raise AnnualClosureStorageError(
+            "Închiderea clasei este blocată: există snapshoturi diferite deja "
+            "înregistrate pentru: " + ", ".join(sorted(conflicts))
+        )
+
+    additions = {
+        key: payload for key, payload in payloads.items()
+        if key not in existing
+    }
+    if not additions:
+        return registry
+
+    updated = {
+        **registry,
+        "snapshots": {**existing, **additions},
+    }
+
+    # Validare integrală înainte de unica publicare.
+    serialize_annual_closure_registry(updated)
+    publish_private_annual_closure_registry(updated, expected_sha=registry_sha)
+
+    try:
+        final, _final_sha = load_private_annual_closure_registry()
+    except Exception as exc:
+        raise AnnualClosurePersistenceUncertainError(
+            "Publicarea lotului clasei poate fi deja efectuată, dar confirmarea "
+            "nu a putut fi citită. Nu repetați automat operația; verificați "
+            "registrul privat înainte de o nouă încercare."
+        ) from exc
+    if final != updated:
+        raise AnnualClosureStorageError(
+            "Verificarea registrului privat după publicarea clasei a eșuat."
+        )
+    return final
+
+
 def reconcile_private_annual_closure(
     snapshot: AnnualClosureSnapshot,
 ) -> str:
