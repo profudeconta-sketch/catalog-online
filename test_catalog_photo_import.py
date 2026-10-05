@@ -51,7 +51,7 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertNotEqual(parse_absence_month_group("X: 1 2"),["12.10"])
 
     def test_absence_group_rejects_invalid_or_ambiguous_content(self):
-        for bad in ("XIII: 1","IIII: 2","X: 32","IX: 31","X:","X: 1/2","X: 2 2"):
+        for bad in ("XIII: 1","IIII: 2","X: 32","IX: 31","X:","X: 1/2","X: 1;2","X: 2 2"):
             with self.assertRaises(PhotoImportError, msg=bad):
                 parse_absence_month_group(bad)
 
