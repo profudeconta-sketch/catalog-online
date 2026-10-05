@@ -167,11 +167,17 @@ def _openai_json_request(req, context, max_attempts=5):
             message = str(err.get("message") or raw or ex).strip()
             if ex.code != 429:
                 raise PhotoImportError(f"{context} a eșuat: HTTP {ex.code}: {message}") from ex
-            non_retryable = {"insufficient_quota", "billing_hard_limit_reached", "credit_balance_exhausted"}
-            if code in non_retryable or any(x in message.casefold() for x in ("quota", "billing", "credit balance")):
+            non_retryable = {
+                "insufficient_quota", "billing_hard_limit_reached", "credit_balance_exhausted",
+                "organization_usage_limit_exceeded", "organization_spend_limit_exceeded",
+                "project_spend_limit_exceeded",
+            }
+            # error.code este autoritar când există. Nu reclasificăm rate_limit_exceeded
+            # drept billing doar pentru că textul explicativ poate menționa planul/limitele.
+            if code in non_retryable:
                 raise PhotoImportError(
-                    f"{context} a fost oprită de limita de credit/cotă OpenAI ({code or 'HTTP 429'}). "
-                    "Verifică Billing/Limits; nu se reia automat și nu se scrie nimic."
+                    f"{context} a fost oprită de limita OpenAI ({code}). "
+                    "Verifică limita indicată; nu se reia automat și nu se scrie nimic."
                 ) from ex
             if attempt >= max_attempts:
                 raise PhotoImportError(
