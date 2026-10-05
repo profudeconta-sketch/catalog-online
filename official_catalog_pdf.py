@@ -1757,6 +1757,133 @@ def generate_official_catalog_prototype(
 
 
 
+def _draw_v6_data_overlay(
+    c: canvas.Canvas,
+    wb,
+    students: Sequence[StudentIdentity],
+    side: str,
+    annual_states: Mapping[str, OfficialCatalogAnnualState],
+) -> None:
+    """Desenează exclusiv date variabile peste geometria V6 deja tipărită."""
+    from official_catalog_v6_geometry import (
+        LEFT_IDENTITY_RIGHT_X,
+        LEFT_SUBJECT_EDGES_X,
+        RIGHT_SUBJECT_EDGES_X,
+        RIGHT_TERMINAL_RIGHT_X,
+        STUDENT_BLOCKS,
+        output_xy,
+    )
+
+    if side not in {"stanga", "dreapta"}:
+        raise OfficialCatalogError("Partea V6 trebuie să fie 'stanga' sau 'dreapta'.")
+
+    slots = CATALOG_P3_SLOTS if side == "stanga" else CATALOG_P4_SLOTS
+    source_keys = CATALOG_P3_SOURCE_KEYS if side == "stanga" else CATALOG_P4_SOURCE_KEYS
+    edges = LEFT_SUBJECT_EDGES_X if side == "stanga" else RIGHT_SUBJECT_EDGES_X
+
+    def out(x: float, y: float) -> tuple[float, float]:
+        return output_xy(x, y, side)
+
+    for idx, block in enumerate(STUDENT_BLOCKS):
+        student = students[idx] if idx < len(students) else None
+        if student is None:
+            continue
+        annual_state = annual_states[student.rm_pg]
+        subject_data = extract_physical_subject_data(wb, student, slots, source_keys)
+
+        # Note și absențe: numai conținut, fără grilă sau etichete fixe.
+        body_bottom = max(block.mean_lines_y)
+        body_top = block.top_y
+        for j, subject in enumerate(subject_data):
+            if subject.source_key is None:
+                continue
+            x0, x1 = edges[j], edges[j + 1]
+            pair_w = x1 - x0
+            abs_x = x0 + pair_w * 0.25
+            note_x = x0 + pair_w * 0.75
+            ox, oy = out(note_x, body_bottom + 2.0)
+            c.saveState(); c.translate(ox, oy); c.rotate(90); c.setFont(PDF_FONT, 4.9)
+            cursor = 0.0
+            for entry in subject.grades:
+                txt = format_catalog_grade(entry)
+                c.drawString(cursor, 0, txt)
+                cursor += pdfmetrics.stringWidth(txt, PDF_FONT, 4.9) + 2.8
+            c.restoreState()
+
+            by_month: dict[int, list[AbsenceEntry]] = {}
+            for entry in subject.absences:
+                by_month.setdefault(entry.date.month, []).append(entry)
+            ox, oy = out(abs_x, body_bottom + 2.0)
+            c.saveState(); c.translate(ox, oy); c.rotate(90)
+            cursor = 0.0
+            for month in sorted(by_month):
+                if cursor:
+                    cursor += 2.8
+                cursor = draw_catalog_absence_line(
+                    c, sorted(by_month[month], key=lambda item: item.date.day),
+                    cursor, 0, font_size=4.9,
+                )
+            c.restoreState()
+
+            print_state = annual_state.subject_print_state(subject.source_key, subject.average)
+            row_values = (
+                print_state.end_of_courses_average,
+                print_state.corigency_exam_average,
+                print_state.annual_average,
+            )
+            for value, yline in zip(row_values, block.mean_lines_y):
+                if value is not None:
+                    cx, cy = out((x0 + x1) / 2, yline - 8.0)
+                    c.setFont(PDF_FONT_BOLD, 5.6)
+                    c.drawCentredString(cx, cy, _format_catalog_average(value))
+
+        if side == "stanga":
+            # Identitatea și situația școlară sunt valori variabile; textele rubricilor sunt în V6.
+            x_right = LEFT_IDENTITY_RIGHT_X
+            name_x, name_y = out(31.0, block.top_y - 20.0)
+            c.setFont(PDF_FONT_BOLD, 7.2); c.drawString(name_x, name_y, student.name)
+            rx, ry = out(x_right - 5.0, block.top_y - 66.0)
+            c.setFont(PDF_FONT, 5.8); c.drawRightString(rx, ry, student.nr_matr)
+            rx, ry = out(x_right - 5.0, block.top_y - 80.0)
+            c.drawRightString(rx, ry, student.rm_pg)
+            rx, ry = out(x_right - 5.0, block.top_y - 116.0)
+            c.setFont(PDF_FONT_BOLD, 5.4); c.drawRightString(rx, ry, annual_state.end_of_courses_status)
+            rx, ry = out(x_right - 5.0, block.top_y - 130.0)
+            c.drawRightString(rx, ry, annual_state.final_status)
+            if annual_state.general_average is not None:
+                rx, ry = out(x_right - 5.0, block.top_y - 145.0)
+                c.drawRightString(rx, ry, _norm(annual_state.general_average))
+        else:
+            # Blocul terminal: purtare, total absențe și nemotivate.
+            terminal_left = edges[-1]
+            terminal_right = RIGHT_TERMINAL_RIGHT_X
+            tw = terminal_right - terminal_left
+            conduct_center = terminal_left + tw * 0.20
+            total_center = terminal_left + tw * 0.55
+            unmotiv_center = terminal_left + tw * 0.83
+            cx, cy = out(conduct_center, (body_bottom + body_top) / 2)
+            c.setFont(PDF_FONT_BOLD, 5.8)
+            if annual_state.conduct_annual_average is not None:
+                c.drawCentredString(cx, cy, _norm(annual_state.conduct_annual_average))
+            cx, cy = out(total_center, block.mean_lines_y[0] - 8.0)
+            c.drawCentredString(cx, cy, str(annual_state.total_absences))
+            cx, cy = out(unmotiv_center, block.mean_lines_y[0] - 8.0)
+            c.drawCentredString(cx, cy, str(annual_state.total_unmotivated_absences))
+
+
+def _build_v6_overlay_page(
+    wb,
+    students: Sequence[StudentIdentity],
+    side: str,
+    annual_states: Mapping[str, OfficialCatalogAnnualState],
+) -> bytes:
+    out = io.BytesIO()
+    c = canvas.Canvas(out, pagesize=OFFICIAL_CATALOG_PAGE_SIZE, pageCompression=1, invariant=1)
+    _draw_v6_data_overlay(c, wb, students, side, annual_states)
+    c.showPage(); c.save()
+    return out.getvalue()
+
+
 def _merge_body_template_with_overlay(template_bytes: bytes, overlay_bytes: bytes) -> bytes:
     """Unește vectorial șablonul V6 cu un strat transparent de date."""
     template_reader = PdfReader(io.BytesIO(template_bytes))
