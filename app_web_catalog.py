@@ -1860,6 +1860,7 @@ with tab_photo:
                             category=p.category, subject=p.subject, kind=p.kind,
                             value=p.value, date=p.date, motivated=p.motivated,
                             confidence=p.confidence, source_image=p.source_image,
+                            verifiable=p.verifiable, verification_reason=p.verification_reason,
                         ))
                     progress.progress((pair_idx + 1) / len(pairs))
                 comparison = compare_with_workbook(
@@ -1882,9 +1883,11 @@ with tab_photo:
                         f"{status} — {elev_name} — {p.subject} — {value_text} — "
                         f"{p.date} — încredere {p.confidence:.0%}"
                     )
-                    if status == "NOU":
+                    if status == "NOU" and p.verifiable:
                         if st.checkbox(label, value=False, key=f"photo_approve_{i}"):
                             approved.append(item)
+                    elif status == "NECESITĂ_VERIFICARE":
+                        st.error(label + " — BLOCAT LA SCRIERE. " + msg)
                     elif status == "DEJA_EXISTENT":
                         st.info(label + " — nu se dublează.")
                     else:
