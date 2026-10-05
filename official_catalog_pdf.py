@@ -25,6 +25,12 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from pypdf import PdfReader, PdfWriter
+
+from official_catalog_body_template import (
+    CatalogBodyTemplateError,
+    build_body_template_half,
+)
 
 # Dimensiunea fizică a fiecărei pagini din tipizatul oficial: 350 × 500 mm.
 OFFICIAL_CATALOG_PAGE_SIZE = (350 * mm, 500 * mm)
@@ -1748,6 +1754,29 @@ def generate_official_catalog_prototype(
         return out.getvalue()
     finally:
         wb.close()
+
+
+
+def _merge_body_template_with_overlay(template_bytes: bytes, overlay_bytes: bytes) -> bytes:
+    """Unește vectorial șablonul V6 cu un strat transparent de date."""
+    template_reader = PdfReader(io.BytesIO(template_bytes))
+    overlay_reader = PdfReader(io.BytesIO(overlay_bytes))
+    if len(template_reader.pages) != 1 or len(overlay_reader.pages) != 1:
+        raise OfficialCatalogError("Șablonul și stratul de date trebuie să aibă exact o pagină.")
+    base = template_reader.pages[0]
+    base.merge_page(overlay_reader.pages[0])
+    writer = PdfWriter()
+    writer.add_page(base)
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
+def _append_pdf_page(writer: PdfWriter, pdf_bytes: bytes) -> None:
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    if len(reader.pages) != 1:
+        raise OfficialCatalogError("Pagina intermediară trebuie să conțină exact o pagină.")
+    writer.add_page(reader.pages[0])
 
 
 def generate_official_catalog_final(
