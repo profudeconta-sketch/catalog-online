@@ -858,3 +858,109 @@ def derive_annual_finalization(
         final_general_average=final_general_average,
         finalized_on=finalized_on,
     )
+
+
+@dataclass(frozen=True)
+class DeferredSubject:
+    """Disciplina neîncheiată și temeiul administrativ explicit al amânării."""
+    subject_name: str
+    reason_code: str
+
+
+@dataclass(frozen=True)
+class AnnualDeferredSituationRecord:
+    """Anexă imuabilă pentru AMÂNAT, legată de snapshot fără a-i schimba schema."""
+    schema_version: int
+    rules_version: str
+    generated_at: str
+    integrity_sha256: str
+    school_year: str
+    student_key: str
+    source_snapshot_sha256: str
+    deferred_subjects: tuple[DeferredSubject, ...]
+
+
+_ALLOWED_DEFERRED_REASON_CODES = {
+    "ABSENTE_50_SI_NOTE_INSUFICIENTE",
+    "SCUTIRE_FRECVENTA",
+    "STUDII_SAU_BURSA_STRAINATATE",
+    "CAUZE_NEIMPUTABILE",
+    "ALTA_SITUATIE_ROFUIP_VALIDATA",
+}
+
+
+def canonical_deferred_situation_payload(record: AnnualDeferredSituationRecord) -> bytes:
+    payload = asdict(record)
+    payload["integrity_sha256"] = ""
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def deferred_situation_sha256(record: AnnualDeferredSituationRecord) -> str:
+    return hashlib.sha256(canonical_deferred_situation_payload(record)).hexdigest()
+
+
+def seal_annual_deferred_situation_record(
+    record: AnnualDeferredSituationRecord,
+) -> AnnualDeferredSituationRecord:
+    return replace(record, integrity_sha256=deferred_situation_sha256(record))
+
+
+def verify_annual_deferred_situation_record(
+    record: AnnualDeferredSituationRecord,
+) -> bool:
+    expected = str(record.integrity_sha256 or "")
+    return len(expected) == 64 and deferred_situation_sha256(record) == expected
+
+
+def build_annual_deferred_situation_record(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    deferred_subjects: Sequence[DeferredSubject],
+) -> AnnualDeferredSituationRecord:
+    """Descrie explicit disciplinele AMÂNAT fără a modifica snapshotul v2."""
+    if not verify_annual_closure_snapshot(source_snapshot):
+        raise AnnualClosureError("Snapshotul sursă nu trece verificarea SHA-256.")
+    if source_snapshot.final_status != "AMANAT":
+        raise AnnualClosureError(
+            "Anexa pentru discipline neîncheiate este permisă numai unui snapshot AMÂNAT."
+        )
+    if not deferred_subjects:
+        raise AnnualClosureError("Situația AMÂNAT necesită cel puțin o disciplină neîncheiată.")
+
+    source_names = {str(row[0]).strip() for row in source_snapshot.subjects}
+    seen = set()
+    normalized = []
+    for item in deferred_subjects:
+        name = str(item.subject_name).strip()
+        reason = str(item.reason_code).strip()
+        if not name or name not in source_names:
+            raise AnnualClosureError(
+                f"{name or '<fără nume>'}: disciplina AMÂNAT nu există în snapshot."
+            )
+        if name in seen:
+            raise AnnualClosureError(
+                f"{name}: disciplina apare de mai multe ori în situația AMÂNAT."
+            )
+        if reason not in _ALLOWED_DEFERRED_REASON_CODES:
+            raise AnnualClosureError(
+                f"{name}: motivul amânării nu este un cod ROFUIP validat de motor."
+            )
+        seen.add(name)
+        normalized.append(DeferredSubject(subject_name=name, reason_code=reason))
+
+    record = AnnualDeferredSituationRecord(
+        schema_version=1,
+        rules_version="etapa-5.6-amanat-2026-2027-v1",
+        generated_at=datetime.now(ZoneInfo("Europe/Bucharest")).isoformat(timespec="seconds"),
+        integrity_sha256="",
+        school_year=source_snapshot.school_year,
+        student_key=source_snapshot.student_key,
+        source_snapshot_sha256=source_snapshot.integrity_sha256,
+        deferred_subjects=tuple(normalized),
+    )
+    return seal_annual_deferred_situation_record(record)
