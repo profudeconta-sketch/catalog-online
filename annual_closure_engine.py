@@ -289,6 +289,8 @@ class SubjectResult:
 @dataclass(frozen=True)
 class AnnualClosurePreview:
     subjects: tuple[SubjectResult, ...]
+    ready_for_final_closure: bool
+    readiness_blockers: tuple[str, ...]
     total_unmotivated_absences: int
     total_motivated_absences: int
     total_absences: int
@@ -450,8 +452,21 @@ def preview_annual_closure(
             )
     status = "AMÂNAT" if blockers else determine_status(results, conduct)
     general = calculate_general_average(results, conduct, status)
+
+    readiness = list(blockers)
+    for result in results:
+        if not result.has_minimum_grade_reference:
+            readiness.append(
+                f"{result.name}: numărul de note este sub reperul ROFUIP configurat "
+                f"({result.minimum_grade_reference}); necesită verificare înainte de închiderea definitivă."
+            )
+    # CORIGENT/REPETENT/AMÂNAT sunt rezultate școlare valide, nu erori tehnice.
+    # Doar lipsurile/condițiile neverificate blochează persistența definitivă.
+    readiness = tuple(dict.fromkeys(readiness))
     return AnnualClosurePreview(
         subjects=results,
+        ready_for_final_closure=not readiness,
+        readiness_blockers=readiness,
         total_unmotivated_absences=total_unmotivated,
         total_motivated_absences=motivated_absences,
         total_absences=total_absences,
