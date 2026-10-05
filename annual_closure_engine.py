@@ -878,7 +878,7 @@ def verify_annual_deferred_situation_record(
     record: AnnualDeferredSituationRecord,
 ) -> bool:
     expected = str(record.integrity_sha256 or "")
-    return len(expected) == 64 and deferred_situation_sha256(record) == expected
+    return _is_sha256_hex(expected) and deferred_situation_sha256(record) == expected
 
 
 def build_annual_deferred_situation_record(
