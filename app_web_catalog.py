@@ -2893,7 +2893,13 @@ with tab7:
                         "plasament": False,
                         "bursa_medicala": False,
                         "bursa_venit": False,
-                        "status_scolar": "ACTIV"
+                        "status_scolar": "ACTIV",
+                        "istoric_miscare": [{
+                            "tip": "ADAUGAT",
+                            "data": datetime.datetime.now(
+                                ZoneInfo("Europe/Bucharest")
+                            ).strftime("%Y-%m-%d"),
+                        }]
                     }
                     excel_backup = None
                     try:
@@ -2960,7 +2966,17 @@ with tab7:
             )
             if st.button("💾 Salvează starea școlară", type="primary", use_container_width=True):
                 status_vechi = status_item.get("status_scolar")
+                istoric_vechi = list(status_item.get("istoric_miscare", []))
                 status_item["status_scolar"] = status_nou
+                if status_nou != status_curent:
+                    istoric = list(status_item.get("istoric_miscare", []))
+                    istoric.append({
+                        "tip": status_nou,
+                        "data": datetime.datetime.now(
+                            ZoneInfo("Europe/Bucharest")
+                        ).strftime("%Y-%m-%d"),
+                    })
+                    status_item["istoric_miscare"] = istoric
                 if save_gestiune_data(gest_data):
                     st.success(
                         f"✅ Starea elevului {status_item.get('nume_complet')} a fost actualizată la {status_nou}. "
@@ -2972,6 +2988,10 @@ with tab7:
                         status_item.pop("status_scolar", None)
                     else:
                         status_item["status_scolar"] = status_vechi
+                    if istoric_vechi:
+                        status_item["istoric_miscare"] = istoric_vechi
+                    else:
+                        status_item.pop("istoric_miscare", None)
                     st.warning(
                         "⚠️ Modificarea stării nu a fost confirmată în repository-ul privat. "
                         "Datele încărcate în sesiunea curentă au fost restaurate."
