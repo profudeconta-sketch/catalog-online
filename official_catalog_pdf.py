@@ -448,8 +448,11 @@ class OfficialCatalogSubjectPrintState:
 class OfficialCatalogAnnualState:
     """Valori anuale validate folosite numai la randarea catalogului."""
     student_key: str
+    subject_end_of_courses_averages: tuple[tuple[str, object], ...]
     subject_annual_averages: tuple[tuple[str, object], ...]
     subject_corigency_exam_averages: tuple[tuple[str, object], ...]
+    total_absences: int
+    total_unmotivated_absences: int
     conduct_annual_average: object | None
     general_average: object | None
     end_of_courses_status: str
@@ -466,9 +469,10 @@ class OfficialCatalogAnnualState:
     ) -> OfficialCatalogSubjectPrintState:
         """Separă media de la cursuri, media examenului și media anuală definitivă."""
         exam_values = dict(self.subject_corigency_exam_averages)
+        end_values = dict(self.subject_end_of_courses_averages)
         return OfficialCatalogSubjectPrintState(
             source_key=source_key,
-            end_of_courses_average=existing_end_of_courses_average,
+            end_of_courses_average=end_values.get(source_key, existing_end_of_courses_average),
             corigency_exam_average=exam_values.get(source_key),
             annual_average=self.subject_average(source_key),
         )
@@ -571,6 +575,7 @@ def official_catalog_state_from_records(
         raise OfficialCatalogError("Snapshotul anual nu trece verificarea SHA-256.")
 
     subject_values: dict[str, int] = {}
+    end_of_courses_values: dict[str, int] = {}
     for row in snapshot.subjects:
         if len(row) != 5:
             raise OfficialCatalogError("Structura disciplinelor din snapshot este invalidă.")
@@ -586,6 +591,7 @@ def official_catalog_state_from_records(
         ):
             raise OfficialCatalogError("Snapshotul conține o disciplină sau o medie invalidă.")
         subject_values[name] = average
+        end_of_courses_values[name] = average
 
     final_status = snapshot.final_status
     general_average = snapshot.general_average
@@ -632,8 +638,11 @@ def official_catalog_state_from_records(
 
     return OfficialCatalogAnnualState(
         student_key=str(snapshot.student_key).strip(),
+        subject_end_of_courses_averages=tuple(sorted(end_of_courses_values.items())),
         subject_annual_averages=tuple(sorted(subject_values.items())),
         subject_corigency_exam_averages=tuple(sorted(corigency_exam_values.items())),
+        total_absences=snapshot.total_absences,
+        total_unmotivated_absences=snapshot.total_unmotivated_absences,
         conduct_annual_average=snapshot.conduct_annual_average,
         general_average=general_average,
         end_of_courses_status=snapshot.final_status,
@@ -1602,17 +1611,23 @@ def _draw_marks_spread_placeholder(
                         _norm(conduct_value),
                     )
 
-                if attendance.total is not None:
+                total_value = annual_state.total_absences if annual_state is not None else attendance.total
+                unmotivated_value = (
+                    annual_state.total_unmotivated_absences
+                    if annual_state is not None
+                    else attendance.unmotivated
+                )
+                if total_value is not None:
                     c.drawCentredString(
                         (x_total + x_unmotiv) / 2,
                         y_bottom + 2 * mean_row_h + 2,
-                        _norm(attendance.total),
+                        _norm(total_value),
                     )
-                if attendance.unmotivated is not None:
+                if unmotivated_value is not None:
                     c.drawCentredString(
                         (x_unmotiv + right) / 2,
                         y_bottom + 2 * mean_row_h + 2,
-                        _norm(attendance.unmotivated),
+                        _norm(unmotivated_value),
                     )
 
             # X-ul tipărit în celula mediană a rubricii Purtare.
