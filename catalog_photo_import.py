@@ -338,13 +338,37 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
     return recovered
 
 def deduplicate_proposals(items):
-    """O singură înregistrare per elev/disciplină/tip/dată; ambiguitățile se blochează."""
+    """O singură înregistrare per elev/disciplină/tip/dată; ambiguitățile se blochează.
+    Dacă aceeași sursă fizică produce date contradictorii pentru aceeași rubrică,
+    nu permitem ca interpretările să devină două înregistrări independente.
+    """
+    evidence={}
+    for p in items:
+        source=str(p.source_image or "").strip().casefold()
+        if source:
+            key=(p.student_index,p.category.casefold(),p.subject.casefold(),p.kind,source)
+            evidence.setdefault(key,[]).append(p)
+    blocked=set()
+    for key,rows in evidence.items():
+        dates={p.date for p in rows if p.verifiable}
+        if len(dates)>1:
+            blocked.add(key)
     groups={}
     for p in items:
-        base=(p.student_index,p.category.casefold(),p.subject.casefold(),p.kind,p.date)
+        source=str(p.source_image or "").strip().casefold()
+        ekey=(p.student_index,p.category.casefold(),p.subject.casefold(),p.kind,source)
+        if source and ekey in blocked:
+            base=("EVIDENCE_CONFLICT",)+ekey
+        else:
+            base=(p.student_index,p.category.casefold(),p.subject.casefold(),p.kind,p.date)
         groups.setdefault(base,[]).append(p)
     out=[]
     for rows in groups.values():
+        dates={p.date for p in rows if p.verifiable}
+        if len(dates)>1:
+            best=max(rows,key=lambda p:p.confidence)
+            out.append(ImportProposal(best.student_index,best.category,best.subject,best.kind,best.value,best.date,best.motivated,best.confidence,best.source_image,False,"Aceeași evidență fizică a fost citită cu date contradictorii; nu se scrie automat."))
+            continue
         semantics={(p.value if p.kind=="grade" else "", p.motivated) for p in rows}
         verified_semantics={(p.value if p.kind=="grade" else "",p.motivated) for p in rows if p.verifiable}
         if len(verified_semantics)==1:
