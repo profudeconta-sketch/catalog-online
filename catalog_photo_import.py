@@ -127,60 +127,75 @@ def _vision_request(prompt,left,right,model="gpt-6-luna"):
         raise PhotoImportError(f"Verificarea vizuală a eșuat: {type(ex).__name__}: {ex}") from ex
 
 def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subjects,items):
-    """A doua citire independentă numai pentru cazurile neclare.
-    Un caz devine verificabil doar prin consens semantic exact între două citiri lizibile.
+    """Până la trei citiri independente. Două citiri lizibile și semantic identice sunt
+    necesare pentru promovarea automată; a treia citire rulează numai pentru cazurile
+    fără consens după primele două.
     """
-    uncertain=[p for p in items if not p.verifiable]
+    def read_pass(pass_no, targets, complete=False):
+        scope=("o citire COMPLETĂ a ambelor pagini, inclusiv înscrieri omise anterior"
+               if complete else "o reverificare focalizată a candidaților nerezolvați")
+        prompt=(f"Efectuează a {pass_no}-a citire independentă: {scope}. "
+          f"Candidați nerezolvați: {json.dumps(targets,ensure_ascii=False)}. "
+          f"Elevii de sus în jos sunt {json.dumps(student_names,ensure_ascii=False)}. "
+          f"Discipline permise: {json.dumps(allowed_subjects,ensure_ascii=False)}. "
+          f"Perioada permisă: {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
+          "Răspunde STRICT JSON {\"records\":[...]}; fiecare record conține student_index, category, "
+          "subject, kind, value, date DD.MM, motivated, confidence, source_image, legible. "
+          "legible=true numai dacă TOATE câmpurile sunt citibile direct din fotografie, fără inferență. Nu ghici.")
+        rows=_parse_vision_records(_vision_request(prompt,left,right),student_names,start)
+        out=[]
+        for r in rows:
+            try:
+                idx=int(r["student_index"]); kind=str(r["kind"]); date=normalize_ddmm(r["date"],start.year)
+                conf=float(r.get("confidence",0)); val=str(r.get("value","")).strip()
+                if not(0<=idx<len(student_names)) or kind not in {"grade","absence"} or not date_in_period(date,start,end):
+                    continue
+                if kind=="grade" and (not val.isdigit() or not 1<=int(val)<=10): continue
+                legible=bool(r.get("legible",False))
+                out.append(ImportProposal(idx,str(r["category"]).strip(),str(r["subject"]).strip(),kind,val,date,
+                    bool(r.get("motivated",False)),conf,str(r.get("source_image","")),legible and conf>=0.90,""))
+            except Exception:
+                continue
+        return out
+
     targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
-              "kind":p.kind,"value":p.value,"date":p.date,"motivated":p.motivated}
-             for p in uncertain]
-    prompt=("Efectuează o A DOUA citire independentă și COMPLETĂ a fotografiilor originale. "
-      "Scopul este atât verificarea candidaților slabi, cât și detectarea oricărei înscrieri din perioada cerută "
-      "care ar fi putut fi omisă la prima citire. Candidații slabi cunoscuți sunt: "
-      f"{json.dumps(targets,ensure_ascii=False)}. "
-      f"Elevii de sus în jos sunt {json.dumps(student_names,ensure_ascii=False)}. "
-      f"Discipline permise: {json.dumps(allowed_subjects,ensure_ascii=False)}. "
-      f"Perioada permisă: {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
-      "Pentru fiecare candidat răspunde STRICT JSON {\"records\":[...]}; fiecare record conține "
-      "student_index, category, subject, kind, value, date DD.MM, motivated, confidence, source_image, legible. "
-      "legible=true numai când toate câmpurile pot fi citite direct și fără inferență din fotografie. "
-      "Dacă nu poți demonstra vizual o valoare, legible=false. Nu ghici.")
-    rows=_parse_vision_records(_vision_request(prompt,left,right),student_names,start)
-    second=[]
-    for r in rows:
-        try:
-            idx=int(r["student_index"]); kind=str(r["kind"]); date=normalize_ddmm(r["date"],start.year)
-            conf=float(r.get("confidence",0)); val=str(r.get("value","")).strip()
-            if not(0<=idx<len(student_names)) or kind not in {"grade","absence"} or not date_in_period(date,start,end):
-                continue
-            if kind=="grade" and (not val.isdigit() or not 1<=int(val)<=10):
-                continue
-            legible=bool(r.get("legible",False))
-            second.append(ImportProposal(idx,str(r["category"]).strip(),str(r["subject"]).strip(),
-                kind,val,date,bool(r.get("motivated",False)),conf,str(r.get("source_image","")),
-                legible and conf>=0.90,""))
-        except Exception:
-            continue
-    first_by_key={_semantic_key(p):p for p in items}
-    second_by_key={_semantic_key(p):p for p in second}
+              "kind":p.kind,"value":p.value,"date":p.date,"motivated":p.motivated} for p in items if not p.verifiable]
+    second=read_pass(2,targets,complete=True)
+    passes=[items,second]
+
+    def consensus(pass_lists):
+        votes={}
+        examples={}
+        for pass_items in pass_lists:
+            seen=set()
+            for p in pass_items:
+                k=_semantic_key(p)
+                if k in seen: continue
+                seen.add(k); examples[k]=p
+                if p.verifiable: votes[k]=votes.get(k,0)+1
+        return votes,examples
+
+    votes,examples=consensus(passes)
+    unresolved=[p for k,p in examples.items() if votes.get(k,0)<2]
+    if unresolved:
+        third_targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
+                        "kind":p.kind,"value":p.value,"date":p.date,"motivated":p.motivated}
+                       for p in unresolved]
+        third=read_pass(3,third_targets,complete=False)
+        passes.append(third)
+        votes,examples=consensus(passes)
+
     recovered=[]
-    all_keys=set(first_by_key)|set(second_by_key)
-    for key in all_keys:
-        p=first_by_key.get(key); q=second_by_key.get(key)
-        if p is not None and q is not None and p.verifiable and q.verifiable:
-            recovered.append(ImportProposal(p.student_index,p.category,p.subject,p.kind,p.value,p.date,
-                p.motivated,max(p.confidence,q.confidence),p.source_image,True,
-                "Demonstrat prin două citiri independente, complete și concordante ale fotografiei originale."))
-        elif p is not None and q is not None and (p.verifiable or q.verifiable):
-            base=p if p.verifiable else q
-            recovered.append(ImportProposal(base.student_index,base.category,base.subject,base.kind,base.value,base.date,
-                base.motivated,base.confidence,base.source_image,False,
-                "Informația apare în ambele citiri, dar nu este demonstrată ca lizibilă independent în ambele."))
+    for k,p in examples.items():
+        count=votes.get(k,0)
+        if count>=2:
+            recovered.append(ImportProposal(p.student_index,p.category,p.subject,p.kind,p.value,p.date,p.motivated,
+                p.confidence,p.source_image,True,
+                f"Demonstrat prin consensul a {count} citiri independente lizibile ale fotografiei originale."))
         else:
-            base=p or q
-            recovered.append(ImportProposal(base.student_index,base.category,base.subject,base.kind,base.value,base.date,
-                base.motivated,base.confidence,base.source_image,False,
-                "Informația apare într-o singură citire sau nu este lizibilă concordant; necesită recuperare/verificare suplimentară."))
+            recovered.append(ImportProposal(p.student_index,p.category,p.subject,p.kind,p.value,p.date,p.motivated,
+                p.confidence,p.source_image,False,
+                "Fără consens de minimum două citiri independente lizibile după epuizarea recuperării automate."))
     return recovered
 
 def deduplicate_proposals(items):
