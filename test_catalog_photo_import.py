@@ -21,6 +21,24 @@ class PhotoImportSafetyTests(unittest.TestCase):
     def test_dates(self):
         self.assertEqual(normalize_ddmm("2/10"),"02.10")
         self.assertEqual(normalize_ddmm("30-9"),"30.09")
+        self.assertEqual(normalize_ddmm("30/IX"),"30.09")
+        self.assertEqual(normalize_ddmm("1.X"),"01.10")
+        self.assertEqual(normalize_ddmm("02-X-2026"),"02.10")
+        self.assertEqual(normalize_ddmm(" 2 / x "), "02.10")
+
+    def test_roman_month_validation(self):
+        for bad in ("2/XIII","2/IIII","31/IX","0/X","2/ABC"):
+            with self.assertRaises(PhotoImportError, msg=bad):
+                normalize_ddmm(bad)
+
+    def test_roman_month_period_filter(self):
+        from catalog_photo_import import date_in_period
+        start=dt.date(2026,9,30); end=dt.date(2026,10,2)
+        self.assertTrue(date_in_period("30/IX",start,end))
+        self.assertTrue(date_in_period("1/X",start,end))
+        self.assertTrue(date_in_period("02/X",start,end))
+        self.assertFalse(date_in_period("29/IX",start,end))
+        self.assertFalse(date_in_period("3/X",start,end))
 
     def test_contradiction_stays_visible_and_blocked(self):
         a=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.98,verifiable=True)
