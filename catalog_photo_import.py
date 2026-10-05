@@ -276,7 +276,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
           "Răspunde STRICT JSON {\"records\":[...]}; fiecare record conține student_index, category, "
           "subject, kind, value, date DD.MM, motivated, confidence, source_image, legible. "
           "Pentru ABSENȚE, luna poate apărea o singură dată ca cifră romană urmată de ':', iar zilele arabe care urmează în ACEEAȘI rubrică aparțin acelei luni; "
-          "virgula sau spațiul separă zile distincte (de ex. 'X: 1 2' = 01.10 și 02.10, NU 12.10). "
+          "virgula, punctul și punctul și virgula sau spațiul separă zile distincte (de ex. 'X: 1 2', 'X: 1.2' și 'X: 1;2' = 01.10 și 02.10, NU 12.10). "
           "Nu transfera niciodată luna între elevi, discipline sau rubrici. Emite câte un record separat pentru fiecare zi. "
           "Pentru NOTE, forma fizică poate fi NOTĂ/ZI, cu luna indicată contextual în ACEEAȘI rubrică. Data este lizibilă numai dacă luna este demonstrabilă vizual acolo; "
           "nu deduce luna din perioada cerută și nu o împrumuta din altă rubrică. "
