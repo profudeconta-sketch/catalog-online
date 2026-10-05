@@ -55,9 +55,10 @@ def _data_url(name,data):
     mime={".png":"image/png",".webp":"image/webp"}.get(PurePosixPath(name).suffix.lower(),"image/jpeg")
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
 
-def analyze_pair_with_vision(left,right,student_names,start,end):
+def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects):
     prompt=("Analizează două fotografii ale aceleiași deschideri de catalog școlar românesc. "
       f"Elevii de sus în jos sunt exact {json.dumps(student_names,ensure_ascii=False)}. "
+      f"Folosește pentru subject NUMAI una dintre denumirile exacte: {json.dumps(allowed_subjects,ensure_ascii=False)}. "
       f"Extrage NUMAI note și absențe cu data lizibilă în intervalul {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
       "Nu ghici și nu completa valori incerte. Răspunde STRICT JSON cu cheia records; fiecare record are "
       "student_index (0..2), category exact 'Cultură Generală' sau 'Module Tehnologice', subject, "
