@@ -307,5 +307,19 @@ class PhotoImportSafetyTests(unittest.TestCase):
             if backup and os.path.exists(backup): os.remove(backup)
         finally: os.remove(path)
 
+
+    def test_streamlit_success_feedback_survives_rerun(self):
+        with open("app_web_catalog.py", "r", encoding="utf-8") as fh:
+            source = fh.read()
+        flash_set = 'st.session_state["photo_import_success_flash"] = ('
+        flash_pop = 'st.session_state.pop("photo_import_success_flash", None)'
+        self.assertIn(flash_set, source)
+        self.assertIn(flash_pop, source)
+        set_pos = source.index(flash_set)
+        rerun_pos = source.index("st.rerun()", set_pos)
+        self.assertLess(set_pos, rerun_pos)
+        self.assertIn("verificarea post-import a confirmat înregistrările ca DEJA_EXISTENT", source)
+        self.assertIn("copia privată a fost sincronizată", source)
+
 if __name__=="__main__":
     unittest.main()
