@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 from openpyxl import Workbook, load_workbook
-from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, deduplicate_proposals, compare_with_workbook, apply_confirmed_import
+from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, deduplicate_proposals, compare_with_workbook, apply_confirmed_import
 
 CG=[("Matematică",8)]
 TH=[]
@@ -39,6 +39,21 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertTrue(date_in_period("02/X",start,end))
         self.assertFalse(date_in_period("29/IX",start,end))
         self.assertFalse(date_in_period("3/X",start,end))
+
+    def test_absence_roman_month_group(self):
+        self.assertEqual(parse_absence_month_group("X: 1, 2, 5"),["01.10","02.10","05.10"])
+        self.assertEqual(parse_absence_month_group("X: 1 2 5"),["01.10","02.10","05.10"])
+        self.assertEqual(parse_absence_month_group(" IX : 30 "),["30.09"])
+        self.assertEqual(parse_absence_month_group("XI: 3,7 12"),["03.11","07.11","12.11"])
+
+    def test_absence_group_never_concatenates_space_separated_days(self):
+        self.assertEqual(parse_absence_month_group("X: 1 2"),["01.10","02.10"])
+        self.assertNotEqual(parse_absence_month_group("X: 1 2"),["12.10"])
+
+    def test_absence_group_rejects_invalid_or_ambiguous_content(self):
+        for bad in ("XIII: 1","IIII: 2","X: 32","IX: 31","X:","X: 1/2","X: 2 2"):
+            with self.assertRaises(PhotoImportError, msg=bad):
+                parse_absence_month_group(bad)
 
     def test_contradiction_stays_visible_and_blocked(self):
         a=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.98,verifiable=True)
