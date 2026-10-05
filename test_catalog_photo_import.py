@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 from openpyxl import Workbook, load_workbook
-from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, pair_catalog_images, deduplicate_proposals, compare_with_workbook, apply_confirmed_import, _student_band_crops
+from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, pair_catalog_images, deduplicate_proposals, compare_with_workbook, apply_confirmed_import, _student_band_crops, absence_day_segmentations, resolve_concatenated_absence_days
 
 CG=[("Matematică",8)]
 TH=[]
@@ -166,6 +166,20 @@ class PhotoImportSafetyTests(unittest.TestCase):
         crops=_student_band_crops(("2.jpeg",buf.getvalue()),3)
         self.assertEqual(len(crops),3)
         self.assertTrue(all(len(data)>0 for _,data in crops))
+
+    def test_concatenated_absence_days_are_not_guessed(self):
+        variants=absence_day_segmentations("193",10)
+        self.assertIn((1,9,3),variants)
+        self.assertIn((19,3),variants)
+        with self.assertRaises(PhotoImportError):
+            resolve_concatenated_absence_days("193",10)
+
+    def test_concatenated_absence_days_use_demonstrable_neighbor_context(self):
+        # O zi precedentă 10 elimină interpretarea care ar începe cu 1;
+        # dacă rămâne ambiguitate, funcția continuă să refuze presupunerea.
+        variants=absence_day_segmentations("193",10,previous_day=10)
+        self.assertNotIn((1,9,3),variants)
+        self.assertIn((19,3),variants)
 
     def test_write_gate_rejects_unverifiable(self):
         path=workbook()
