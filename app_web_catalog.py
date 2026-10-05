@@ -25,6 +25,7 @@ from conduct_storage import ConductStorageError, conduct_grades_for_student, loa
 from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, IX_TH_2026_2027_CLASS_CDEOS_HOURS, build_annual_closure_snapshot, build_student_subject_inputs, preview_annual_closure
 from annual_closure_storage import AnnualClosureStorageError, load_private_annual_closure_snapshots, persist_private_annual_closure_batch_once
 from official_catalog_pdf import OfficialCatalogError, generate_official_catalog_final, official_catalog_state_from_records
+from final_status_storage import FinalStatusStorageError, load_private_final_status_registry, persist_private_final_status_batch_once
 from leave_pass_storage import (
     STATUS_APPROVED as LEAVE_STATUS_APPROVED,
     STATUS_EXPIRED as LEAVE_STATUS_EXPIRED,
@@ -3800,6 +3801,76 @@ with tab9:
                 "Închiderea situației școlare nu a fost finalizată în siguranță. "
                 f"Motiv: {ex}"
             )
+
+
+# Situația definitivă este o etapă separată de snapshotul de la încheierea cursurilor.
+# Nu rescrie snapshoturile și nu modifică datele primare.
+with tab9:
+    st.divider()
+    st.subheader("Situație definitivă")
+    st.caption(
+        "Această etapă poate fi înregistrată numai după închiderea situației școlare pentru "
+        "întreaga clasă. PROMOVAT și REPETENT pot deveni definitive direct; CORIGENT și "
+        "AMÂNAT necesită mai întâi rezultatul/actul ulterior auditabil."
+    )
+    try:
+        definitive_closed_snapshots = load_private_annual_closure_snapshots()
+        definitive_expected_keys = {str(elev[3]).strip() for elev in ELEVI}
+        definitive_missing = definitive_expected_keys - set(definitive_closed_snapshots)
+        definitive_extra = set(definitive_closed_snapshots) - definitive_expected_keys
+        definitive_pending = {
+            key: snapshot.final_status
+            for key, snapshot in definitive_closed_snapshots.items()
+            if str(snapshot.final_status).strip().upper() in {"CORIGENT", "AMANAT", "AMÂNAT"}
+        }
+        definitive_unknown = {
+            key: snapshot.final_status
+            for key, snapshot in definitive_closed_snapshots.items()
+            if str(snapshot.final_status).strip().upper()
+            not in {"PROMOVAT", "REPETENT", "CORIGENT", "AMANAT", "AMÂNAT"}
+        }
+
+        final_registry, _final_registry_sha = load_private_final_status_registry()
+        final_existing = set(final_registry["students"])
+        already_final = final_existing == definitive_expected_keys
+
+        if definitive_missing or definitive_extra:
+            st.warning(
+                "Situația definitivă este blocată: registrul de închidere nu corespunde exact clasei."
+            )
+        elif definitive_pending:
+            st.warning(
+                f"Situația definitivă nu poate fi încă înregistrată pentru clasă: "
+                f"{len(definitive_pending)} elev(i) au CORIGENT/AMÂNAT și necesită act ulterior auditabil."
+            )
+        elif definitive_unknown:
+            st.error("Situația definitivă este blocată de statute anuale necunoscute.")
+        elif already_final:
+            st.success("Situația școlară definitivă a întregii clase este deja înregistrată.")
+        else:
+            definitive_confirmed = st.checkbox(
+                "Confirm că am verificat situația definitivă a întregii clase.",
+                key="confirm_definitive_class_status",
+            )
+            if st.button(
+                "🔐 Situație definitivă",
+                key="persist_definitive_class_status",
+                type="primary",
+                use_container_width=True,
+                disabled=not definitive_confirmed,
+            ):
+                persist_private_final_status_batch_once(
+                    definitive_closed_snapshots,
+                    definitive_expected_keys,
+                )
+                st.success(
+                    "Situația școlară definitivă a clasei a fost înregistrată în registrul privat. "
+                    "Excelul, gestiunea elevilor și snapshoturile de la încheierea cursurilor "
+                    "nu au fost modificate."
+                )
+                st.rerun()
+    except (AnnualClosureStorageError, FinalStatusStorageError, RuntimeError, OSError, ValueError) as ex:
+        st.error(f"Situația definitivă nu poate fi înregistrată în siguranță: {ex}")
 
 
 # PDF-ul de după închidere folosește exclusiv snapshoturile private validate pentru situația anuală.
