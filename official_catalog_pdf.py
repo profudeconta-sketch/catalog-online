@@ -2116,7 +2116,7 @@ def _draw_official_personal_data_overlay(
         )
         phones = " / ".join(
             value for value in (
-                _norm(row.get("telefon_elev")),
+                _norm(row.get("telefon")),
                 _norm(row.get("telefon_mama")),
                 _norm(row.get("telefon_tata")),
             ) if value
@@ -2150,21 +2150,31 @@ def _draw_official_statistics_overlay(c: canvas.Canvas, stats: GeneralStatistics
     h = OFFICIAL_CATALOG_PAGE_SIZE[1]
     x = 439.5
 
+    # Coordonatele urmeaza exact sub-randurile tipizatului oficial.
+    # Pentru corigenti nu inventam repartizarea pe una/doua discipline:
+    # daca totalul este zero, ambele sub-randuri pot fi completate sigur cu 0;
+    # altfel totalul se inscrie pe primul sub-rand numai ca valoare agregata.
+    corigent_first = stats.corigent_students
+    corigent_second = 0 if stats.corigent_students == 0 else None
+
+    # La amanati, totalul are propriul rand. Cauza (medical/abandon/alte situatii)
+    # nu este dedusa de generator. Sub-randurile pot primi 0 numai cand totalul este 0.
+    deferred_detail = 0 if stats.deferred_students == 0 else None
     values = (
         (180.0, stats.recorded_students),
         (225.0, stats.added_dated_students),
         (269.0, stats.departed_dated_students),
         (306.0, stats.active_students),
         (343.0, stats.promoted_students),
-        (375.0, stats.corigent_students),
-        (404.0, 0),
-        (455.0, 0),
-        (514.0, stats.repeat_students),
-        (562.0, stats.deferred_students),
-        (609.0, 0),
-        (655.0, 0),
-        (696.0, 0),
-        (734.0, 0),
+        (375.0, corigent_first),
+        (404.0, corigent_second),
+        (455.0, stats.repeat_students),
+        (514.0, deferred_detail),
+        (562.0, deferred_detail),
+        (609.0, stats.deferred_students),
+        (655.0, deferred_detail),
+        (696.0, deferred_detail),
+        (734.0, deferred_detail),
         (774.0, stats.total_absences),
         (818.0, stats.unmotivated_absences),
     )
