@@ -2070,6 +2070,21 @@ def _build_official_overlay(drawer) -> bytes:
     return out.getvalue()
 
 
+def _draw_official_cover_overlay(c: canvas.Canvas) -> None:
+    """Completează exclusiv câmpurile variabile de pe coperta oficială P1."""
+    h = OFFICIAL_CATALOG_PAGE_SIZE[1]
+
+    # Coordonate dedicate copertei; text mai vizibil și bold, fără a altera tipizatul.
+    c.setFont(PDF_FONT_BOLD, 11.0)
+    c.drawCentredString(496.0, h - 300.0, CATALOG_CONFIG["unitate"])
+    c.setFont(PDF_FONT_BOLD, 10.0)
+    c.drawCentredString(496.0, h - 350.0, "Turda, județul Cluj")
+    c.setFont(PDF_FONT_BOLD, 16.0)
+    c.drawCentredString(496.0, h - 510.0, CATALOG_CONFIG["clasa"])
+    c.setFont(PDF_FONT_BOLD, 13.0)
+    c.drawCentredString(496.0, h - 650.0, CATALOG_CONFIG["an_scolar"])
+
+
 def _draw_official_admin_overlay(c: canvas.Canvas) -> None:
     """Datele clasei peste pagina 3 a tipizatului oficial, pe geometria aprobata."""
     h = OFFICIAL_CATALOG_PAGE_SIZE[1]
@@ -2138,13 +2153,13 @@ def _draw_personal_cell_multiline(
 
     def fitting_size(line: str) -> float | None:
         try:
-            return _fit_text(c, line, max_width, PDF_FONT, preferred, minimum)
+            return _fit_text(c, line, max_width, PDF_FONT_BOLD, preferred, minimum)
         except OfficialCatalogError:
             return None
 
     direct_size = fitting_size(value)
     if direct_size is not None:
-        c.setFont(PDF_FONT, direct_size)
+        c.setFont(PDF_FONT_BOLD, direct_size)
         c.drawString(x, baseline, value)
         return
 
@@ -2206,7 +2221,7 @@ def _draw_personal_cell_multiline(
     line_gap = 4.8
     start_y = baseline + (len(lines) - 1) * line_gap / 2
     for index, (line, size) in enumerate(zip(lines, sizes)):
-        c.setFont(PDF_FONT, size)
+        c.setFont(PDF_FONT_BOLD, size)
         c.drawString(x, start_y - index * line_gap, line)
 
 def _draw_official_personal_data_overlay(
@@ -2245,19 +2260,19 @@ def _draw_official_personal_data_overlay(
         )
         domicile = ", ".join(value for value in (address, phones) if value)
 
-        c.setFont(PDF_FONT, 5.8)
+        c.setFont(PDF_FONT_BOLD, 6.4)
         c.drawCentredString(84.0, baseline, student.nr_matr)
 
-        name_size = _fit_text(c, student.name, 180.0, PDF_FONT, 5.8, 4.2)
-        c.setFont(PDF_FONT, name_size); c.drawString(111.0, baseline, student.name)
+        name_size = _fit_text(c, student.name, 180.0, PDF_FONT_BOLD, 6.4, 4.4)
+        c.setFont(PDF_FONT_BOLD, name_size); c.drawString(111.0, baseline, student.name)
 
         if birth:
-            c.setFont(PDF_FONT, 5.6); c.drawCentredString(343.0, baseline, birth)
+            c.setFont(PDF_FONT_BOLD, 6.2); c.drawCentredString(343.0, baseline, birth)
 
-        _draw_personal_cell_multiline(c, father, 393.0, baseline, 66.0)
-        _draw_personal_cell_multiline(c, mother, 468.0, baseline, 66.0)
+        _draw_personal_cell_multiline(c, father, 393.0, baseline, 66.0, preferred=5.9, minimum=4.0)
+        _draw_personal_cell_multiline(c, mother, 468.0, baseline, 66.0, preferred=5.9, minimum=4.0)
         _draw_personal_cell_multiline(
-            c, domicile, 544.0, baseline, 270.0, preferred=5.2, minimum=3.7
+            c, domicile, 544.0, baseline, 270.0, preferred=5.8, minimum=3.9
         )
 
     # 32 pagini fizice = 16 file.
@@ -2427,7 +2442,9 @@ def generate_official_catalog_current(
         )
 
         try:
-            p1 = merge_official_page_with_overlay(0)
+            p1 = merge_official_page_with_overlay(
+                0, _build_official_overlay(_draw_official_cover_overlay)
+            )
             p2 = merge_official_page_with_overlay(1)
             p3 = merge_official_page_with_overlay(
                 2, _build_official_overlay(_draw_official_admin_overlay)
@@ -2547,7 +2564,9 @@ def generate_official_catalog_final(
         )
 
         try:
-            p1 = merge_official_page_with_overlay(0)
+            p1 = merge_official_page_with_overlay(
+                0, _build_official_overlay(_draw_official_cover_overlay)
+            )
             p2 = merge_official_page_with_overlay(1)
             p3 = merge_official_page_with_overlay(
                 2, _build_official_overlay(_draw_official_admin_overlay)
