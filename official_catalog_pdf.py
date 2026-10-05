@@ -698,6 +698,23 @@ def validate_official_catalog_annual_states(
                 raise OfficialCatalogError(
                     f"{subject}: media anuală validată este invalidă pentru {student.rm_pg!r}."
                 )
+        end_values = dict(state.subject_end_of_courses_averages)
+        if set(end_values) != valid_subjects:
+            raise OfficialCatalogError(
+                f"Situația de la încheierea cursurilor pentru {student.rm_pg!r} nu conține exact disciplinele clasei."
+            )
+        if (
+            not isinstance(state.total_absences, int)
+            or isinstance(state.total_absences, bool)
+            or not isinstance(state.total_unmotivated_absences, int)
+            or isinstance(state.total_unmotivated_absences, bool)
+            or state.total_absences < 0
+            or state.total_unmotivated_absences < 0
+            or state.total_unmotivated_absences > state.total_absences
+        ):
+            raise OfficialCatalogError(
+                f"Totalurile de absențe validate sunt invalide pentru {student.rm_pg!r}."
+            )
         if state.end_of_courses_status not in allowed_statuses or state.final_status not in allowed_statuses:
             raise OfficialCatalogError(
                 f"Statut anual invalid pentru {student.rm_pg!r}."
@@ -1817,7 +1834,8 @@ def assert_read_only_contract() -> bool:
         "update_excel_computed_values",
         "save_gestiune_data",
     }
-    names = set(generate_official_catalog_prototype.__code__.co_names)
-    if names & forbidden_names:
-        raise OfficialCatalogError("Generatorul încalcă contractul read-only.")
+    for generator in (generate_official_catalog_prototype, generate_official_catalog_final):
+        names = set(generator.__code__.co_names)
+        if names & forbidden_names:
+            raise OfficialCatalogError("Generatorul încalcă contractul read-only.")
     return True
