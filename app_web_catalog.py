@@ -3664,6 +3664,74 @@ def build_class_annual_closure_previews(file_path):
     return tuple(results)
 
 
+# Validarea clasei este numai informativă/read-only. Nu închide și nu persistă situații.
+with tab9:
+    st.divider()
+    st.subheader("Validare clasă înainte de închiderea situației școlare")
+    st.caption(
+        "Verificarea citește situația tuturor elevilor și indică blocajele. "
+        "Nu modifică Excelul, registrul de purtare sau gestiunea elevilor."
+    )
+    if st.button(
+        "🔎 Verifică întreaga clasă pentru închidere",
+        key="annual_class_validation_readonly",
+        use_container_width=True,
+    ):
+        try:
+            class_results = build_class_annual_closure_previews(selected_file)
+            ready_count = 0
+            blocked_count = 0
+            error_count = 0
+            for item in class_results:
+                preview = item["preview"]
+                if item["error"] is not None:
+                    error_count += 1
+                elif preview.ready_for_final_closure:
+                    ready_count += 1
+                else:
+                    blocked_count += 1
+
+            col_ready, col_blocked, col_error = st.columns(3)
+            col_ready.metric("Pregătiți", ready_count)
+            col_blocked.metric("Cu blocaje", blocked_count)
+            col_error.metric("Date incomplete/incoerente", error_count)
+
+            if blocked_count == 0 and error_count == 0:
+                st.success(
+                    "Toți elevii au trecut validarea read-only. "
+                    "Această verificare NU a închis încă situația școlară."
+                )
+            else:
+                st.warning(
+                    "Clasa nu este încă pregătită integral pentru închidere. "
+                    "Problemele de mai jos trebuie analizate înainte de orice persistență."
+                )
+
+            for item in class_results:
+                preview = item["preview"]
+                if item["error"] is not None:
+                    with st.expander(f"❌ {item['name']} — calcul indisponibil"):
+                        st.error(item["error"])
+                    continue
+                if preview.ready_for_final_closure:
+                    st.success(
+                        f"✅ {item['name']} — {preview.final_status}; "
+                        f"purtare {preview.conduct_annual_average}; "
+                        f"absențe {preview.total_absences}."
+                    )
+                    continue
+                with st.expander(f"⚠️ {item['name']} — necesită verificare"):
+                    st.write(
+                        f"Situație calculată: **{preview.final_status}** | "
+                        f"Purtare: **{preview.conduct_annual_average}** | "
+                        f"Absențe: **{preview.total_absences}**"
+                    )
+                    for blocker in preview.readiness_blockers:
+                        st.warning(blocker)
+        except (AnnualClosureError, ConductStorageError, RuntimeError, OSError) as ex:
+            st.error(f"Validarea clasei nu a putut fi finalizată: {ex}")
+
+
 # Preview-ul anual rămâne read-only; este disponibil doar când registrul are toate cele 5 note.
 with tab9:
     st.divider()
