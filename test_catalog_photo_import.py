@@ -2,8 +2,10 @@ import datetime as dt
 import os
 import tempfile
 import unittest
+import urllib.error
+from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
-from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, pair_catalog_images, deduplicate_proposals, compare_with_workbook, apply_confirmed_import, _student_band_crops, absence_day_segmentations, resolve_concatenated_absence_days
+from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, pair_catalog_images, deduplicate_proposals, compare_with_workbook, apply_confirmed_import, _student_band_crops, absence_day_segmentations, resolve_concatenated_absence_days, _openai_json_request
 
 CG=[("Matematică",8)]
 TH=[]
@@ -320,6 +322,42 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertLess(set_pos, rerun_pos)
         self.assertIn("verificarea post-import a confirmat înregistrările ca DEJA_EXISTENT", source)
         self.assertIn("copia privată a fost sincronizată", source)
+
+
+    def test_openai_429_retries_then_succeeds(self):
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{"ok": true}'
+        err = urllib.error.HTTPError("https://api.openai.com/v1/responses", 429, "Too Many Requests", {}, None)
+        err.read = lambda: b'{"error":{"type":"rate_limit_error","message":"Rate limit reached"}}'
+        with patch("catalog_photo_import.urllib.request.urlopen", side_effect=[err, Response()]) as call, \
+             patch("catalog_photo_import.time.sleep") as sleep, \
+             patch("catalog_photo_import.random.uniform", return_value=0):
+            result = _openai_json_request(object(), "Test", max_attempts=3)
+        self.assertTrue(result["ok"])
+        self.assertEqual(call.call_count, 2)
+        sleep.assert_called_once()
+
+    def test_openai_quota_429_does_not_retry(self):
+        err = urllib.error.HTTPError("https://api.openai.com/v1/responses", 429, "Too Many Requests", {}, None)
+        err.read = lambda: b'{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}'
+        with patch("catalog_photo_import.urllib.request.urlopen", side_effect=err) as call, \
+             patch("catalog_photo_import.time.sleep") as sleep:
+            with self.assertRaises(PhotoImportError) as ctx:
+                _openai_json_request(object(), "Test", max_attempts=3)
+        self.assertIn("credit/cotă", str(ctx.exception))
+        self.assertEqual(call.call_count, 1)
+        sleep.assert_not_called()
+
+    def test_streamlit_resume_cache_is_scoped_to_archive_period_and_cover(self):
+        with open("app_web_catalog.py", "r", encoding="utf-8") as fh:
+            source = fh.read()
+        self.assertIn('archive_id = __import__("hashlib").sha256(photo_zip.getvalue()).hexdigest()', source)
+        self.assertIn('run_key = (archive_id, str(import_start), str(import_end), bool(has_cover))', source)
+        self.assertIn('st.session_state["photo_import_pair_results"] = {}', source)
+        self.assertIn('if pair_idx in pair_results:', source)
+        self.assertIn('if len(pair_results) != len(pairs):', source)
 
 if __name__=="__main__":
     unittest.main()
