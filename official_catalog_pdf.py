@@ -2122,6 +2122,63 @@ def _personal_row_text(row: Mapping, *keys: str) -> str:
     return ""
 
 
+def _draw_personal_cell_multiline(
+    c: canvas.Canvas,
+    text: str,
+    x: float,
+    baseline: float,
+    max_width: float,
+    preferred: float = 5.4,
+    minimum: float = 3.9,
+) -> None:
+    """Randare pe maximum două rânduri, fără trunchierea datelor din gestiune."""
+    value = _norm(text)
+    if not value:
+        return
+    try:
+        size = _fit_text(c, value, max_width, PDF_FONT, preferred, minimum)
+        c.setFont(PDF_FONT, size)
+        c.drawString(x, baseline, value)
+        return
+    except OfficialCatalogError:
+        pass
+
+    # Preferă separatorii expliciți folosiți în gestiune pentru note/relații.
+    import re
+    candidates = []
+    for match in re.finditer(r"\s*(?:/|;|\|)\s*", value):
+        left = value[:match.start()].strip()
+        right = value[match.end():].strip()
+        if left and right:
+            candidates.append((left, right))
+    if not candidates:
+        words = value.split()
+        candidates = [
+            (" ".join(words[:i]), " ".join(words[i:]))
+            for i in range(1, len(words))
+        ]
+
+    best = None
+    for left, right in candidates:
+        try:
+            left_size = _fit_text(c, left, max_width, PDF_FONT, preferred, minimum)
+            right_size = _fit_text(c, right, max_width, PDF_FONT, preferred, minimum)
+        except OfficialCatalogError:
+            continue
+        score = min(left_size, right_size)
+        if best is None or score > best[0]:
+            best = (score, left, right, left_size, right_size)
+    if best is None:
+        raise OfficialCatalogError(f"Textul nu încape în rubrica oficială nici pe două rânduri: {value}")
+
+    _, left, right, left_size, right_size = best
+    line_gap = 5.2
+    c.setFont(PDF_FONT, left_size)
+    c.drawString(x, baseline + line_gap / 2, left)
+    c.setFont(PDF_FONT, right_size)
+    c.drawString(x, baseline - line_gap / 2, right)
+
+
 def _draw_official_personal_data_overlay(
     c: canvas.Canvas,
     students: Sequence[StudentIdentity],
@@ -2167,13 +2224,11 @@ def _draw_official_personal_data_overlay(
         if birth:
             c.setFont(PDF_FONT, 5.6); c.drawCentredString(343.0, baseline, birth)
 
-        father_size = _fit_text(c, father, 66.0, PDF_FONT, 5.4, 3.9)
-        mother_size = _fit_text(c, mother, 66.0, PDF_FONT, 5.4, 3.9)
-        c.setFont(PDF_FONT, father_size); c.drawString(393.0, baseline, father)
-        c.setFont(PDF_FONT, mother_size); c.drawString(468.0, baseline, mother)
-
-        dom_size = _fit_text(c, domicile, 270.0, PDF_FONT, 5.2, 3.7)
-        c.setFont(PDF_FONT, dom_size); c.drawString(544.0, baseline, domicile)
+        _draw_personal_cell_multiline(c, father, 393.0, baseline, 66.0)
+        _draw_personal_cell_multiline(c, mother, 468.0, baseline, 66.0)
+        _draw_personal_cell_multiline(
+            c, domicile, 544.0, baseline, 270.0, preferred=5.2, minimum=3.7
+        )
 
     # 32 pagini fizice = 16 file.
     c.setFont(PDF_FONT_BOLD, 8.0)
