@@ -631,11 +631,25 @@ def preview_annual_closure(
 
 @dataclass(frozen=True)
 class AnnualFinalizationSubjectResult:
-    """Rezultat ulterior pentru o disciplină; nu modifică snapshotul inițial."""
+    """Rezultat ulterior pentru o disciplină; media este serializată canonic cu două zecimale."""
     subject_name: str
     source_status: str
     result_type: str
-    resulting_annual_average: int
+    resulting_annual_average: str
+
+    @staticmethod
+    def normalize_average(value: object) -> str:
+        if isinstance(value, bool):
+            raise AnnualClosureError("Media rezultată nu poate fi booleană.")
+        try:
+            number = Decimal(str(value))
+        except Exception as exc:
+            raise AnnualClosureError("Media rezultată nu este numerică.") from exc
+        if not number.is_finite() or number < Decimal("1") or number > Decimal("10"):
+            raise AnnualClosureError("Media rezultată trebuie să fie între 1 și 10.")
+        if number.as_tuple().exponent < -2:
+            raise AnnualClosureError("Media rezultată poate avea cel mult două zecimale.")
+        return format(number.quantize(Decimal("0.01")), ".2f")
 
 
 @dataclass(frozen=True)
@@ -732,18 +746,18 @@ def build_annual_finalization_record(
             raise AnnualClosureError("Starea sursă a rezultatului ulterior este invalidă.")
         if item.result_type not in _ALLOWED_FINALIZATION_RESULT_TYPES:
             raise AnnualClosureError("Tipul rezultatului ulterior este invalid.")
-        if not isinstance(item.resulting_annual_average, int) or isinstance(
-            item.resulting_annual_average, bool
-        ) or not 1 <= item.resulting_annual_average <= 10:
-            raise AnnualClosureError(
-                f"{name}: media anuală rezultată trebuie să fie un întreg între 1 și 10."
+        try:
+            normalized_average = AnnualFinalizationSubjectResult.normalize_average(
+                item.resulting_annual_average
             )
+        except AnnualClosureError as exc:
+            raise AnnualClosureError(f"{name}: {exc}") from exc
         normalized.append(
             AnnualFinalizationSubjectResult(
                 subject_name=name,
                 source_status=item.source_status,
                 result_type=item.result_type,
-                resulting_annual_average=item.resulting_annual_average,
+                resulting_annual_average=normalized_average,
             )
         )
 
@@ -939,7 +953,7 @@ def build_annual_deferred_situation_record(
 class DeferredResolution:
     """Rezultatul pur al încheierii situației unui elev AMÂNAT."""
     status: str
-    subject_annual_averages: tuple[tuple[str, int], ...]
+    subject_annual_averages: tuple[tuple[str, object], ...]
     general_average: Decimal | None
 
 
@@ -993,13 +1007,13 @@ def derive_deferred_resolution(
             )
         if name in replacements:
             raise AnnualClosureError(f"{name}: rezultat ulterior duplicat.")
-        if not isinstance(item.resulting_annual_average, int) or isinstance(
-            item.resulting_annual_average, bool
-        ) or not 1 <= item.resulting_annual_average <= 10:
-            raise AnnualClosureError(
-                f"{name}: media anuală rezultată trebuie să fie un întreg între 1 și 10."
+        try:
+            normalized_average = AnnualFinalizationSubjectResult.normalize_average(
+                item.resulting_annual_average
             )
-        replacements[name] = item.resulting_annual_average
+        except AnnualClosureError as exc:
+            raise AnnualClosureError(f"{name}: {exc}") from exc
+        replacements[name] = Decimal(AnnualFinalizationSubjectResult.normalize_average(item.resulting_annual_average))
 
     missing = sorted(required.difference(replacements))
     if missing:
@@ -1280,7 +1294,7 @@ def build_reexamination_approval_record(
 class CorigentSessionOutcome:
     """Rezultatul intermediar al sesiunii de corigență, înainte de reexaminare."""
     status: str
-    subject_annual_averages: tuple[tuple[str, int], ...]
+    subject_annual_averages: tuple[tuple[str, object], ...]
     failed_subjects: tuple[str, ...]
     general_average: Decimal | None
 
@@ -1299,7 +1313,7 @@ class CorigentSessionRecord:
     corigent_subjects: tuple[str, ...]
     corigent_results: tuple[AnnualFinalizationSubjectResult, ...]
     status: str
-    subject_annual_averages: tuple[tuple[str, int], ...]
+    subject_annual_averages: tuple[tuple[str, object], ...]
     failed_subjects: tuple[str, ...]
     general_average: str | None
 
@@ -1308,7 +1322,7 @@ def derive_corigent_session_outcome(
     *,
     source_snapshot: AnnualClosureSnapshot,
     corigent_subjects: Sequence[str],
-    base_subject_annual_averages: Sequence[tuple[str, int]],
+    base_subject_annual_averages: Sequence[tuple[str, object]],
     corigent_results: Sequence[AnnualFinalizationSubjectResult],
 ) -> CorigentSessionOutcome:
     """Evaluează prima sesiune de corigență fără a presupune că situația e definitivă."""
@@ -1320,8 +1334,11 @@ def derive_corigent_session_outcome(
         name = str(raw_name).strip()
         if not name or name in base:
             raise AnnualClosureError("Lista mediilor de bază conține discipline invalide/duplicate.")
-        average = int(raw_average)
-        if not 1 <= average <= 10:
+        try:
+            average = Decimal(str(raw_average))
+        except Exception as exc:
+            raise AnnualClosureError(f"{name}: media anuală de bază este invalidă.") from exc
+        if not average.is_finite() or not Decimal("1") <= average <= Decimal("10"):
             raise AnnualClosureError(f"{name}: media anuală de bază este invalidă.")
         base[name] = average
 
@@ -1346,7 +1363,7 @@ def derive_corigent_session_outcome(
             item.resulting_annual_average, bool
         ) or not 1 <= item.resulting_annual_average <= 10:
             raise AnnualClosureError(f"{name}: media rezultată este invalidă.")
-        replacements[name] = item.resulting_annual_average
+        replacements[name] = Decimal(AnnualFinalizationSubjectResult.normalize_average(item.resulting_annual_average))
 
     missing = sorted(required.difference(replacements))
     if missing:
@@ -1409,7 +1426,7 @@ def build_corigent_session_record(
     *,
     source_snapshot: AnnualClosureSnapshot,
     corigent_subjects: Sequence[str],
-    base_subject_annual_averages: Sequence[tuple[str, int]],
+    base_subject_annual_averages: Sequence[tuple[str, object]],
     corigent_results: Sequence[AnnualFinalizationSubjectResult],
     upstream_audit_chain_sha256: Sequence[str] = (),
 ) -> CorigentSessionRecord:
@@ -1557,13 +1574,11 @@ def derive_reexamination_finalization(
         raise AnnualClosureError(
             "Rezultatul final trebuie să fie CORIGENT/REEXAMINARE."
         )
-    average = reexamination_result.resulting_annual_average
-    if (
-        not isinstance(average, int)
-        or isinstance(average, bool)
-        or not 1 <= average <= 10
-    ):
-        raise AnnualClosureError("Media rezultată la reexaminare este invalidă.")
+    average = Decimal(
+        AnnualFinalizationSubjectResult.normalize_average(
+            reexamination_result.resulting_annual_average
+        )
+    )
 
     final_averages = dict(corigent_session_record.subject_annual_averages)
     if name not in final_averages:
