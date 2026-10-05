@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import tempfile
+from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from annual_closure_engine import (
     AnnualClosureSnapshot,
@@ -61,6 +61,82 @@ def _snapshot_dict(snapshot: AnnualClosureSnapshot) -> dict[str, Any]:
     return asdict(snapshot)
 
 
+def _fsync_directory(directory: Path) -> None:
+    """Persistă metadatele rename-ului pe sisteme POSIX; fail-closed dacă fsync e disponibil."""
+    if os.name != "posix":
+        return
+    fd = os.open(str(directory), os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+@contextmanager
+def _exclusive_registry_lock(target: Path) -> Iterator[None]:
+    """Lock fail-closed: un al doilea writer trebuie să reîncerce, nu să suprascrie."""
+    lock = target.with_suffix(target.suffix + ".lock")
+    try:
+        fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError as exc:
+        raise AnnualClosureStorageError(
+            "Registrul anual este deja în curs de actualizare. Reîncercați operația."
+        ) from exc
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(f"pid={os.getpid()}\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        yield
+    finally:
+        try:
+            lock.unlink(missing_ok=True)
+            _fsync_directory(target.parent)
+        except Exception:
+            # Eliberarea lockului nu trebuie să mascheze o eroare anterioară.
+            pass
+
+
+def _write_verified_json_temp(
+    data: dict[str, Any],
+    *,
+    directory: Path,
+    prefix: str,
+) -> str:
+    fd, temp_name = tempfile.mkstemp(prefix=prefix, suffix=".tmp", dir=str(directory))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        return temp_name
+    except Exception:
+        try:
+            Path(temp_name).unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise
+
+
+def _atomic_backup(target: Path, backup: Path) -> None:
+    """Copiază versiunea anterioară în backup fără a lăsa un .bak parțial."""
+    previous = json.loads(target.read_text(encoding="utf-8"))
+    temp_name = _write_verified_json_temp(
+        previous,
+        directory=target.parent,
+        prefix=backup.name + ".",
+    )
+    try:
+        if json.loads(Path(temp_name).read_text(encoding="utf-8")) != previous:
+            raise AnnualClosureStorageError("Verificarea backupului temporar a eșuat.")
+        os.replace(temp_name, backup)
+        _fsync_directory(target.parent)
+    except Exception:
+        Path(temp_name).unlink(missing_ok=True)
+        raise
+
+
 def register_annual_closure_once(
     snapshot: AnnualClosureSnapshot,
     path: str | Path = ANNUAL_CLOSURE_REGISTRY_FILE,
@@ -70,61 +146,69 @@ def register_annual_closure_once(
     if not key:
         raise AnnualClosureStorageError("Lipsește identificatorul stabil al elevului.")
     payload = _snapshot_dict(snapshot)
-    registry = load_annual_closure_registry(path)
-    snapshots = registry["snapshots"]
-    if key in snapshots:
-        existing = snapshots[key]
-        if existing == payload:
-            return registry  # retry idempotent; nu rescriem.
-        raise AnnualClosureStorageError(
-            "Elevul are deja o închidere anuală persistentă. "
-            "Corectarea necesită un flux separat și auditabil."
-        )
-
-    updated = {
-        **registry,
-        "snapshots": {**snapshots, key: payload},
-    }
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    backup = target.with_suffix(target.suffix + ".bak")
 
-    fd, temp_name = tempfile.mkstemp(prefix=target.name + ".", suffix=".tmp", dir=str(target.parent))
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(updated, handle, ensure_ascii=False, indent=2, sort_keys=True)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
+    with _exclusive_registry_lock(target):
+        # Citirea are loc DUPĂ obținerea lockului: elimină lost-update între writeri.
+        registry = load_annual_closure_registry(target)
+        snapshots = registry["snapshots"]
+        if key in snapshots:
+            existing = snapshots[key]
+            if existing == payload:
+                return registry  # retry idempotent; nu rescriem.
+            raise AnnualClosureStorageError(
+                "Elevul are deja o închidere anuală persistentă. "
+                "Corectarea necesită un flux separat și auditabil."
+            )
 
-        check = json.loads(Path(temp_name).read_text(encoding="utf-8"))
-        stored = check.get("snapshots", {}).get(key)
-        if stored != payload:
-            raise AnnualClosureStorageError("Verificarea registrului temporar a eșuat.")
+        updated = {
+            **registry,
+            "snapshots": {**snapshots, key: payload},
+        }
+        backup = target.with_suffix(target.suffix + ".bak")
+        temp_name = _write_verified_json_temp(
+            updated,
+            directory=target.parent,
+            prefix=target.name + ".",
+        )
         try:
-            stored_snapshot = AnnualClosureSnapshot(**stored)
-        except Exception as exc:
-            raise AnnualClosureStorageError("Snapshotul temporar nu poate fi reconstruit.") from exc
-        if not verify_annual_closure_snapshot(stored_snapshot):
-            raise AnnualClosureStorageError("SHA-256 al snapshotului temporar este invalid.")
-        if target.exists():
-            shutil.copy2(target, backup)
-        os.replace(temp_name, target)
-    except Exception:
-        try:
-            Path(temp_name).unlink(missing_ok=True)
+            check = json.loads(Path(temp_name).read_text(encoding="utf-8"))
+            stored = check.get("snapshots", {}).get(key)
+            if stored != payload:
+                raise AnnualClosureStorageError("Verificarea registrului temporar a eșuat.")
+            try:
+                stored_snapshot = AnnualClosureSnapshot(**stored)
+            except Exception as exc:
+                raise AnnualClosureStorageError(
+                    "Snapshotul temporar nu poate fi reconstruit."
+                ) from exc
+            if not verify_annual_closure_snapshot(stored_snapshot):
+                raise AnnualClosureStorageError("SHA-256 al snapshotului temporar este invalid.")
+
+            if target.exists():
+                _atomic_backup(target, backup)
+            os.replace(temp_name, target)
+            _fsync_directory(target.parent)
         except Exception:
-            pass
-        raise
+            try:
+                Path(temp_name).unlink(missing_ok=True)
+            except Exception:
+                pass
+            raise
 
-    final = load_annual_closure_registry(target)
-    final_payload = final["snapshots"].get(key)
-    if final_payload != payload:
-        raise AnnualClosureStorageError("Verificarea după scriere a registrului anual a eșuat.")
-    try:
-        final_snapshot = AnnualClosureSnapshot(**final_payload)
-    except Exception as exc:
-        raise AnnualClosureStorageError("Snapshotul final nu poate fi reconstruit.") from exc
-    if not verify_annual_closure_snapshot(final_snapshot):
-        raise AnnualClosureStorageError("SHA-256 al snapshotului final este invalid.")
-    return final
+        final = load_annual_closure_registry(target)
+        final_payload = final["snapshots"].get(key)
+        if final_payload != payload:
+            raise AnnualClosureStorageError(
+                "Verificarea după scriere a registrului anual a eșuat."
+            )
+        try:
+            final_snapshot = AnnualClosureSnapshot(**final_payload)
+        except Exception as exc:
+            raise AnnualClosureStorageError(
+                "Snapshotul final nu poate fi reconstruit."
+            ) from exc
+        if not verify_annual_closure_snapshot(final_snapshot):
+            raise AnnualClosureStorageError("SHA-256 al snapshotului final este invalid.")
+        return final
