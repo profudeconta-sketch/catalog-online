@@ -126,15 +126,15 @@ PROFESSORS = {
 # Geometria NU se comprimă atunci când o rubrică este goală.
 CATALOG_P3_SLOTS = (
     "Limba și literatura română",
-    None,  # Limba și literatura maternă – rubrică fizică neutilizată la IX TH
     "Limba modernă 1 – Limba engleză",
     "Limba modernă 2 – Limba franceză",
-    None,  # Limba modernă 3 – rubrică fizică neutilizată la IX TH
     "Matematică",
     "Fizică",
     "Chimie",
     "Biologie",
     "Istorie",
+    None,  # Istoria comunismului din România – denumirea rămâne tipărită în V6
+    None,  # Istoria evreilor. Holocaustul – denumirea rămâne tipărită în V6
     "Geografie",
 )
 
@@ -161,15 +161,15 @@ CATALOG_P4_SLOTS = (
 # rămâne goală și nu se încearcă nicio citire.
 CATALOG_P3_SOURCE_KEYS = (
     "Limba și literatura română",
-    None,
     "Limba engleză (L1)",
     "Limba franceză (L2)",
-    None,
     "Matematică",
     "Fizică",
     "Chimie",
     "Biologie",
     "Istorie",
+    None,
+    None,
     "Geografie",
 )
 
