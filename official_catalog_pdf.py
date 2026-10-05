@@ -506,6 +506,11 @@ def validate_finalization_audit_chain_for_print(
                 or record.school_year != snapshot.school_year
             ):
                 raise OfficialCatalogError("Actul primei corigențe nu aparține snapshotului tipărit.")
+            expected_upstream = tuple(actual)
+            if record.upstream_audit_chain_sha256 != expected_upstream:
+                raise OfficialCatalogError(
+                    "Actul primei corigențe nu confirmă exact lanțul anterior furnizat."
+                )
             previous_session = record
         elif isinstance(record, ReexaminationApprovalRecord):
             if not verify_reexamination_approval_record(record):
