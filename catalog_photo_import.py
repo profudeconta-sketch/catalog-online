@@ -37,6 +37,43 @@ def date_in_period(ddmm,start,end):
     d=dt.datetime.strptime(normalize_ddmm(ddmm,start.year),"%d.%m").date().replace(year=start.year)
     return start<=d<=end
 
+
+def parse_absence_month_group(value, year=2026):
+    """Transformă notația fizică de tip 'X: 1, 2 5,17' în date DD.MM.
+    Luna romană este declarată o singură dată; fiecare număr arab ulterior este o zi.
+    """
+    raw=str(value or "").strip().upper()
+    m=re.fullmatch(r"\s*([IVX]+)\s*:\s*(.*?)\s*",raw)
+    if not m:
+        raise PhotoImportError(f"Grup de absențe invalid: {value!r}")
+    month=_ROMAN_MONTHS.get(m.group(1))
+    if month is None:
+        raise PhotoImportError(f"Lună romană invalidă în grupul de absențe: {value!r}")
+    days_raw=m.group(2)
+    if not days_raw:
+        raise PhotoImportError(f"Grup de absențe fără zile: {value!r}")
+    # În catalog zilele pot fi delimitate prin virgulă, punct și virgulă sau doar spațiu.
+    # Nu concatenăm cifre separate: "1 2" înseamnă zilele 1 și 2, nu ziua 12.
+    if re.search(r"[^\d,\s;]",days_raw):
+        raise PhotoImportError(f"Separator sau caracter invalid în grupul de absențe: {value!r}")
+    tokens=re.findall(r"\d{1,2}",days_raw)
+    residue=re.sub(r"\d{1,2}|[,;\s]","",days_raw)
+    if residue or not tokens:
+        raise PhotoImportError(f"Zile invalide în grupul de absențe: {value!r}")
+    out=[]
+    seen=set()
+    for token in tokens:
+        day=int(token)
+        try:
+            ddmm=dt.date(year,month,day).strftime("%d.%m")
+        except ValueError as ex:
+            raise PhotoImportError(f"Zi calendaristică invalidă în grupul de absențe: {token!r}") from ex
+        if ddmm in seen:
+            raise PhotoImportError(f"Zi repetată în același grup de absențe: {ddmm}")
+        seen.add(ddmm); out.append(ddmm)
+    return out
+
+
 def safe_zip_images(data):
     if len(data)>80*1024*1024: raise PhotoImportError("Arhiva depășește 80 MB.")
     out=[]
@@ -79,6 +116,9 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
       "kind 'grade' sau 'absence', value (1..10 pentru grade), date DD.MM, motivated boolean, "
       "confidence 0..1, source_image 'left' sau 'right', legible boolean. "
       "legible=true NUMAI dacă studentul, disciplina, tipul, valoarea și data pot fi citite direct din fotografie, fără presupuneri. "
+      "Pentru ABSENȚE, catalogul fizic poate scrie luna o singură dată cu cifre romane urmată de două puncte, de exemplu 'X: 1, 2 5'. "
+      "În acest caz X este luna octombrie, iar 1, 2 și 5 sunt trei zile distincte; spațiul dintre 2 și 5 este separator, nu formează 25. "
+      "Emite câte un record separat pentru fiecare zi, cu date normalizată DD.MM. "
       "Dacă există orice dubiu, păstrează recordul, pune legible=false și confidence corespunzător; nu inventa valoarea.")
     payload={"model":"gpt-6-luna","input":[{"role":"user","content":[
       {"type":"input_text","text":prompt},
