@@ -108,6 +108,27 @@ def _data_url(name,data):
     mime={".png":"image/png",".webp":"image/webp"}.get(PurePosixPath(name).suffix.lower(),"image/jpeg")
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
 
+def _student_band_crops(image, count):
+    """Decupaje deterministe pentru lizibilitate. Nu modifică semantic imaginea și nu inventează conținut."""
+    try:
+        from PIL import Image
+    except Exception:
+        return []
+    if count < 1:
+        return []
+    im=Image.open(io.BytesIO(image[1])).convert("RGB")
+    w,h=im.size
+    # Antetul ocupă aproximativ partea superioară; benzile elevilor sunt egale în formular.
+    top=int(h*0.055); bottom=int(h*0.94)
+    band=(bottom-top)/count
+    out=[]
+    for idx in range(count):
+        y0=max(0,int(top+idx*band)-25); y1=min(h,int(top+(idx+1)*band)+25)
+        crop=im.crop((0,y0,w,y1))
+        buf=io.BytesIO(); crop.save(buf,format="JPEG",quality=95)
+        out.append((f"{PurePosixPath(image[0]).stem}-elev-{idx+1}.jpg",buf.getvalue()))
+    return out
+
 def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects):
     prompt=("Analizează două fotografii ale aceleiași deschideri de catalog școlar românesc. "
       f"Elevii de sus în jos sunt exact {json.dumps(student_names,ensure_ascii=False)}. "
@@ -129,7 +150,8 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
     payload={"model":model,"input":[{"role":"user","content":[
       {"type":"input_text","text":prompt},
       {"type":"input_image","image_url":_data_url(left[0],left[1]),"detail":"high"},
-      {"type":"input_image","image_url":_data_url(right[0],right[1]),"detail":"high"}]}]}
+      {"type":"input_image","image_url":_data_url(right[0],right[1]),"detail":"high"},
+      *[{"type":"input_image","image_url":_data_url(n,d),"detail":"high"} for n,d in (_student_band_crops(left,len(student_names))+_student_band_crops(right,len(student_names)))]}]}
     req=urllib.request.Request("https://api.openai.com/v1/responses",data=json.dumps(payload).encode(),
       headers={"Authorization":f"Bearer {_api_key()}","Content-Type":"application/json"},method="POST")
     try:
