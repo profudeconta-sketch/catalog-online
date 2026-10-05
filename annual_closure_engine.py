@@ -79,6 +79,7 @@ class SubjectInput:
     grades: tuple[Decimal, ...]
     unmotivated_absences: int
     annual_hours: int | None
+    weekly_hours: Decimal | None = None
     is_module: bool = False
     ends_during_year: bool = False
 
@@ -90,6 +91,8 @@ class SubjectResult:
     annual_average: int
     unmotivated_absences: int
     annual_hours: int
+    minimum_grade_reference: int
+    has_minimum_grade_reference: bool
     reaches_20_percent: bool
     is_module: bool
     ends_during_year: bool
@@ -124,6 +127,20 @@ def round_annual_subject_average(value: Decimal) -> int:
     return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
+def minimum_grade_reference(subject: SubjectInput) -> int:
+    """Reperul ROFUIP art. 107; „de regulă”, nu prag absolut în toate cazurile."""
+    if subject.is_module:
+        if subject.annual_hours is None or subject.annual_hours <= 0:
+            raise AnnualClosureError(f"{subject.name}: lipsesc orele modulului.")
+        # de regulă o notă / 25 ore; minimum absolut menționat: 2
+        return max(2, int((subject.annual_hours + 24) // 25))
+    if subject.weekly_hours is None or subject.weekly_hours <= 0:
+        raise AnnualClosureError(f"{subject.name}: lipsesc orele săptămânale.")
+    if subject.weekly_hours < 1:
+        return 2
+    return max(4, int(subject.weekly_hours) + 3)
+
+
 def calculate_subject(subject: SubjectInput) -> SubjectResult:
     if not subject.grades:
         raise AnnualClosureError(f"{subject.name}: nu există note pentru încheiere.")
@@ -133,6 +150,7 @@ def calculate_subject(subject: SubjectInput) -> SubjectResult:
             "nu poate fi verificat pragul legal de 20%."
         )
     grades = tuple(_decimal_grade(v) for v in subject.grades)
+    minimum_reference = minimum_grade_reference(subject)
     raw = sum(grades, Decimal("0")) / Decimal(len(grades))
     annual = round_annual_subject_average(raw)
     reaches_20 = Decimal(subject.unmotivated_absences) >= (
@@ -144,6 +162,8 @@ def calculate_subject(subject: SubjectInput) -> SubjectResult:
         annual_average=annual,
         unmotivated_absences=subject.unmotivated_absences,
         annual_hours=subject.annual_hours,
+        minimum_grade_reference=minimum_reference,
+        has_minimum_grade_reference=len(grades) >= minimum_reference,
         reaches_20_percent=reaches_20,
         is_module=subject.is_module,
         ends_during_year=subject.ends_during_year,
@@ -225,7 +245,19 @@ def preview_annual_closure(
     base, penalty, conduct = calculate_conduct(
         interval_conduct_grades, total_unmotivated, results
     )
-    status = determine_status(results, conduct)
+    blockers = []
+    for result in results:
+        total_subject_absences = next(
+            s.unmotivated_absences for s in subjects if s.name == result.name
+        )
+        if (
+            total_subject_absences >= result.annual_hours * 0.50
+            and not result.has_minimum_grade_reference
+        ):
+            blockers.append(
+                f"{result.name}: cel puțin 50% absențe și număr insuficient de note – AMÂNAT."
+            )
+    status = "AMÂNAT" if blockers else determine_status(results, conduct)
     general = calculate_general_average(results, conduct, status)
     return AnnualClosurePreview(
         subjects=results,
@@ -237,5 +269,5 @@ def preview_annual_closure(
         conduct_annual_average=conduct,
         final_status=status,
         general_average=general,
-        blockers=(),
+        blockers=tuple(blockers),
     )
