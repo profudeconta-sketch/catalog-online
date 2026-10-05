@@ -55,6 +55,37 @@ class PhotoImportSafetyTests(unittest.TestCase):
             with self.assertRaises(PhotoImportError, msg=bad):
                 parse_absence_month_group(bad)
 
+    def test_absence_group_interval_and_duplicate_flow(self):
+        from catalog_photo_import import date_in_period
+        start=dt.date(2026,9,30); end=dt.date(2026,10,2)
+        dates=parse_absence_month_group("X: 1 2 5")
+        self.assertEqual([d for d in dates if date_in_period(d,start,end)],["01.10","02.10"])
+        path=workbook()
+        try:
+            # 01.10 există deja; 02.10 trebuie propusă o singură dată.
+            wb=load_workbook(path); ws=wb["Cultură Generală"]; ws.cell(13,8+21).value="01.10"; wb.save(path); wb.close()
+            items=[ImportProposal(0,"Cultură Generală","Matematică","absence","",d,confidence=.99,verifiable=True)
+                   for d in dates if date_in_period(d,start,end)]
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,items)
+            self.assertEqual([x[1] for x in result],["DEJA_EXISTENT","NOU"])
+            changed,backup=apply_confirmed_import(path,ELEVI,CG,TH,resolve,[x for x in result if x[1]=="NOU"])
+            self.assertEqual(changed,1)
+            after=compare_with_workbook(path,ELEVI,CG,TH,resolve,items)
+            self.assertEqual([x[1] for x in after],["DEJA_EXISTENT","DEJA_EXISTENT"])
+            if backup and os.path.exists(backup): os.remove(backup)
+        finally: os.remove(path)
+
+    def test_motivated_absence_conflicts_with_existing_unmotivated(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]; ws.cell(13,8+21).value="02.10"; wb.save(path); wb.close()
+            p=ImportProposal(0,"Cultură Generală","Matematică","absence","","02.10",motivated=True,confidence=.99,verifiable=True)
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
+            self.assertEqual(result[0][1],"CONFLICT")
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,result)
+        finally: os.remove(path)
+
     def test_contradiction_stays_visible_and_blocked(self):
         a=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.98,verifiable=True)
         b=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",confidence=.99,verifiable=True)
