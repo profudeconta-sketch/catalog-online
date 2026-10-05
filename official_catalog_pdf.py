@@ -376,8 +376,8 @@ def draw_catalog_absence_line(
     return cursor
 
 
-def _fit_v6_cell_font(text: str, max_width: float, preferred: float = 4.9, minimum: float = 3.4) -> float:
-    """Alege cea mai mare mărime lizibilă care încape într-o subcoloană V6."""
+def _fit_v6_cell_font(text: str, max_width: float, preferred: float = 5.2, minimum: float = 3.8) -> float:
+    """Alege fontul maxim care încape în lățimea FINALĂ a subcoloanei V6."""
     size = preferred
     while size > minimum and pdfmetrics.stringWidth(text, PDF_FONT, size) > max_width:
         size = round(size - 0.1, 2)
@@ -386,24 +386,35 @@ def _fit_v6_cell_font(text: str, max_width: float, preferred: float = 4.9, minim
     return size
 
 
-def _absence_line_width(entries: Sequence[AbsenceEntry], font_size: float) -> float:
-    """Lățimea exactă a unei linii de absențe, inclusiv luna și separatorii."""
-    if not entries:
-        return 0.0
-    month = entries[0].date.month
-    prefix = f"{ROMAN_MONTHS[month]}:"
-    text = prefix + ",".join(f"{entry.date.day:02d}" for entry in sorted(entries, key=lambda item: item.date.day))
-    return pdfmetrics.stringWidth(text, PDF_FONT, font_size)
+def _format_v6_absence(entry: AbsenceEntry) -> str:
+    """Format compact, suficient pentru 30 de poziții verticale: zi.lună romană."""
+    return f"{entry.date.day:02d}.{ROMAN_MONTHS[entry.date.month]}"
 
 
-def _fit_v6_absence_font(entries: Sequence[AbsenceEntry], max_width: float, preferred: float = 4.9, minimum: float = 3.4) -> float:
-    """Alege fontul maxim care păstrează întreaga linie de absențe în subcoloană."""
-    size = preferred
-    while size > minimum and _absence_line_width(entries, size) > max_width:
-        size = round(size - 0.1, 2)
-    if _absence_line_width(entries, size) > max_width:
-        raise OfficialCatalogError("Linia de absențe nu încape lizibil în subcoloana V6.")
-    return size
+def _draw_v6_absence_entry(
+    c: canvas.Canvas,
+    entry: AbsenceEntry,
+    x: float,
+    y: float,
+    max_width: float,
+) -> None:
+    """Desenează o singură absență; motivarea este marcată prin oval."""
+    text = _format_v6_absence(entry)
+    size = _fit_v6_cell_font(text, max_width, preferred=5.2, minimum=3.8)
+    c.setFont(PDF_FONT, size)
+    c.drawString(x, y, text)
+    if entry.motivated:
+        width = pdfmetrics.stringWidth(text, PDF_FONT, size)
+        pad_x = 0.8
+        pad_y = 0.9
+        c.ellipse(
+            x - pad_x,
+            y - pad_y,
+            x + width + pad_x,
+            y + size + pad_y,
+            stroke=1,
+            fill=0,
+        )
 
 
 def _source_location(source_key: str) -> tuple[str, int]:
@@ -1836,37 +1847,52 @@ def _draw_v6_data_overlay(
             cell_pad = 1.4
             abs_left = x0 + cell_pad
             note_left = x0 + half_w + cell_pad
-            cell_width = half_w - 2 * cell_pad
 
-            # În tipizat, textul din ambele subcoloane se citește normal:
-            # stânga -> dreapta, iar înregistrările se succed de sus în jos.
-            # Spațiul vertical disponibil se termină înaintea celor trei rânduri de medii.
-            content_top = body_top - 14.0
-            content_bottom = min(block.mean_lines_y) + 6.0
-            grade_count = len(subject.grades)
-            grade_step = min(10.0, (content_top - content_bottom) / max(grade_count - 1, 1))
+            # Coordonatele x/y ale V6 sunt scalate cu 1,4 la pagina finală;
+            # fonturile ReportLab sunt deja în puncte finale. De aceea lățimea
+            # disponibilă pentru text se compară după aplicarea aceleiași scalări.
+            cell_width_output = (half_w - 2 * cell_pad) * 1.4
+
+            # Zona de conținut se termină înaintea celor trei rânduri de medii.
+            # 30 de absențe trebuie să încapă garantat, indiferent de distribuția pe luni.
+            content_top = body_top - 13.0
+            content_bottom = min(block.mean_lines_y) + 7.0
+
+            grade_entries = tuple(subject.grades)
+            if len(grade_entries) > 10:
+                raise OfficialCatalogError(
+                    f"{subject.label}: sunt mai mult de 10 note pentru rubrica V6."
+                )
+            grade_step = min(
+                15.0,
+                (content_top - content_bottom) / max(len(grade_entries) - 1, 1),
+            )
             grade_y = content_top
-            for entry in subject.grades:
+            for entry in grade_entries:
                 txt = format_catalog_grade(entry)
-                font_size = _fit_v6_cell_font(txt, cell_width)
+                font_size = _fit_v6_cell_font(
+                    txt, cell_width_output, preferred=5.2, minimum=3.8
+                )
                 ox, oy = out(note_left, grade_y)
                 c.setFont(PDF_FONT, font_size)
                 c.drawString(ox, oy, txt)
                 grade_y -= grade_step
 
-            by_month: dict[int, list[AbsenceEntry]] = {}
-            for entry in subject.absences:
-                by_month.setdefault(entry.date.month, []).append(entry)
-            month_groups = [
-                tuple(sorted(by_month[month], key=lambda item: item.date.day))
-                for month in sorted(by_month)
-            ]
-            absence_step = min(10.0, (content_top - content_bottom) / max(len(month_groups) - 1, 1))
+            absence_entries = tuple(sorted(subject.absences, key=lambda item: item.date))
+            if len(absence_entries) > 30:
+                raise OfficialCatalogError(
+                    f"{subject.label}: sunt mai mult de 30 de absențe pentru rubrica V6."
+                )
+            absence_step = min(
+                8.0,
+                (content_top - content_bottom) / max(len(absence_entries) - 1, 1),
+            )
             absence_y = content_top
-            for entries in month_groups:
-                font_size = _fit_v6_absence_font(entries, cell_width)
+            for entry in absence_entries:
                 ox, oy = out(abs_left, absence_y)
-                draw_catalog_absence_line(c, entries, ox, oy, font_size=font_size)
+                _draw_v6_absence_entry(
+                    c, entry, ox, oy, cell_width_output
+                )
                 absence_y -= absence_step
 
             print_state = annual_state.subject_print_state(subject.source_key, subject.average)
