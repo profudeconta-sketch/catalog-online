@@ -296,3 +296,56 @@ def publish_private_annual_closure_registry(
         raise AnnualClosureStorageError(
             "Registrul privat al închiderilor anuale nu a putut fi publicat."
         ) from exc
+
+
+def persist_private_annual_closure_once(
+    snapshot: AnnualClosureSnapshot,
+) -> dict[str, Any]:
+    """Persistă definitiv un snapshot anual în registrul privat, fără suprascriere.
+
+    Operația este intenționat independentă de interfața catalogului și de datele
+    primare. Conflictul de versiune al registrului privat este tratat fail-closed.
+    """
+    key = str(snapshot.student_key).strip()
+    if not key:
+        raise AnnualClosureStorageError("Lipsește identificatorul stabil al elevului.")
+    payload = _snapshot_dict(snapshot)
+
+    registry, registry_sha = load_private_annual_closure_registry()
+    snapshots = registry["snapshots"]
+
+    if key in snapshots:
+        if snapshots[key] == payload:
+            # Retry idempotent: nu publicăm și nu modificăm repository-ul privat.
+            return registry
+        raise AnnualClosureStorageError(
+            "Elevul are deja o închidere anuală definitivă în registrul privat. "
+            "Corectarea necesită un flux separat și auditabil."
+        )
+
+    updated = {
+        **registry,
+        "snapshots": {**snapshots, key: payload},
+    }
+
+    # Validăm integral noua stare înainte de orice tentativă de publicare.
+    serialize_annual_closure_registry(updated)
+
+    # private_write verifică SHA-ul citit mai sus. Dacă alt writer a modificat
+    # registrul între timp, publicarea este refuzată, nu se face merge implicit.
+    publish_private_annual_closure_registry(
+        updated,
+        expected_sha=registry_sha,
+    )
+
+    # Read-after-write: rezultatul publicat trebuie să fie exact cel pregătit.
+    final, _final_sha = load_private_annual_closure_registry()
+    if final != updated:
+        raise AnnualClosureStorageError(
+            "Verificarea registrului privat după publicare a eșuat."
+        )
+    if final["snapshots"].get(key) != payload:
+        raise AnnualClosureStorageError(
+            "Snapshotul anual publicat nu corespunde datelor validate."
+        )
+    return final
