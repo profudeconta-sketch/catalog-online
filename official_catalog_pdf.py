@@ -32,6 +32,11 @@ from official_catalog_body_template import (
     build_body_template_half,
 )
 
+from official_catalog_source_template import (
+    OfficialCatalogSourceError,
+    merge_official_page_with_overlay,
+)
+
 # Dimensiunea fizică a fiecărei pagini din tipizatul oficial: 350 × 500 mm.
 OFFICIAL_CATALOG_PAGE_SIZE = (350 * mm, 500 * mm)
 OFFICIAL_CATALOG_PAGE_COUNT = 32
@@ -2020,16 +2025,200 @@ def _append_pdf_page(writer: PdfWriter, pdf_bytes: bytes) -> None:
     writer.add_page(reader.pages[0])
 
 
+
+def _build_official_overlay(drawer) -> bytes:
+    out = io.BytesIO()
+    c = canvas.Canvas(out, pagesize=OFFICIAL_CATALOG_PAGE_SIZE, pageCompression=1, invariant=1)
+    drawer(c)
+    c.showPage()
+    c.save()
+    return out.getvalue()
+
+
+def _draw_official_admin_overlay(c: canvas.Canvas) -> None:
+    """Datele clasei peste pagina 3 a tipizatului oficial, pe geometria aprobata."""
+    h = OFFICIAL_CATALOG_PAGE_SIZE[1]
+
+    def y(top: float, size: float = 8.0) -> float:
+        return h - top - size
+
+    c.setFont(PDF_FONT_BOLD, 9.0)
+    c.drawCentredString(525.0, y(106, 9), CATALOG_CONFIG["unitate"])
+    c.drawCentredString(495.0, y(165, 9), "Turda, județul Cluj")
+    c.setFont(PDF_FONT_BOLD, 10.0)
+    c.drawString(648.0, y(275, 10), "IX-a TH")
+
+    c.setFont(PDF_FONT_BOLD, 8.0)
+    c.drawString(350.0, y(340, 8), CATALOG_CONFIG["filiera"])
+    c.drawString(350.0, y(372, 8), CATALOG_CONFIG["profil"])
+    c.drawString(627.0, y(402, 8), CATALOG_CONFIG["domeniu"])
+    c.drawString(547.5, y(434, 8), CATALOG_CONFIG["calificare"])
+    c.setFont(PDF_FONT_BOLD, 9.0)
+    c.drawString(560.0, y(474, 9), "2026 - 2027")
+
+    c.setFont(PDF_FONT, 8.0)
+    c.drawString(85.0, y(600, 8), CATALOG_CONFIG["director"])
+    c.drawRightString(925.0, y(600, 8), CATALOG_CONFIG["diriginte"])
+
+    entries = list(PROFESSORS.items())
+    row_top = 718.0
+    row_step = 36.36
+    for row in range(10):
+        baseline = y(row_top + row * row_step, 7.0)
+        left_subject, left_prof = entries[row]
+        right_subject, right_prof = entries[row + 10]
+
+        ls = _fit_text(c, left_subject, 128.0, PDF_FONT, 7.0, 5.0)
+        lp = _fit_text(c, left_prof, 112.0, PDF_FONT, 7.0, 5.0)
+        rs = _fit_text(c, right_subject, 155.0, PDF_FONT, 7.0, 4.8)
+        rp = _fit_text(c, right_prof, 120.0, PDF_FONT, 7.0, 5.0)
+
+        c.setFont(PDF_FONT, ls); c.drawCentredString(148.0, baseline, left_subject)
+        c.setFont(PDF_FONT, lp); c.drawCentredString(365.0, baseline, left_prof)
+        c.setFont(PDF_FONT, rs); c.drawCentredString(580.0, baseline, right_subject)
+        c.setFont(PDF_FONT, rp); c.drawCentredString(798.0, baseline, right_prof)
+
+
+def _personal_row_text(row: Mapping, *keys: str) -> str:
+    for key in keys:
+        value = _norm(row.get(key))
+        if value:
+            return value
+    return ""
+
+
+def _draw_official_personal_data_overlay(
+    c: canvas.Canvas,
+    students: Sequence[StudentIdentity],
+    gest_by_rm: Mapping[str, Mapping],
+) -> None:
+    """Completeaza numai celulele variabile ale paginii oficiale DATE PERSONALE."""
+    h = OFFICIAL_CATALOG_PAGE_SIZE[1]
+    first_top = 174.0
+    row_step = 26.86
+
+    for idx, student in enumerate(students[:35]):
+        row = gest_by_rm[student.rm_pg]
+        top = first_top + idx * row_step
+        baseline = h - top - 6.4
+
+        birth = _birth_date_from_cnp(row.get("cnp"))
+        father = _personal_row_text(row, "prenume_tata", "nume_tata")
+        mother = _personal_row_text(row, "prenume_mama", "nume_mama")
+        address = ", ".join(
+            value for value in (
+                _norm(row.get("localitate")),
+                _norm(row.get("strada")),
+                _norm(row.get("numar_strada")),
+                _norm(row.get("bloc")),
+                _norm(row.get("apartament")),
+            ) if value
+        )
+        phones = " / ".join(
+            value for value in (
+                _norm(row.get("telefon_elev")),
+                _norm(row.get("telefon_mama")),
+                _norm(row.get("telefon_tata")),
+            ) if value
+        )
+        domicile = ", ".join(value for value in (address, phones) if value)
+
+        c.setFont(PDF_FONT, 5.8)
+        c.drawCentredString(84.0, baseline, student.nr_matr)
+
+        name_size = _fit_text(c, student.name, 180.0, PDF_FONT, 5.8, 4.2)
+        c.setFont(PDF_FONT, name_size); c.drawString(111.0, baseline, student.name)
+
+        if birth:
+            c.setFont(PDF_FONT, 5.6); c.drawCentredString(343.0, baseline, birth)
+
+        father_size = _fit_text(c, father, 66.0, PDF_FONT, 5.4, 3.9)
+        mother_size = _fit_text(c, mother, 66.0, PDF_FONT, 5.4, 3.9)
+        c.setFont(PDF_FONT, father_size); c.drawString(393.0, baseline, father)
+        c.setFont(PDF_FONT, mother_size); c.drawString(468.0, baseline, mother)
+
+        dom_size = _fit_text(c, domicile, 270.0, PDF_FONT, 5.2, 3.7)
+        c.setFont(PDF_FONT, dom_size); c.drawString(544.0, baseline, domicile)
+
+    # 32 pagini fizice = 16 file.
+    c.setFont(PDF_FONT_BOLD, 8.0)
+    c.drawString(523.0, h - 1138.0, "16")
+
+
+def _draw_official_statistics_overlay(c: canvas.Canvas, stats: GeneralStatistics) -> None:
+    """Valorile anuale peste tabelul statistic oficial; rubricile fara sursa raman goale."""
+    h = OFFICIAL_CATALOG_PAGE_SIZE[1]
+    x = 439.5
+
+    values = (
+        (180.0, stats.recorded_students),
+        (225.0, stats.added_dated_students),
+        (269.0, stats.departed_dated_students),
+        (306.0, stats.active_students),
+        (343.0, stats.promoted_students),
+        (375.0, stats.corigent_students),
+        (404.0, 0),
+        (455.0, 0),
+        (514.0, stats.repeat_students),
+        (562.0, stats.deferred_students),
+        (609.0, 0),
+        (655.0, 0),
+        (696.0, 0),
+        (734.0, 0),
+        (774.0, stats.total_absences),
+        (818.0, stats.unmotivated_absences),
+    )
+    c.setFont(PDF_FONT_BOLD, 8.0)
+    for top, value in values:
+        if value is not None:
+            c.drawCentredString(x, h - top - 8.0, str(value))
+
+    if stats.promoted_students is not None:
+        c.drawCentredString(902.5, h - 285.0 - 8.0, str(stats.promoted_students))
+
+
+def _draw_official_process_overlay(
+    c: canvas.Canvas,
+    students: Sequence[StudentIdentity],
+) -> None:
+    """Completeaza datele certe ale procesului-verbal; datele si semnaturile raman libere."""
+    h = OFFICIAL_CATALOG_PAGE_SIZE[1]
+    c.setFont(PDF_FONT, 8.0)
+    c.drawString(174.0, h - 55.0 - 8.0, CATALOG_CONFIG["unitate"])
+    c.drawString(267.0, h - 151.0 - 8.0, CATALOG_CONFIG["diriginte"].replace("Prof. Ec. ", ""))
+    c.drawString(341.0, h - 192.0 - 8.0, CATALOG_CONFIG["director"])
+
+    total_positions = 39
+    completed = len(students)
+    uncompleted = max(total_positions - completed, 0)
+    c.setFont(PDF_FONT_BOLD, 8.0)
+    c.drawCentredString(698.0, h - 192.0 - 8.0, str(total_positions))
+    c.drawCentredString(817.5, h - 192.0 - 8.0, str(completed))
+    c.drawCentredString(909.5, h - 192.0 - 8.0, str(uncompleted))
+    c.drawCentredString(162.5, h - 213.0 - 8.0, "0")
+
+    entries = list(PROFESSORS.items())
+    for idx, (subject, professor) in enumerate(entries, start=1):
+        top = 523.0 + (idx - 1) * 21.5
+        baseline = h - top - 6.5
+        c.setFont(PDF_FONT, 5.8)
+        c.drawCentredString(232.5, baseline, str(idx))
+        prof_size = _fit_text(c, professor, 245.0, PDF_FONT, 5.8, 4.2)
+        subj_size = _fit_text(c, subject, 190.0, PDF_FONT, 5.4, 3.8)
+        c.setFont(PDF_FONT, prof_size); c.drawString(249.0, baseline, professor)
+        c.setFont(PDF_FONT, subj_size); c.drawString(529.0, baseline, subject)
+
+    # Numele dirigintelui, deasupra punctajului rubricii finale, conform variantei aprobate.
+    c.setFont(PDF_FONT, 8.0)
+    c.drawString(320.0, 168.0, CATALOG_CONFIG["diriginte"])
+
+
 def generate_official_catalog_final(
     excel_path: str,
     gest_data: Sequence[Mapping],
     annual_states: Mapping[str, OfficialCatalogAnnualState],
 ) -> bytes:
-    """Generează 32 de pagini în ordinea și dimensiunea fizică a tipizatului oficial.
-
-    Funcția este strict read-only: nu salvează workbook-ul și nu persistă situațiile.
-    Stratul de randare nu adaugă rame, titluri sau numere de pagină artificiale.
-    """
+    """Genereaza catalogul oficial complet P1-P32, strict read-only si fail-closed."""
     _register_unicode_fonts()
     _validate_physical_source_mapping()
     wb = openpyxl.load_workbook(excel_path, data_only=True, read_only=True)
@@ -2038,32 +2227,9 @@ def generate_official_catalog_final(
         validate_official_catalog_annual_states(students, annual_states)
         gest_by_rm = _gest_by_identity(gest_data, students)
 
-        out = io.BytesIO()
-        c = canvas.Canvas(
-            out,
-            pagesize=OFFICIAL_CATALOG_PAGE_SIZE,
-            pageCompression=1,
-            invariant=1,
-        )
-
-        # P1 – coperta. Geometria fidelă va fi suprapusă din șablonul oficial;
-        # până la conectarea șablonului, pagina rămâne intenționat fără elemente artificiale.
-        c.showPage()
-
-        # P2 – NORME. Textul integral trebuie provenit din tipizatul oficial,
-        # nu dintr-o parafrazare generată de aplicație.
-        c.showPage()
-
-        # P3 – date administrative și tabelul profesorilor.
-        _draw_admin_page(c)
-        c.showPage()
-
-        # P4–P29 sunt compuse separat după finalizarea stratului ReportLab:
-        # șablonul vectorial V6 rămâne fundalul imuabil, iar datele sunt overlay.
         body_pages: list[bytes] = []
         for spread_index in range(13):
-            start_pos = spread_index * 3
-            group = students[start_pos : start_pos + 3]
+            group = students[spread_index * 3 : spread_index * 3 + 3]
             for side in ("stanga", "dreapta"):
                 try:
                     template = build_body_template_half(side)
@@ -2072,20 +2238,13 @@ def generate_official_catalog_final(
                 overlay = _build_v6_overlay_page(wb, group, side, annual_states)
                 body_pages.append(_merge_body_template_with_overlay(template, overlay))
 
-        # Rezervăm P4–P29 în fluxul ReportLab; după finalizare sunt înlocuite
-        # vectorial cu paginile V6 compuse mai sus.
-        for _ in body_pages:
-            c.showPage()
-
-        # P30 – date personale.
-        _draw_students_grid(c, students, gest_by_rm, 30)
-        c.showPage()
-
-        # P31 – situația generală.
         base_stats = extract_general_statistics(wb, students, gest_by_rm)
         final_counts = {"PROMOVAT": 0, "CORIGENT": 0, "REPETENT": 0, "AMANAT": 0}
         for student in students:
-            final_counts[annual_states[student.rm_pg].final_status] += 1
+            status = annual_states[student.rm_pg].final_status
+            if status not in final_counts:
+                raise OfficialCatalogError(f"Situatie finala necunoscuta: {status!r}.")
+            final_counts[status] += 1
         general_stats = GeneralStatistics(
             recorded_students=base_stats.recorded_students,
             active_students=base_stats.active_students,
@@ -2093,39 +2252,63 @@ def generate_official_catalog_final(
             withdrawn_students=base_stats.withdrawn_students,
             added_dated_students=base_stats.added_dated_students,
             departed_dated_students=base_stats.departed_dated_students,
-            total_absences=sum(
-                annual_states[student.rm_pg].total_absences for student in students
-            ),
+            total_absences=sum(annual_states[s.rm_pg].total_absences for s in students),
             unmotivated_absences=sum(
-                annual_states[student.rm_pg].total_unmotivated_absences for student in students
+                annual_states[s.rm_pg].total_unmotivated_absences for s in students
             ),
             promoted_students=final_counts["PROMOVAT"],
             corigent_students=final_counts["CORIGENT"],
             repeat_students=final_counts["REPETENT"],
             deferred_students=final_counts["AMANAT"],
         )
-        _draw_general_statistics(c, general_stats)
-        c.showPage()
 
-        # P32 – proces-verbal. Rubricile administrative rămân necompletate automat.
-        c.showPage()
-
-        c.save()
-
-        # Înlocuiește exclusiv P4–P29. Restul paginilor rămân exact cele
-        # produse de generatorul existent.
-        base_reader = PdfReader(io.BytesIO(out.getvalue()))
-        if len(base_reader.pages) != OFFICIAL_CATALOG_PAGE_COUNT:
-            raise OfficialCatalogError(
-                f"Generatorul intermediar are {len(base_reader.pages)} pagini, nu 32."
+        try:
+            p1 = merge_official_page_with_overlay(0)
+            p2 = merge_official_page_with_overlay(1)
+            p3 = merge_official_page_with_overlay(
+                2, _build_official_overlay(_draw_official_admin_overlay)
             )
+            p30 = merge_official_page_with_overlay(
+                6,
+                _build_official_overlay(
+                    lambda c: _draw_official_personal_data_overlay(c, students, gest_by_rm)
+                ),
+            )
+            p31 = merge_official_page_with_overlay(
+                5,
+                _build_official_overlay(
+                    lambda c: _draw_official_statistics_overlay(c, general_stats)
+                ),
+            )
+            p32 = merge_official_page_with_overlay(
+                7,
+                _build_official_overlay(
+                    lambda c: _draw_official_process_overlay(c, students)
+                ),
+            )
+        except OfficialCatalogSourceError as exc:
+            raise OfficialCatalogError(str(exc)) from exc
+
         writer = PdfWriter()
-        for page_index, page in enumerate(base_reader.pages):
-            if 3 <= page_index <= 28:
-                body_reader = PdfReader(io.BytesIO(body_pages[page_index - 3]))
-                writer.add_page(body_reader.pages[0])
-            else:
-                writer.add_page(page)
+        for page_bytes in (p1, p2, p3):
+            _append_pdf_page(writer, page_bytes)
+        for page_bytes in body_pages:
+            _append_pdf_page(writer, page_bytes)
+        for page_bytes in (p30, p31, p32):
+            _append_pdf_page(writer, page_bytes)
+
+        if len(writer.pages) != OFFICIAL_CATALOG_PAGE_COUNT:
+            raise OfficialCatalogError(
+                f"Catalogul final are {len(writer.pages)} pagini, nu {OFFICIAL_CATALOG_PAGE_COUNT}."
+            )
+        for index, page in enumerate(writer.pages, start=1):
+            width = float(page.mediabox.width)
+            height = float(page.mediabox.height)
+            if abs(width - OFFICIAL_CATALOG_PAGE_SIZE[0]) > 0.25 or abs(height - OFFICIAL_CATALOG_PAGE_SIZE[1]) > 0.25:
+                raise OfficialCatalogError(
+                    f"Pagina {index} are dimensiuni nevalide: {width:.2f} x {height:.2f} pt."
+                )
+
         final_out = io.BytesIO()
         writer.write(final_out)
         return final_out.getvalue()
