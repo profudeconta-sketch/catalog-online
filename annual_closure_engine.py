@@ -25,6 +25,11 @@ class AnnualClosureError(RuntimeError):
     pass
 
 
+def _is_sha256_hex(value: str) -> bool:
+    text = str(value or "").strip()
+    return len(text) == 64 and all(ch in "0123456789abcdefABCDEF" for ch in text)
+
+
 @dataclass(frozen=True)
 class SchoolYearCourseInterval:
     number: int
@@ -350,9 +355,10 @@ def build_annual_closure_snapshot(
             "Snapshotul anual nu poate fi construit cât timp există blocaje de închidere."
         )
     if preview.final_status == "AMÂNAT":
+        deferred_blockers = set(preview.blockers)
         non_deferred_blockers = tuple(
             blocker for blocker in preview.readiness_blockers
-            if "AMÂNAT" not in blocker
+            if blocker not in deferred_blockers
         )
         if non_deferred_blockers:
             raise AnnualClosureError(
@@ -419,8 +425,8 @@ def seal_annual_closure_snapshot(snapshot: AnnualClosureSnapshot) -> AnnualClosu
 
 
 def verify_annual_closure_snapshot(snapshot: AnnualClosureSnapshot) -> bool:
-    expected = snapshot.integrity_sha256
-    if not expected or len(expected) != 64:
+    expected = str(snapshot.integrity_sha256 or "")
+    if not _is_sha256_hex(expected):
         return False
     return snapshot_sha256(snapshot) == expected
 
@@ -677,7 +683,7 @@ def seal_annual_finalization_record(
 
 def verify_annual_finalization_record(record: AnnualFinalizationRecord) -> bool:
     expected = str(record.integrity_sha256 or "")
-    return len(expected) == 64 and finalization_sha256(record) == expected
+    return _is_sha256_hex(expected) and finalization_sha256(record) == expected
 
 
 def build_annual_finalization_record(
@@ -750,7 +756,7 @@ def build_annual_finalization_record(
         general = str(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
     chain = tuple(str(value).strip() for value in audit_chain_sha256)
-    if any(len(value) != 64 for value in chain) or len(set(chain)) != len(chain):
+    if any(not _is_sha256_hex(value) for value in chain) or len(set(chain)) != len(chain):
         raise AnnualClosureError("Lanțul SHA-256 al definitivării este invalid sau duplicat.")
 
     record = AnnualFinalizationRecord(
@@ -1090,7 +1096,7 @@ def seal_deferred_to_corigent_record(
 
 def verify_deferred_to_corigent_record(record: DeferredToCorigentRecord) -> bool:
     expected = str(record.integrity_sha256 or "")
-    return len(expected) == 64 and deferred_to_corigent_sha256(record) == expected
+    return _is_sha256_hex(expected) and deferred_to_corigent_sha256(record) == expected
 
 
 def build_deferred_to_corigent_record(
@@ -1208,7 +1214,7 @@ def seal_reexamination_approval_record(
 
 def verify_reexamination_approval_record(record: ReexaminationApprovalRecord) -> bool:
     expected = str(record.integrity_sha256 or "")
-    return len(expected) == 64 and reexamination_approval_sha256(record) == expected
+    return _is_sha256_hex(expected) and reexamination_approval_sha256(record) == expected
 
 
 def build_reexamination_approval_record(
