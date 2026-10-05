@@ -28,6 +28,11 @@ class AnnualClosureStorageError(RuntimeError):
     pass
 
 
+class AnnualClosurePersistenceUncertainError(AnnualClosureStorageError):
+    """Scrierea poate fi deja efectuată; este interzis retry-ul automat."""
+    pass
+
+
 def empty_annual_closure_registry() -> dict[str, Any]:
     return {
         "schema_version": REGISTRY_SCHEMA_VERSION,
@@ -338,8 +343,15 @@ def persist_private_annual_closure_once(
         expected_sha=registry_sha,
     )
 
-    # Read-after-write: rezultatul publicat trebuie să fie exact cel pregătit.
-    final, _final_sha = load_private_annual_closure_registry()
+    # După PUT, orice eșec de citire este ambiguu: scrierea poate exista deja.
+    # Nu transformăm această stare într-un retry automat al operației de scriere.
+    try:
+        final, _final_sha = load_private_annual_closure_registry()
+    except Exception as exc:
+        raise AnnualClosurePersistenceUncertainError(
+            "Publicarea poate fi deja efectuată, dar confirmarea nu a putut fi citită. "
+            "Nu repetați automat închiderea; verificați registrul privat înainte de orice nouă operație."
+        ) from exc
     if final != updated:
         raise AnnualClosureStorageError(
             "Verificarea registrului privat după publicare a eșuat."
