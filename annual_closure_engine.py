@@ -1244,6 +1244,10 @@ def build_reexamination_approval_record(
     reference = str(director_approval_reference).strip()
     if not name or not reference:
         raise AnnualClosureError("Reexaminarea necesită disciplina și referința aprobării directorului.")
+    if name != corigent_session_record.failed_subjects[0]:
+        raise AnnualClosureError(
+            "Aprobarea poate fi emisă numai pentru singura disciplină rămasă nepromovată."
+        )
     if approved_at < requested_at:
         raise AnnualClosureError("Aprobarea reexaminării nu poate preceda cererea.")
     if approved_at - requested_at > __import__("datetime").timedelta(hours=24):
