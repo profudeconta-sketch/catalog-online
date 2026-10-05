@@ -109,15 +109,19 @@ def calculate_conduct(
             "Lipsesc notele la purtare acordate pentru intervalele de cursuri."
         )
     grades = tuple(_decimal_grade(v) for v in interval_conduct_grades)
-    base = sum(grades, Decimal("0")) / Decimal(len(grades))
+    raw_base = sum(grades, Decimal("0")) / Decimal(len(grades))
+    # ROFUIP art. 109: și la purtare se încheie o singură medie anuală,
+    # rotunjită la întregul cel mai apropiat; .50 în favoarea elevului.
+    rounded_base = Decimal(round_annual_subject_average(raw_base))
 
     total_steps = total_unmotivated // 20
-    subject_threshold_reached = any(s.reaches_20_percent for s in subject_results)
+    subject_threshold_steps = sum(1 for s in subject_results if s.reaches_20_percent)
 
-    # Norma folosește alternativa „sau”; nu cumulăm de două ori aceeași sancțiune.
-    penalty = max(total_steps, 1 if subject_threshold_reached else 0)
-    annual = max(Decimal("1"), base - Decimal(penalty))
-    return base, penalty, annual
+    # „sau” = criterii alternative pentru diminuare; folosim sancțiunea mai severă,
+    # fără a dubla aceleași absențe prin însumarea celor două criterii.
+    penalty = max(total_steps, subject_threshold_steps)
+    annual = max(Decimal("1"), rounded_base - Decimal(penalty))
+    return rounded_base, penalty, annual
 
 
 def determine_status(
