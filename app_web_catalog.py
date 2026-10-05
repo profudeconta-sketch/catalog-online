@@ -3648,7 +3648,16 @@ with tab9:
             )
             if preview.general_average is not None:
                 st.info(f"Media generală anuală preliminară: {preview.general_average}")
-            for blocker in preview.blockers:
-                st.warning(blocker)
+            if preview.ready_for_final_closure:
+                st.success(
+                    "Validarea preliminară nu a identificat blocaje pentru închiderea definitivă. "
+                    "Nu s-a efectuat nicio scriere."
+                )
+            else:
+                st.warning(
+                    "Situația poate fi simulată, dar NU este pregătită pentru închiderea definitivă."
+                )
+                for blocker in preview.readiness_blockers:
+                    st.warning(blocker)
         except (ConductStorageError, AnnualClosureError, RuntimeError) as ex:
             st.warning(f"Simularea anuală nu poate fi finalizată încă: {ex}")
