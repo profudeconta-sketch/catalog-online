@@ -458,8 +458,14 @@ def preview_annual_closure(
         if not result.has_minimum_grade_reference:
             readiness.append(
                 f"{result.name}: numărul de note este sub reperul ROFUIP configurat "
-                f"({result.minimum_grade_reference}); necesită verificare înainte de închiderea definitivă."
+                f"({result.minimum_grade_reference}). Art. 117 poate impune declararea AMÂNAT "
+                "și în alte situații decât pragul de 50% absențe; cazul trebuie validat "
+                "administrativ înainte de închiderea definitivă."
             )
+    # Art. 117 include și cauze administrative care nu pot fi deduse numai din catalog
+    # (scutire de frecvență, studii/bursă în străinătate, alte cauze neimputabile etc.).
+    # Motorul nu inventează aceste stări; ele vor necesita o declarație administrativă
+    # explicită înaintea snapshotului definitiv.
     # CORIGENT/REPETENT/AMÂNAT sunt rezultate școlare valide, nu erori tehnice.
     # Doar lipsurile/condițiile neverificate blochează persistența definitivă.
     readiness = tuple(dict.fromkeys(readiness))
