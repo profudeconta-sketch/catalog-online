@@ -296,6 +296,9 @@ class AnnualClosurePreview:
     total_absences: int
     conduct_base_average: Decimal
     conduct_penalty_points: int
+    conduct_penalty_total_absences: int
+    conduct_penalty_subject_thresholds: int
+    conduct_penalty_rule: str
     conduct_annual_average: Decimal
     final_status: str
     general_average: Decimal | None
@@ -365,7 +368,7 @@ def calculate_conduct(
     interval_conduct_grades: Sequence[Decimal],
     total_unmotivated: int,
     subject_results: Sequence[SubjectResult],
-) -> tuple[Decimal, int, Decimal]:
+) -> tuple[Decimal, int, int, int, str, Decimal]:
     """ROFUIP art. 108–109 + Statut art. 28: bază anuală, apoi diminuare pentru absențe."""
     if len(interval_conduct_grades) != len(CLJ_2026_2027_COURSE_INTERVALS):
         raise AnnualClosureError(
@@ -382,8 +385,15 @@ def calculate_conduct(
     # Criteriile legale sunt alternative („sau”). Nu însumăm aceeași nefrecventare
     # de două ori; aplicăm numărul de trepte rezultat din criteriul mai sever.
     penalty = max(total_steps, subject_threshold_steps)
+    rule = (
+        "TOTAL_ANUAL"
+        if total_steps > subject_threshold_steps
+        else "PRAG_DISCIPLINE_MODULE"
+        if subject_threshold_steps > total_steps
+        else "EGAL"
+    )
     annual = max(Decimal("1"), rounded_base - Decimal(penalty))
-    return rounded_base, penalty, annual
+    return rounded_base, penalty, total_steps, subject_threshold_steps, rule, annual
 
 
 def determine_status(
@@ -437,7 +447,7 @@ def preview_annual_closure(
             "Totalul absențelor motivate nu corespunde sumei pe discipline/module."
         )
     total_absences = total_unmotivated + motivated_absences
-    base, penalty, conduct = calculate_conduct(
+    base, penalty, penalty_total, penalty_subjects, penalty_rule, conduct = calculate_conduct(
         interval_conduct_grades, total_unmotivated, results
     )
     blockers = []
@@ -478,6 +488,9 @@ def preview_annual_closure(
         total_absences=total_absences,
         conduct_base_average=base,
         conduct_penalty_points=penalty,
+        conduct_penalty_total_absences=penalty_total,
+        conduct_penalty_subject_thresholds=penalty_subjects,
+        conduct_penalty_rule=penalty_rule,
         conduct_annual_average=conduct,
         final_status=status,
         general_average=general,
