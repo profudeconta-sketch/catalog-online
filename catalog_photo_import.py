@@ -96,6 +96,88 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
         except Exception: continue
     return out
 
+
+def _semantic_key(p):
+    return (p.student_index,p.category.casefold(),p.subject.casefold(),p.kind,p.date,
+            p.value if p.kind=="grade" else "",p.motivated)
+
+def _parse_vision_records(body,student_names,start):
+    txt=body.get("output_text","")
+    if not txt:
+        txt="\n".join(p.get("text","") for item in body.get("output",[])
+                      for p in item.get("content",[]) if p.get("type")=="output_text")
+    txt=str(txt).strip().strip(chr(96)).removeprefix("json").strip()
+    try:
+        return json.loads(txt).get("records",[])
+    except Exception as ex:
+        raise PhotoImportError("Răspunsul AI nu este JSON valid; verificarea a fost oprită.") from ex
+
+def _vision_request(prompt,left,right,model="gpt-6-luna"):
+    payload={"model":model,"input":[{"role":"user","content":[
+        {"type":"input_text","text":prompt},
+        {"type":"input_image","image_url":_data_url(left[0],left[1]),"detail":"high"},
+        {"type":"input_image","image_url":_data_url(right[0],right[1]),"detail":"high"}]}]}
+    req=urllib.request.Request("https://api.openai.com/v1/responses",
+        data=json.dumps(payload).encode(),
+        headers={"Authorization":f"Bearer {_api_key()}","Content-Type":"application/json"},method="POST")
+    try:
+        with urllib.request.urlopen(req,timeout=120) as resp:
+            return json.loads(resp.read().decode())
+    except Exception as ex:
+        raise PhotoImportError(f"Verificarea vizuală a eșuat: {type(ex).__name__}: {ex}") from ex
+
+def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subjects,items):
+    """A doua citire independentă numai pentru cazurile neclare.
+    Un caz devine verificabil doar prin consens semantic exact între două citiri lizibile.
+    """
+    uncertain=[p for p in items if not p.verifiable]
+    if not uncertain:
+        return items
+    targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
+              "kind":p.kind,"value":p.value,"date":p.date,"motivated":p.motivated}
+             for p in uncertain]
+    prompt=("Efectuează o A DOUA citire independentă a fotografiilor originale. "
+      "Verifică exclusiv înscrierile candidate de mai jos și nu folosi prima interpretare ca adevăr: "
+      f"{json.dumps(targets,ensure_ascii=False)}. "
+      f"Elevii de sus în jos sunt {json.dumps(student_names,ensure_ascii=False)}. "
+      f"Discipline permise: {json.dumps(allowed_subjects,ensure_ascii=False)}. "
+      f"Perioada permisă: {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
+      "Pentru fiecare candidat răspunde STRICT JSON {\"records\":[...]}; fiecare record conține "
+      "student_index, category, subject, kind, value, date DD.MM, motivated, confidence, source_image, legible. "
+      "legible=true numai când toate câmpurile pot fi citite direct și fără inferență din fotografie. "
+      "Dacă nu poți demonstra vizual o valoare, legible=false. Nu ghici.")
+    rows=_parse_vision_records(_vision_request(prompt,left,right),student_names,start)
+    second=[]
+    for r in rows:
+        try:
+            idx=int(r["student_index"]); kind=str(r["kind"]); date=normalize_ddmm(r["date"],start.year)
+            conf=float(r.get("confidence",0)); val=str(r.get("value","")).strip()
+            if not(0<=idx<len(student_names)) or kind not in {"grade","absence"} or not date_in_period(date,start,end):
+                continue
+            if kind=="grade" and (not val.isdigit() or not 1<=int(val)<=10):
+                continue
+            legible=bool(r.get("legible",False))
+            second.append(ImportProposal(idx,str(r["category"]).strip(),str(r["subject"]).strip(),
+                kind,val,date,bool(r.get("motivated",False)),conf,str(r.get("source_image","")),
+                legible and conf>=0.90,""))
+        except Exception:
+            continue
+    by_key={_semantic_key(p):p for p in second if p.verifiable}
+    recovered=[]
+    for p in items:
+        if p.verifiable:
+            recovered.append(p); continue
+        q=by_key.get(_semantic_key(p))
+        if q is not None:
+            recovered.append(ImportProposal(p.student_index,p.category,p.subject,p.kind,p.value,p.date,
+                p.motivated,min(p.confidence,q.confidence),p.source_image,True,
+                "Verificat prin două citiri independente concordante ale fotografiei originale."))
+        else:
+            recovered.append(ImportProposal(p.student_index,p.category,p.subject,p.kind,p.value,p.date,
+                p.motivated,p.confidence,p.source_image,False,
+                "A doua citire independentă nu a demonstrat fără echivoc aceeași informație."))
+    return recovered
+
 def deduplicate_proposals(items):
     """O singură înregistrare per elev/disciplină/tip/dată; ambiguitățile se blochează."""
     groups={}
