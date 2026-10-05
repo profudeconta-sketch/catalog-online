@@ -1445,3 +1445,75 @@ def validate_reexamination_approval_for_outcome(
         raise AnnualClosureError(
             "Aprobarea reexaminării nu corespunde singurei discipline nepromovate."
         )
+
+
+def derive_reexamination_finalization(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    corigent_outcome: CorigentSessionOutcome,
+    approval: ReexaminationApprovalRecord,
+    reexamination_result: AnnualFinalizationSubjectResult,
+    finalized_on: date,
+) -> AnnualFinalizationRecord:
+    """Definitivează situația după reexaminarea aprobată, fără persistență."""
+    validate_reexamination_approval_for_outcome(
+        source_snapshot=source_snapshot,
+        outcome=corigent_outcome,
+        approval=approval,
+    )
+    name = str(reexamination_result.subject_name).strip()
+    if name != approval.subject_name:
+        raise AnnualClosureError(
+            "Rezultatul reexaminării nu corespunde disciplinei aprobate."
+        )
+    if (
+        reexamination_result.source_status != "CORIGENT"
+        or reexamination_result.result_type != "REEXAMINARE"
+    ):
+        raise AnnualClosureError(
+            "Rezultatul final trebuie să fie CORIGENT/REEXAMINARE."
+        )
+    average = reexamination_result.resulting_annual_average
+    if (
+        not isinstance(average, int)
+        or isinstance(average, bool)
+        or not 1 <= average <= 10
+    ):
+        raise AnnualClosureError("Media rezultată la reexaminare este invalidă.")
+
+    final_averages = dict(corigent_outcome.subject_annual_averages)
+    if name not in final_averages:
+        raise AnnualClosureError(
+            "Disciplina aprobată nu există în situația rezultată după corigență."
+        )
+    final_averages[name] = average
+    conduct = Decimal(str(source_snapshot.conduct_annual_average))
+
+    if conduct < Decimal("6") or average < 5:
+        final_status = "REPETENT"
+        general = None
+    else:
+        remaining_failed = [
+            subject_name
+            for subject_name, subject_average in final_averages.items()
+            if subject_average < 5
+        ]
+        if remaining_failed:
+            raise AnnualClosureError(
+                "Situația după reexaminare este inconsistentă; există alte discipline "
+                "nepromovate în afara celei reexaminate."
+            )
+        final_status = "PROMOVAT"
+        values = [Decimal(value) for value in final_averages.values()]
+        values.append(conduct)
+        general = (
+            sum(values, Decimal("0")) / Decimal(len(values))
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    return build_annual_finalization_record(
+        source_snapshot=source_snapshot,
+        subject_results=(reexamination_result,),
+        final_status=final_status,
+        final_general_average=general,
+        finalized_on=finalized_on,
+    )
