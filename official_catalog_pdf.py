@@ -915,10 +915,32 @@ def _draw_admin_page(c: canvas.Canvas) -> None:
         y = top - header_h - (row + 0.67) * row_h
         for side, entry_index in ((0, row), (2, row + 10)):
             subject, professor = entries[entry_index]
-            subject_size = _fit_text(c, subject, col_x[side + 1] - col_x[side] - 6, PDF_FONT, 5.5, 4.0)
-            professor_size = _fit_text(c, professor, col_x[side + 2] - col_x[side + 1] - 6, PDF_FONT, 5.5, 4.0)
+            subject_width = col_x[side + 1] - col_x[side] - 6
+            professor_width = col_x[side + 2] - col_x[side + 1] - 6
+            try:
+                subject_size = _fit_text(c, subject, subject_width, PDF_FONT, 5.5, 4.0)
+                subject_lines = (subject,)
+            except OfficialCatalogError:
+                words = subject.split()
+                split_at = min(
+                    range(1, len(words)),
+                    key=lambda index: abs(
+                        pdfmetrics.stringWidth(" ".join(words[:index]), PDF_FONT, 4.2)
+                        - pdfmetrics.stringWidth(" ".join(words[index:]), PDF_FONT, 4.2)
+                    ),
+                )
+                subject_lines = (" ".join(words[:split_at]), " ".join(words[split_at:]))
+                subject_size = min(
+                    _fit_text(c, line, subject_width, PDF_FONT, 4.6, 4.0)
+                    for line in subject_lines
+                )
+            professor_size = _fit_text(c, professor, professor_width, PDF_FONT, 5.5, 4.0)
             c.setFont(PDF_FONT, subject_size)
-            c.drawString(col_x[side] + 3, y, subject)
+            if len(subject_lines) == 1:
+                c.drawString(col_x[side] + 3, y, subject_lines[0])
+            else:
+                c.drawString(col_x[side] + 3, y + 2.4, subject_lines[0])
+                c.drawString(col_x[side] + 3, y - 3.0, subject_lines[1])
             c.setFont(PDF_FONT, professor_size)
             c.drawString(col_x[side + 1] + 3, y, professor)
 
