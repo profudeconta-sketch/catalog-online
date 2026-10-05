@@ -3751,11 +3751,18 @@ with tab9:
                 else:
                     blocked_count += 1
 
+            validation_elapsed = time.perf_counter() - validation_started
             validation_status.update(
-                label=f"Diagnostic finalizat în {time.perf_counter() - validation_started:.2f} s.",
+                label=f"Diagnostic finalizat în {validation_elapsed:.2f} s.",
                 state="complete",
                 expanded=True,
             )
+            st.session_state["annual_class_validation_summary"] = {
+                "ready_count": ready_count,
+                "blocked_count": blocked_count,
+                "error_count": error_count,
+                "elapsed": validation_elapsed,
+            }
 
             col_ready, col_blocked, col_error = st.columns(3)
             col_ready.metric("Pregătiți", ready_count)
@@ -3795,7 +3802,31 @@ with tab9:
                     for blocker in preview.readiness_blockers:
                         st.warning(blocker)
         except (AnnualClosureError, ConductStorageError, RuntimeError, OSError) as ex:
+            st.session_state["annual_class_validation_summary"] = {
+                "error": str(ex),
+            }
             st.error(f"Validarea clasei nu a putut fi finalizată: {ex}")
+
+    persisted_validation = st.session_state.get("annual_class_validation_summary")
+    if persisted_validation:
+        st.caption("Ultimul rezultat al verificării read-only (păstrat în această sesiune):")
+        if persisted_validation.get("error"):
+            st.error(
+                "Ultima verificare nu a putut fi finalizată: "
+                + persisted_validation["error"]
+            )
+        else:
+            p_ready, p_blocked, p_error = st.columns(3)
+            p_ready.metric("Pregătiți", persisted_validation["ready_count"])
+            p_blocked.metric("Cu blocaje", persisted_validation["blocked_count"])
+            p_error.metric(
+                "Date incomplete/incoerente",
+                persisted_validation["error_count"],
+            )
+            st.caption(
+                f"Timpul ultimei verificări: {persisted_validation['elapsed']:.2f} s. "
+                "Rezultatul este numai informativ; nu s-a efectuat nicio scriere."
+            )
 
 
 # Închiderea situației școlare persistă numai snapshoturi validate în registrul privat separat.
