@@ -1418,6 +1418,13 @@ def build_corigent_session_record(
         corigent_results=corigent_results,
     )
     normalized_subjects = tuple(sorted(str(name).strip() for name in corigent_subjects))
+    if (
+        any(not name for name in normalized_subjects)
+        or len(set(normalized_subjects)) != len(normalized_subjects)
+    ):
+        raise AnnualClosureError(
+            "Actul sesiunii de corigență nu poate conține discipline goale sau duplicate."
+        )
     record = CorigentSessionRecord(
         schema_version=1,
         rules_version="etapa-5.6-sesiune-corigenta-2026-2027-v1",
