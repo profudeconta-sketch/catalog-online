@@ -419,6 +419,60 @@ class PhysicalSubjectData:
     average: object | None
 
 
+@dataclass(frozen=True)
+class OfficialCatalogAnnualState:
+    """Valori anuale validate folosite numai la randarea catalogului."""
+    student_key: str
+    subject_annual_averages: tuple[tuple[str, int], ...]
+    conduct_annual_average: object | None
+    general_average: object | None
+    end_of_courses_status: str
+    final_status: str
+
+    def subject_average(self, source_key: str) -> object | None:
+        values = dict(self.subject_annual_averages)
+        return values.get(source_key)
+
+
+def validate_official_catalog_annual_states(
+    students: Sequence[StudentIdentity],
+    annual_states: Mapping[str, OfficialCatalogAnnualState],
+) -> None:
+    """Fail-closed: fiecare elev tipărit trebuie să aibă exact o situație anuală coerentă."""
+    allowed_statuses = {"PROMOVAT", "CORIGENT", "REPETENT", "AMANAT"}
+    expected = {student.rm_pg for student in students}
+    provided = {str(key).strip() for key in annual_states}
+    if provided != expected:
+        raise OfficialCatalogError(
+            "Situațiile anuale validate nu corespund exact elevilor din catalog."
+        )
+    valid_subjects = set(OFFICIAL_SUBJECT_NAMES)
+    for student in students:
+        state = annual_states[student.rm_pg]
+        if str(state.student_key).strip() != student.rm_pg:
+            raise OfficialCatalogError(
+                f"Situația anuală nu corespunde elevului cu RM/PG {student.rm_pg!r}."
+            )
+        subject_values = dict(state.subject_annual_averages)
+        if len(subject_values) != len(state.subject_annual_averages):
+            raise OfficialCatalogError(
+                f"Situația anuală pentru {student.rm_pg!r} conține discipline duplicate."
+            )
+        if set(subject_values) != valid_subjects:
+            raise OfficialCatalogError(
+                f"Situația anuală pentru {student.rm_pg!r} nu conține exact disciplinele clasei."
+            )
+        for subject, average in subject_values.items():
+            if not isinstance(average, int) or isinstance(average, bool) or not 1 <= average <= 10:
+                raise OfficialCatalogError(
+                    f"{subject}: media anuală validată este invalidă pentru {student.rm_pg!r}."
+                )
+        if state.end_of_courses_status not in allowed_statuses or state.final_status not in allowed_statuses:
+            raise OfficialCatalogError(
+                f"Statut anual invalid pentru {student.rm_pg!r}."
+            )
+
+
 def extract_physical_subject_data(
     wb,
     student: StudentIdentity,
@@ -895,6 +949,7 @@ def _draw_marks_spread_placeholder(
     wb,
     students: Sequence[StudentIdentity],
     side: str,
+    annual_states: Mapping[str, OfficialCatalogAnnualState] | None = None,
 ) -> None:
     """Geometrie P3/P4; populează numai Note/Data și Absențe în corpul rubricilor."""
     width, height = A4
@@ -1045,7 +1100,16 @@ def _draw_marks_spread_placeholder(
             c.drawString(x, y_top - 125, "La sfârșitul anului școlar .......................")
             c.drawString(x, y_top - 140, "Media generală ......................................")
             if student is not None:
-                general_average = extract_existing_general_average(wb, student)
+                annual_state = annual_states.get(student.rm_pg) if annual_states is not None else None
+                general_average = (
+                    annual_state.general_average
+                    if annual_state is not None
+                    else extract_existing_general_average(wb, student)
+                )
+                if annual_state is not None:
+                    c.setFont(PDF_FONT_BOLD, 4.1)
+                    c.drawRightString(identity_right, y_top - 112, annual_state.end_of_courses_status)
+                    c.drawRightString(identity_right, y_top - 125, annual_state.final_status)
                 if general_average is not None:
                     c.setFont(PDF_FONT_BOLD, 4.5)
                     c.drawRightString(identity_right, y_top - 140, _norm(general_average))
@@ -1092,12 +1156,18 @@ def _draw_marks_spread_placeholder(
                 )
                 c.setFont(PDF_FONT_BOLD, 4.0)
                 for j, subject in enumerate(p3_data):
-                    if subject.average is not None:
+                    annual_state = annual_states.get(student.rm_pg) if annual_states is not None else None
+                    display_average = (
+                        annual_state.subject_average(subject.source_key)
+                        if annual_state is not None and subject.source_key is not None
+                        else subject.average
+                    )
+                    if display_average is not None:
                         gx = grid_left + j * pair_w
                         c.drawCentredString(
                             gx + pair_w / 2,
                             y_bottom + 2 * mean_row_h + 2,
-                            _norm(subject.average),
+                            _norm(display_average),
                         )
 
             # Etichetele apar în zona de situație școlară, nu într-o
@@ -1186,27 +1256,39 @@ def _draw_marks_spread_placeholder(
                 )
                 c.setFont(PDF_FONT_BOLD, 4.0)
                 for j, subject in enumerate(p4_data):
-                    if subject.average is not None:
+                    annual_state = annual_states.get(student.rm_pg) if annual_states is not None else None
+                    display_average = (
+                        annual_state.subject_average(subject.source_key)
+                        if annual_state is not None and subject.source_key is not None
+                        else subject.average
+                    )
+                    if display_average is not None:
                         gx = left + j * pair_w
                         c.drawCentredString(
                             gx + pair_w / 2,
                             y_bottom + 2 * mean_row_h + 2,
-                            _norm(subject.average),
+                            _norm(display_average),
                         )
 
             if student is not None:
                 attendance = extract_existing_attendance_summary(wb, student)
+                annual_state = annual_states.get(student.rm_pg) if annual_states is not None else None
                 c.setFont(PDF_FONT_BOLD, 4.2)
 
                 # Nota la purtare este valoarea persistentă din coloana 8.
                 # Se înscrie în zona de corp Purtare; rândul median barat cu X
                 # și celelalte câmpuri manuale ale tipizatului rămân neatinse.
-                if attendance.conduct is not None:
+                conduct_value = (
+                    annual_state.conduct_annual_average
+                    if annual_state is not None
+                    else attendance.conduct
+                )
+                if conduct_value is not None:
                     conduct_body_y = (y_bottom + mean_h + conduct_split_y) / 2
                     c.drawCentredString(
                         (x_conduct + x_total) / 2,
                         conduct_body_y,
-                        _norm(attendance.conduct),
+                        _norm(conduct_value),
                     )
 
                 if attendance.total is not None:
