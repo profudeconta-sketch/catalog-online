@@ -188,6 +188,25 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertNotIn((1,9,3),variants)
         self.assertIn((19,3),variants)
 
+    def test_same_physical_evidence_with_conflicting_dates_is_blocked(self):
+        rows=[
+            ImportProposal(0,"Cultură Generală","Matematică","grade","8","01.10",False,0.99,"left",True,""),
+            ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",False,0.98,"left",True,""),
+        ]
+        out=deduplicate_proposals(rows)
+        self.assertEqual(len(out),1)
+        self.assertFalse(out[0].verifiable)
+        self.assertIn("date contradictorii",out[0].verification_reason)
+
+    def test_different_physical_sources_may_contain_distinct_dates(self):
+        rows=[
+            ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",False,0.99,"left-mark-1",True,""),
+            ImportProposal(0,"Cultură Generală","Matematică","absence","","02.10",False,0.99,"left-mark-2",True,""),
+        ]
+        out=deduplicate_proposals(rows)
+        self.assertEqual(len(out),2)
+        self.assertTrue(all(p.verifiable for p in out))
+
     def test_write_gate_rejects_unverifiable(self):
         path=workbook()
         try:
