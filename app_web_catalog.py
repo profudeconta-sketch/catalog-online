@@ -3628,19 +3628,63 @@ with tab9:
 def build_class_annual_closure_previews(file_path):
     """Construiește read-only situația anuală pentru întreaga clasă.
 
-    Nu scrie în Excel, gestiune sau registrul de purtare. Pentru fiecare elev
-    întoarce fie preview-ul valid, fie eroarea concretă care blochează calculul.
+    Nu scrie în Excel, gestiune sau registrul de purtare. Identitatea elevilor
+    este indexată o singură dată, secvențial, pentru a evita accesul aleatoriu
+    repetat foarte lent al openpyxl în modul read_only.
     """
     results = []
     wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
     try:
+        required_sheets = ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii")
+        for sheet_name in required_sheets:
+            if sheet_name not in wb.sheetnames:
+                raise RuntimeError(f"Lipsește foaia obligatorie: {sheet_name}")
+
+        row_maps = {}
+        for sheet_name in required_sheets:
+            ws = wb[sheet_name]
+            key_rows = {}
+            for row_number, values in enumerate(
+                ws.iter_rows(min_row=9, min_col=4, max_col=4, values_only=True),
+                start=9,
+            ):
+                key = str(values[0] or "").strip()
+                if not key:
+                    continue
+                if key in key_rows:
+                    raise RuntimeError(
+                        f"Identificatorul {key!r} apare de mai multe ori în foaia {sheet_name}."
+                    )
+                key_rows[key] = row_number
+            row_maps[sheet_name] = key_rows
+
+        def indexed_row_resolver(_wb, elev_info):
+            key = str(elev_info[3]).strip()
+            if not key:
+                raise RuntimeError("Elevul nu are identificator de catalog valid.")
+            rows = []
+            for sheet_name in required_sheets:
+                row = row_maps[sheet_name].get(key)
+                if row is None:
+                    raise RuntimeError(
+                        f"Identitatea elevului nu există în foaia {sheet_name}. "
+                        "Operația a fost oprită fără salvare."
+                    )
+                rows.append(row)
+            if len(set(rows)) != 1:
+                raise RuntimeError(
+                    "Identitatea elevului nu corespunde pe același rând în toate foile catalogului. "
+                    "Operația a fost oprită fără salvare."
+                )
+            return rows[0]
+
         for elev_info in ELEVI:
             student_key = str(elev_info[3]).strip()
             try:
                 subjects = build_student_subject_inputs(
                     wb,
                     elev_info,
-                    resolve_student_row,
+                    indexed_row_resolver,
                     IX_TH_2026_2027_CLASS_CDEOS_HOURS,
                 )
                 conduct_values = conduct_grades_for_student(student_key)
