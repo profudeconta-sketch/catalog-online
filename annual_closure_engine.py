@@ -350,11 +350,11 @@ def build_annual_closure_snapshot(
     # Snapshotul de sfârșit de cursuri este o captură auditabilă, nu înseamnă
     # automat situație școlară definitivă. AMÂNAT trebuie să poată fi capturat
     # pentru a ancora criptografic etapele ulterioare.
-    if not preview.ready_for_final_closure and preview.final_status != "AMÂNAT":
+    if not preview.ready_for_final_closure and preview.final_status != "AMANAT":
         raise AnnualClosureError(
             "Snapshotul anual nu poate fi construit cât timp există blocaje de închidere."
         )
-    if preview.final_status == "AMÂNAT":
+    if preview.final_status == "AMANAT":
         deferred_blockers = set(preview.blockers)
         non_deferred_blockers = tuple(
             blocker for blocker in preview.readiness_blockers
@@ -586,7 +586,7 @@ def preview_annual_closure(
             blockers.append(
                 f"{result.name}: cel puțin 50% absențe și număr insuficient de note – AMÂNAT."
             )
-    status = "AMÂNAT" if blockers else determine_status(results, conduct)
+    status = "AMANAT" if blockers else determine_status(results, conduct)
     general = calculate_general_average(results, conduct, status)
 
     readiness = list(blockers)
