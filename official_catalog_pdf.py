@@ -1397,6 +1397,74 @@ def generate_official_catalog_prototype(
         wb.close()
 
 
+def generate_official_catalog_final(
+    excel_path: str,
+    gest_data: Sequence[Mapping],
+    annual_states: Mapping[str, OfficialCatalogAnnualState],
+) -> bytes:
+    """Generează catalogul pentru tipărire din sursa primară + situații anuale validate.
+
+    Funcția este strict read-only: nu salvează workbook-ul și nu persistă situațiile.
+    """
+    _register_unicode_fonts()
+    _validate_physical_source_mapping()
+    wb = openpyxl.load_workbook(excel_path, data_only=True, read_only=True)
+    try:
+        students = validate_and_resolve_students(wb, gest_data)
+        validate_official_catalog_annual_states(students, annual_states)
+        gest_by_rm = _gest_by_identity(gest_data, students)
+
+        out = io.BytesIO()
+        c = canvas.Canvas(out, pagesize=A4, pageCompression=1, invariant=1)
+
+        _draw_page_frame(c, 1, "Date de identificare și cadre didactice")
+        _draw_admin_page(c)
+        c.showPage()
+
+        _draw_page_frame(c, 2, "NORME pentru completarea și utilizarea catalogului clasei")
+        c.setFont(PDF_FONT, 8)
+        c.drawString(42, A4[1] - 85, "Pagina rezervată reproducerii fidele a normelor din tipizatul oficial.")
+        c.showPage()
+
+        for spread_index in range(13):
+            start_pos = spread_index * 3
+            group = students[start_pos : start_pos + 3]
+            left_page = 3 + spread_index * 2
+            right_page = left_page + 1
+
+            _draw_page_frame(c, left_page, "Situația școlară – corp catalog")
+            _draw_marks_spread_placeholder(c, wb, group, "stângă", annual_states)
+            c.showPage()
+
+            _draw_page_frame(c, right_page, "Situația școlară – corp catalog")
+            _draw_marks_spread_placeholder(c, wb, group, "dreaptă", annual_states)
+            c.showPage()
+
+        _draw_page_frame(c, 29, "DATE PERSONALE ALE ELEVILOR")
+        _draw_students_grid(c, students, gest_by_rm, 29)
+        c.showPage()
+
+        _draw_page_frame(
+            c,
+            30,
+            "Situația generală asupra mișcării și frecvenței elevilor și a rezultatelor obținute",
+        )
+        general_stats = extract_general_statistics(wb, students, gest_by_rm)
+        _draw_general_statistics(c, general_stats)
+        c.showPage()
+
+        _draw_page_frame(c, 31, "PROCES-VERBAL")
+        c.setFont(PDF_FONT, 8)
+        c.drawString(42, A4[1] - 85, "Semnăturile și constatările administrative rămân necompletate automat.")
+        c.showPage()
+
+        c.showPage()
+        c.save()
+        return out.getvalue()
+    finally:
+        wb.close()
+
+
 def assert_read_only_contract() -> bool:
     """Contract verificabil simplu pentru auditul prototipului."""
     forbidden_names = {
