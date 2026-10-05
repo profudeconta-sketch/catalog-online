@@ -1397,7 +1397,10 @@ def derive_corigent_session_outcome(
 
     return CorigentSessionOutcome(
         status=status,
-        subject_annual_averages=tuple(sorted(final_averages.items())),
+        subject_annual_averages=tuple(
+            sorted((name, format(Decimal(str(value)).quantize(Decimal("0.01")), ".2f"))
+                   for name, value in final_averages.items())
+        ),
         failed_subjects=failed,
         general_average=general,
     )
