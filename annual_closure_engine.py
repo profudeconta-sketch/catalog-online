@@ -603,3 +603,149 @@ def preview_annual_closure(
         general_average=general,
         blockers=tuple(blockers),
     )
+
+
+@dataclass(frozen=True)
+class AnnualFinalizationSubjectResult:
+    """Rezultat ulterior pentru o disciplină; nu modifică snapshotul inițial."""
+    subject_name: str
+    source_status: str
+    result_type: str
+    resulting_annual_average: int
+
+
+@dataclass(frozen=True)
+class AnnualFinalizationRecord:
+    """Act imuabil care definitivează ulterior o situație anuală neîncheiată."""
+    schema_version: int
+    rules_version: str
+    generated_at: str
+    integrity_sha256: str
+    school_year: str
+    student_key: str
+    source_snapshot_sha256: str
+    source_status: str
+    subject_results: tuple[AnnualFinalizationSubjectResult, ...]
+    final_status: str
+    final_general_average: str | None
+    finalized_on: str
+
+
+_ALLOWED_FINALIZATION_SOURCE_STATUSES = {"CORIGENT", "AMANAT"}
+_ALLOWED_FINALIZATION_RESULT_TYPES = {
+    "INCHEIERE_SITUATIE",
+    "CORIGENTA",
+    "REEXAMINARE",
+}
+_ALLOWED_FINAL_STATUSES = {"PROMOVAT", "REPETENT"}
+
+
+def canonical_finalization_payload(record: AnnualFinalizationRecord) -> bytes:
+    payload = asdict(record)
+    payload["integrity_sha256"] = ""
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def finalization_sha256(record: AnnualFinalizationRecord) -> str:
+    return hashlib.sha256(canonical_finalization_payload(record)).hexdigest()
+
+
+def seal_annual_finalization_record(
+    record: AnnualFinalizationRecord,
+) -> AnnualFinalizationRecord:
+    return replace(record, integrity_sha256=finalization_sha256(record))
+
+
+def verify_annual_finalization_record(record: AnnualFinalizationRecord) -> bool:
+    expected = str(record.integrity_sha256 or "")
+    return len(expected) == 64 and finalization_sha256(record) == expected
+
+
+def build_annual_finalization_record(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    subject_results: Sequence[AnnualFinalizationSubjectResult],
+    final_status: str,
+    final_general_average: Decimal | None,
+    finalized_on: date,
+) -> AnnualFinalizationRecord:
+    """Construiește actul ulterior fără a modifica snapshotul sursă.
+
+    Regulile juridice care produc rezultatele examenelor vor fi implementate
+    separat. Aici validăm numai identitatea, legătura criptografică și forma
+    rezultatului deja stabilit.
+    """
+    if not verify_annual_closure_snapshot(source_snapshot):
+        raise AnnualClosureError("Snapshotul sursă nu trece verificarea SHA-256.")
+    if source_snapshot.final_status not in _ALLOWED_FINALIZATION_SOURCE_STATUSES:
+        raise AnnualClosureError(
+            "Snapshotul sursă nu reprezintă o situație care necesită definitivare ulterioară."
+        )
+    if final_status not in _ALLOWED_FINAL_STATUSES:
+        raise AnnualClosureError("Statutul definitiv solicitat nu este permis.")
+    if not subject_results:
+        raise AnnualClosureError("Actul de definitivare necesită cel puțin un rezultat ulterior.")
+
+    seen = set()
+    normalized = []
+    for item in subject_results:
+        name = str(item.subject_name).strip()
+        if not name:
+            raise AnnualClosureError("Disciplina din actul de definitivare nu poate fi goală.")
+        if name in seen:
+            raise AnnualClosureError(
+                f"Disciplina {name!r} apare de mai multe ori în același act de definitivare."
+            )
+        seen.add(name)
+        if item.source_status not in _ALLOWED_FINALIZATION_SOURCE_STATUSES:
+            raise AnnualClosureError("Starea sursă a rezultatului ulterior este invalidă.")
+        if item.result_type not in _ALLOWED_FINALIZATION_RESULT_TYPES:
+            raise AnnualClosureError("Tipul rezultatului ulterior este invalid.")
+        if not isinstance(item.resulting_annual_average, int) or isinstance(
+            item.resulting_annual_average, bool
+        ) or not 1 <= item.resulting_annual_average <= 10:
+            raise AnnualClosureError(
+                f"{name}: media anuală rezultată trebuie să fie un întreg între 1 și 10."
+            )
+        normalized.append(
+            AnnualFinalizationSubjectResult(
+                subject_name=name,
+                source_status=item.source_status,
+                result_type=item.result_type,
+                resulting_annual_average=item.resulting_annual_average,
+            )
+        )
+
+    if final_status == "PROMOVAT" and final_general_average is None:
+        raise AnnualClosureError("Statutul PROMOVAT necesită media generală definitivă.")
+    if final_status != "PROMOVAT" and final_general_average is not None:
+        raise AnnualClosureError(
+            "Media generală definitivă nu se fixează pentru un statut nepromovat."
+        )
+    general = None
+    if final_general_average is not None:
+        value = Decimal(str(final_general_average))
+        if value < Decimal("1") or value > Decimal("10"):
+            raise AnnualClosureError("Media generală definitivă este în afara intervalului 1–10.")
+        general = str(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+    record = AnnualFinalizationRecord(
+        schema_version=1,
+        rules_version="etapa-5.6-finalizare-2026-2027-v1",
+        generated_at=datetime.now(ZoneInfo("Europe/Bucharest")).isoformat(timespec="seconds"),
+        integrity_sha256="",
+        school_year=source_snapshot.school_year,
+        student_key=source_snapshot.student_key,
+        source_snapshot_sha256=source_snapshot.integrity_sha256,
+        source_status=source_snapshot.final_status,
+        subject_results=tuple(normalized),
+        final_status=final_status,
+        final_general_average=general,
+        finalized_on=finalized_on.isoformat(),
+    )
+    return seal_annual_finalization_record(record)
