@@ -21,6 +21,10 @@ import io
 import shutil
 import copy
 from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document, store_new_document
+from conduct_storage import ConductStorageError, conduct_grades_for_student, load_conduct_registry, save_conduct_grade
+from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, IX_TH_2026_2027_CLASS_CDEOS_HOURS, build_annual_closure_snapshot, build_student_subject_inputs, preview_annual_closure
+from annual_closure_storage import AnnualClosureStorageError, load_private_annual_closure_snapshots, persist_private_annual_closure_batch_once
+from official_catalog_pdf import OfficialCatalogError, generate_official_catalog_final, official_catalog_state_from_records
 from leave_pass_storage import (
     STATUS_APPROVED as LEAVE_STATUS_APPROVED,
     STATUS_EXPIRED as LEAVE_STATUS_EXPIRED,
@@ -116,6 +120,61 @@ def sync_gestiune_from_private_repo():
         except Exception:
             pass
 
+        return False
+
+
+def sync_conduct_registry_from_private_repo():
+    filename = "registru_purtare_2026_2027.json"
+    token = os.environ.get("GITHUB_TOKEN") or ""
+    try:
+        if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+            token = token or str(st.secrets["GITHUB_TOKEN"])
+    except Exception:
+        pass
+    if not token:
+        return False
+    url = (
+        "https://api.github.com/repos/profudeconta-sketch/"
+        f"catalog-online-date-private/contents/{filename}?ref=main"
+    )
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "StreamlitApp",
+                "Cache-Control": "no-cache",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        content = base64.b64decode(payload.get("content", ""))
+        if not content:
+            return False
+        temp = filename + ".download.tmp"
+        with open(temp, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        with open(temp, "r", encoding="utf-8") as handle:
+            candidate = json.load(handle)
+        if (
+            candidate.get("schema_version") != 1
+            or candidate.get("school_year") != "2026-2027"
+            or not isinstance(candidate.get("grades"), list)
+        ):
+            raise ValueError("Registru purtare invalid.")
+        if os.path.exists(filename):
+            shutil.copy2(filename, filename + ".bak")
+        os.replace(temp, filename)
+        return True
+    except Exception:
+        try:
+            if os.path.exists(filename + ".download.tmp"):
+                os.remove(filename + ".download.tmp")
+        except Exception:
+            pass
         return False
 
 
@@ -1033,7 +1092,8 @@ def push_to_github(file_path):
              "profudeconta-sketch/catalog-online-date-private"
               if filename in {
                  GESTIUNE_FILE,
-                 "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
+                 "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
+                 "registru_purtare_2026_2027.json"
               }
               else "profudeconta-sketch/catalog-online"
         )
@@ -1697,7 +1757,7 @@ with st.sidebar:
 if not os.path.exists(selected_file):
     st.warning(f"⚠️ Fișierul catalog '{selected_file}' nu a fost găsit în directorul curent.")
 
-tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "➕ Adăugare Notă", 
     "❌ Adăugare Absență", 
     "✅ Motivare Absență", 
@@ -1706,7 +1766,8 @@ tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "📈 Centralizator Clasă",
     "📋 Raport Diriginte",
     "👥 Gestiune Elevi",
-    "📁 Documente Elevi"
+    "📁 Documente Elevi",
+    "🧭 Purtare pe intervale"
 ])
 
 elev_options = [f"{e[0]}. {e[1]} (Matr. {e[3]})" for e in ELEVI]
@@ -2893,7 +2954,13 @@ with tab7:
                         "plasament": False,
                         "bursa_medicala": False,
                         "bursa_venit": False,
-                        "status_scolar": "ACTIV"
+                        "status_scolar": "ACTIV",
+                        "istoric_miscare": [{
+                            "tip": "ADAUGAT",
+                            "data": datetime.datetime.now(
+                                ZoneInfo("Europe/Bucharest")
+                            ).strftime("%Y-%m-%d"),
+                        }]
                     }
                     excel_backup = None
                     try:
@@ -2960,7 +3027,17 @@ with tab7:
             )
             if st.button("💾 Salvează starea școlară", type="primary", use_container_width=True):
                 status_vechi = status_item.get("status_scolar")
+                istoric_vechi = list(status_item.get("istoric_miscare", []))
                 status_item["status_scolar"] = status_nou
+                if status_nou != status_curent:
+                    istoric = list(status_item.get("istoric_miscare", []))
+                    istoric.append({
+                        "tip": status_nou,
+                        "data": datetime.datetime.now(
+                            ZoneInfo("Europe/Bucharest")
+                        ).strftime("%Y-%m-%d"),
+                    })
+                    status_item["istoric_miscare"] = istoric
                 if save_gestiune_data(gest_data):
                     st.success(
                         f"✅ Starea elevului {status_item.get('nume_complet')} a fost actualizată la {status_nou}. "
@@ -2972,6 +3049,10 @@ with tab7:
                         status_item.pop("status_scolar", None)
                     else:
                         status_item["status_scolar"] = status_vechi
+                    if istoric_vechi:
+                        status_item["istoric_miscare"] = istoric_vechi
+                    else:
+                        status_item.pop("istoric_miscare", None)
                     st.warning(
                         "⚠️ Modificarea stării nu a fost confirmată în repository-ul privat. "
                         "Datele încărcate în sesiunea curentă au fost restaurate."
@@ -3459,3 +3540,348 @@ with tab8:
 
 
 render_copyright_footer()
+
+
+# --- TAB 9: PURTARE PE INTERVALE ---
+with tab9:
+    st.subheader("Purtare pe intervalele de cursuri")
+    if not sync_conduct_registry_from_private_repo():
+        st.error(
+            "Registrul notelor la purtare nu a putut fi sincronizat din sursa privată. "
+            "Acordarea notelor este blocată pentru protejarea datelor."
+        )
+        st.stop()
+    st.caption(
+        "Nota este acordată de diriginte după consultarea consiliului clasei. "
+        "Absențele nu generează automat nota pe interval; diminuarea pentru "
+        "nefrecventare se aplică mediei anuale la închiderea anului."
+    )
+    elev_idx_p = st.selectbox(
+        "Selectează elevul:",
+        range(len(ELEVI)),
+        format_func=lambda i: elev_options[i],
+        key="elev_purtare_interval",
+    )
+    today_ro = datetime.datetime.now(ZoneInfo("Europe/Bucharest")).date()
+    registry = load_conduct_registry()
+    student_key = str(ELEVI[elev_idx_p][3]).strip()
+    existing = {
+        int(item["interval_number"]): item
+        for item in registry.get("grades", [])
+        if str(item.get("student_key", "")).strip() == student_key
+    }
+
+    for interval in CLJ_2026_2027_COURSE_INTERVALS:
+        current = existing.get(interval.number)
+        label = (
+            f"Intervalul {interval.number}: "
+            f"{interval.start_date.strftime('%d.%m.%Y')}–{interval.end_date.strftime('%d.%m.%Y')}"
+        )
+        if current:
+            st.success(
+                f"{label} — nota {current['grade']}, acordată la {current['awarded_on']}."
+            )
+            continue
+        if today_ro < interval.end_date:
+            st.info(f"{label} — nota poate fi acordată după încheierea intervalului.")
+            continue
+
+        with st.expander(f"{label} — acordă nota"):
+            nota_p = st.number_input(
+                "Nota la purtare",
+                min_value=1,
+                max_value=10,
+                value=10,
+                step=1,
+                key=f"nota_purtare_{interval.number}_{student_key}",
+            )
+            if st.button(
+                f"💾 Salvează nota pentru intervalul {interval.number}",
+                key=f"save_purtare_{interval.number}_{student_key}",
+                use_container_width=True,
+            ):
+                try:
+                    wb_check = openpyxl.load_workbook(selected_file, read_only=True, data_only=False)
+                    try:
+                        resolve_student_row(wb_check, ELEVI[elev_idx_p])
+                    finally:
+                        wb_check.close()
+                    save_conduct_grade(
+                        student_key=student_key,
+                        interval_number=interval.number,
+                        grade=int(nota_p),
+                        awarded_on=today_ro.isoformat(),
+                    )
+                    if not push_to_github("registru_purtare_2026_2027.json"):
+                        st.warning(
+                            "Nota a fost salvată local, dar sincronizarea în sursa privată "
+                            "nu a fost confirmată."
+                        )
+                    else:
+                        st.success("Nota la purtare a fost salvată și sincronizată.")
+                        st.rerun()
+                except (ConductStorageError, Exception) as ex:
+                    st.error(f"Nota la purtare nu a fost salvată: {ex}")
+
+
+def build_class_annual_closure_previews(file_path):
+    """Construiește read-only situația anuală pentru întreaga clasă.
+
+    Nu scrie în Excel, gestiune sau registrul de purtare. Pentru fiecare elev
+    întoarce fie preview-ul valid, fie eroarea concretă care blochează calculul.
+    """
+    results = []
+    wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+    try:
+        for elev_info in ELEVI:
+            student_key = str(elev_info[3]).strip()
+            try:
+                subjects = build_student_subject_inputs(
+                    wb,
+                    elev_info,
+                    resolve_student_row,
+                    IX_TH_2026_2027_CLASS_CDEOS_HOURS,
+                )
+                conduct_values = conduct_grades_for_student(student_key)
+                preview = preview_annual_closure(
+                    subjects,
+                    sum(item.motivated_absences for item in subjects),
+                    conduct_values,
+                )
+                results.append({
+                    "student_key": student_key,
+                    "name": str(elev_info[1]).strip(),
+                    "preview": preview,
+                    "conduct_values": tuple(conduct_values),
+                    "error": None,
+                })
+            except (ConductStorageError, AnnualClosureError, RuntimeError, ValueError) as ex:
+                results.append({
+                    "student_key": student_key,
+                    "name": str(elev_info[1]).strip(),
+                    "preview": None,
+                    "conduct_values": None,
+                    "error": str(ex),
+                })
+    finally:
+        wb.close()
+    return tuple(results)
+
+
+# Validarea clasei este numai informativă/read-only. Nu închide și nu persistă situații.
+with tab9:
+    st.divider()
+    st.subheader("Validare clasă înainte de închiderea situației școlare")
+    st.caption(
+        "Verificarea citește situația tuturor elevilor și indică blocajele. "
+        "Nu modifică Excelul, registrul de purtare sau gestiunea elevilor."
+    )
+    if st.button(
+        "🔎 Verifică întreaga clasă pentru închidere",
+        key="annual_class_validation_readonly",
+        use_container_width=True,
+    ):
+        try:
+            class_results = build_class_annual_closure_previews(selected_file)
+            ready_count = 0
+            blocked_count = 0
+            error_count = 0
+            for item in class_results:
+                preview = item["preview"]
+                if item["error"] is not None:
+                    error_count += 1
+                elif preview.ready_for_final_closure:
+                    ready_count += 1
+                else:
+                    blocked_count += 1
+
+            col_ready, col_blocked, col_error = st.columns(3)
+            col_ready.metric("Pregătiți", ready_count)
+            col_blocked.metric("Cu blocaje", blocked_count)
+            col_error.metric("Date incomplete/incoerente", error_count)
+
+            if blocked_count == 0 and error_count == 0:
+                st.success(
+                    "Toți elevii au trecut validarea read-only. "
+                    "Această verificare NU a închis încă situația școlară."
+                )
+            else:
+                st.warning(
+                    "Clasa nu este încă pregătită integral pentru închidere. "
+                    "Problemele de mai jos trebuie analizate înainte de orice persistență."
+                )
+
+            for item in class_results:
+                preview = item["preview"]
+                if item["error"] is not None:
+                    with st.expander(f"❌ {item['name']} — calcul indisponibil"):
+                        st.error(item["error"])
+                    continue
+                if preview.ready_for_final_closure:
+                    st.success(
+                        f"✅ {item['name']} — {preview.final_status}; "
+                        f"purtare {preview.conduct_annual_average}; "
+                        f"absențe {preview.total_absences}."
+                    )
+                    continue
+                with st.expander(f"⚠️ {item['name']} — necesită verificare"):
+                    st.write(
+                        f"Situație calculată: **{preview.final_status}** | "
+                        f"Purtare: **{preview.conduct_annual_average}** | "
+                        f"Absențe: **{preview.total_absences}**"
+                    )
+                    for blocker in preview.readiness_blockers:
+                        st.warning(blocker)
+        except (AnnualClosureError, ConductStorageError, RuntimeError, OSError) as ex:
+            st.error(f"Validarea clasei nu a putut fi finalizată: {ex}")
+
+
+# Închiderea situației școlare persistă numai snapshoturi validate în registrul privat separat.
+with tab9:
+    st.divider()
+    st.subheader("Închiderea situației școlare")
+    st.warning(
+        "Operația fixează snapshotul de la încheierea cursurilor. Nu modifică Excelul. "
+        "Snapshoturile existente nu sunt suprascrise; orice conflict blochează operația."
+    )
+    closure_confirmed = st.checkbox(
+        "Confirm că am verificat situația clasei și doresc închiderea situației școlare.",
+        key="confirm_annual_class_closure",
+    )
+    if st.button(
+        "🔒 Închiderea situației școlare",
+        key="persist_annual_class_closure",
+        type="primary",
+        use_container_width=True,
+        disabled=not closure_confirmed,
+    ):
+        try:
+            class_results = build_class_annual_closure_previews(selected_file)
+            invalid = [item for item in class_results if item["error"] is not None]
+            blocked = [
+                item for item in class_results
+                if item["error"] is None
+                and not item["preview"].ready_for_final_closure
+                and item["preview"].final_status != "AMANAT"
+            ]
+            if invalid or blocked:
+                st.error(
+                    "Închiderea a fost blocată înainte de orice scriere: "
+                    "cel puțin un elev are date incomplete/incoerente sau blocaje nerezolvate."
+                )
+                for item in invalid:
+                    st.error(f"{item['name']}: {item['error']}")
+                for item in blocked:
+                    for reason in item["preview"].readiness_blockers:
+                        st.warning(f"{item['name']}: {reason}")
+            else:
+                snapshots = []
+                for item in class_results:
+                    snapshots.append(
+                        build_annual_closure_snapshot(
+                            student_key=item["student_key"],
+                            preview=item["preview"],
+                            interval_conduct_grades=item["conduct_values"],
+                        )
+                    )
+
+                # Revalidăm toate snapshoturile înainte de prima publicare.
+                if len(snapshots) != len(class_results):
+                    raise AnnualClosureError("Numărul snapshoturilor nu corespunde clasei validate.")
+
+                persist_private_annual_closure_batch_once(tuple(snapshots))
+                persisted = len(snapshots)
+                st.success(
+                    f"Închiderea situației școlare a fost înregistrată pentru {persisted} elevi. "
+                    "Datele primare din Excel nu au fost modificate."
+                )
+        except (AnnualClosureError, AnnualClosureStorageError, ConductStorageError, RuntimeError, OSError) as ex:
+            st.error(
+                "Închiderea situației școlare nu a fost finalizată în siguranță. "
+                f"Motiv: {ex}"
+            )
+
+
+# PDF-ul de după închidere folosește exclusiv snapshoturile private validate pentru situația anuală.
+with tab9:
+    st.divider()
+    st.subheader("Catalog PDF după închiderea situației școlare")
+    try:
+        closed_snapshots = load_private_annual_closure_snapshots()
+        expected_keys = {str(elev[3]).strip() for elev in ELEVI}
+        if set(closed_snapshots) == expected_keys:
+            annual_states = {
+                key: official_catalog_state_from_records(snapshot)
+                for key, snapshot in closed_snapshots.items()
+            }
+            closed_catalog_pdf = generate_official_catalog_final(
+                selected_file,
+                load_gestiune_data(),
+                annual_states,
+            )
+            st.download_button(
+                "📘 Descarcă catalogul PDF din situația închisă",
+                data=closed_catalog_pdf,
+                file_name="catalog_situatie_inchisa.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="download_closed_official_catalog_pdf",
+            )
+            st.caption(
+                "Mediile anuale, purtarea și statutul școlar provin din snapshoturile "
+                "private verificate SHA-256; notele și absențele curente sunt citite "
+                "read-only pentru rubricile de evidență ale catalogului."
+            )
+        elif closed_snapshots:
+            st.info(
+                "Registrul privat conține numai o parte din elevii clasei. "
+                "Catalogul din situația închisă nu este generat până când setul nu este complet."
+            )
+        else:
+            st.info(
+                "Catalogul din situația închisă va deveni disponibil după înregistrarea "
+                "snapshoturilor pentru întreaga clasă."
+            )
+    except (AnnualClosureStorageError, OfficialCatalogError, RuntimeError, OSError, ValueError) as ex:
+        st.error(f"Catalogul PDF din situația închisă nu poate fi generat: {ex}")
+
+
+# Preview-ul anual rămâne read-only; este disponibil doar când registrul are toate cele 5 note.
+with tab9:
+    st.divider()
+    st.subheader("Simulare închidere anuală")
+    if st.button("🧮 Simulează situația anuală", key="annual_preview_readonly", use_container_width=True):
+        try:
+            conduct_values = conduct_grades_for_student(student_key)
+            wb_preview = openpyxl.load_workbook(selected_file, read_only=True, data_only=True)
+            try:
+                subjects = build_student_subject_inputs(
+                    wb_preview, ELEVI[elev_idx_p], resolve_student_row, IX_TH_2026_2027_CLASS_CDEOS_HOURS
+                )
+            finally:
+                wb_preview.close()
+            preview = preview_annual_closure(
+                subjects,
+                sum(item.motivated_absences for item in subjects),
+                conduct_values,
+            )
+            st.success(
+                f"Situație preliminară: {preview.final_status}; "
+                f"purtare anuală: {preview.conduct_annual_average}; "
+                f"absențe totale: {preview.total_absences}."
+            )
+            if preview.general_average is not None:
+                st.info(f"Media generală anuală preliminară: {preview.general_average}")
+            if preview.ready_for_final_closure:
+                st.success(
+                    "Validarea preliminară nu a identificat blocaje pentru închiderea situației școlare. "
+                    "Nu s-a efectuat nicio scriere."
+                )
+            else:
+                st.warning(
+                    "Situația poate fi simulată, dar NU este pregătită pentru închiderea situației școlare."
+                )
+                for blocker in preview.readiness_blockers:
+                    st.warning(blocker)
+        except (ConductStorageError, AnnualClosureError, RuntimeError) as ex:
+            st.warning(f"Simularea anuală nu poate fi finalizată încă: {ex}")

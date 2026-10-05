@@ -23,6 +23,8 @@ from school_document_receipt_pdf import generate_school_document_receipt_pdf
 
 PRIVATE_REPO = "profudeconta-sketch/catalog-online-date-private"
 DOCUMENT_ROOT = "documente_scolare"
+ANNUAL_CLOSURE_ROOT = "inchideri_anuale"
+PRIVATE_ALLOWED_ROOTS = (DOCUMENT_ROOT, ANNUAL_CLOSURE_ROOT)
 REGISTRY_PATH = f"{DOCUMENT_ROOT}/registru_documente.json"
 PENDING_ROOT = f"{DOCUMENT_ROOT}/operatii_in_asteptare"
 PARENT_EXCUSE_REGISTRY_PATH = f"{DOCUMENT_ROOT}/registru_motivari_parinte.json"
@@ -102,8 +104,12 @@ def _headers():
 
 def _api_url(path):
     clean = str(path).strip().lstrip("/")
-    if not clean.startswith(DOCUMENT_ROOT + "/") and clean != DOCUMENT_ROOT:
-        raise DocumentStorageError("Calea documentului nu apartine zonei private aprobate.")
+    allowed = any(
+        clean == root or clean.startswith(root + "/")
+        for root in PRIVATE_ALLOWED_ROOTS
+    )
+    if not allowed:
+        raise DocumentStorageError("Calea nu apartine unei zone private aprobate.")
     quoted = "/".join(urllib.parse.quote(part, safe="") for part in clean.split("/"))
     return f"https://api.github.com/repos/{PRIVATE_REPO}/contents/{quoted}"
 
