@@ -1946,8 +1946,9 @@ with tab_photo:
                         st.session_state.pop("photo_import_comparison", None)
                         st.session_state["photo_manual_proposals"] = []
                         st.session_state["photo_import_success_flash"] = (
-                            f"Import finalizat cu succes: {changed} înregistrări noi. Backup creat, catalog recalculat, "
-                            "verificare post-import trecută și copie privată sincronizată. Suprapunerile nu au fost duplicate."
+                            f"Import finalizat cu succes: {changed} înregistrări noi. Backup-ul a fost creat, catalogul a fost recalculat, "
+                            "verificarea post-import a confirmat înregistrările ca DEJA_EXISTENT, iar copia privată a fost sincronizată. "
+                            "Suprapunerile nu au fost duplicate."
                         )
                         st.rerun()
                     else:
