@@ -142,6 +142,112 @@ def pair_catalog_images(images,skip_cover=True):
         raise PhotoImportError("După tratarea explicită a copertei, numărul fotografiilor stânga/dreapta nu este par.")
     return [(work[i],work[i+1]) for i in range(0,len(work),2)]
 
+_LOCAL_VISION_MODEL = "HuggingFaceTB/SmolVLM2-256M-Video-Instruct"
+_LOCAL_MODEL_CACHE = None
+
+def local_vision_available():
+    """Verificare ieftină; nu descarcă modelul și nu face apeluri API."""
+    try:
+        import torch  # noqa: F401
+        import transformers  # noqa: F401
+        from PIL import Image  # noqa: F401
+        return True, ""
+    except Exception as ex:
+        return False, f"{type(ex).__name__}: {ex}"
+
+def _load_local_vision_model():
+    """Încarcă lazy modelul public local. Nicio cheie/API externă nu este folosită la inferență."""
+    global _LOCAL_MODEL_CACHE
+    if _LOCAL_MODEL_CACHE is not None:
+        return _LOCAL_MODEL_CACHE
+    try:
+        import torch
+        from transformers import AutoProcessor, AutoModelForImageTextToText
+        processor = AutoProcessor.from_pretrained(_LOCAL_VISION_MODEL)
+        model = AutoModelForImageTextToText.from_pretrained(
+            _LOCAL_VISION_MODEL, torch_dtype=torch.float32, low_cpu_mem_usage=True
+        )
+        model.eval()
+        _LOCAL_MODEL_CACHE = (processor, model)
+        return _LOCAL_MODEL_CACHE
+    except Exception as ex:
+        raise PhotoImportError(
+            f"Modelul vizual local nu a putut fi încărcat: {type(ex).__name__}: {ex}. "
+            "Nu s-a modificat catalogul."
+        ) from ex
+
+def _extract_first_json_object(text):
+    raw=str(text or "").strip()
+    start=raw.find("{"); end=raw.rfind("}")
+    if start<0 or end<=start:
+        raise PhotoImportError("Modelul local nu a returnat JSON demonstrabil.")
+    try:
+        return json.loads(raw[start:end+1])
+    except Exception as ex:
+        raise PhotoImportError("Răspunsul modelului local nu este JSON valid.") from ex
+
+def local_vision_read_crop(image_bytes, prompt, max_new_tokens=192):
+    """Inferență VLM locală pe un singur decupaj; fără OpenAI/API."""
+    try:
+        import torch
+        from PIL import Image
+        processor, model = _load_local_vision_model()
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        messages=[{"role":"user","content":[{"type":"image"},{"type":"text","text":prompt}]}]
+        text_prompt=processor.apply_chat_template(messages, add_generation_prompt=True)
+        inputs=processor(text=text_prompt, images=[image], return_tensors="pt")
+        with torch.inference_mode():
+            ids=model.generate(**inputs, do_sample=False, max_new_tokens=max_new_tokens)
+        generated=ids[:, inputs["input_ids"].shape[1]:]
+        answer=processor.batch_decode(generated, skip_special_tokens=True)[0]
+        return _extract_first_json_object(answer)
+    except PhotoImportError:
+        raise
+    except Exception as ex:
+        raise PhotoImportError(f"Inferența vizuală locală a eșuat: {type(ex).__name__}: {ex}") from ex
+
+def local_read_student_band(image, student_name, start, end, allowed_subjects):
+    """Două citiri locale independente ale aceleiași benzi. Numai consensul exact devine propunere.
+    Acest prototip este intenționat fail-closed: orice diferență sau câmp lipsă rămâne blocat.
+    """
+    prompt=(
+        f"Privește exclusiv această bandă dintr-un catalog școlar pentru elevul {student_name}. "
+        f"Extrage numai note și absențe din perioada {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
+        f"Discipline permise: {json.dumps(allowed_subjects,ensure_ascii=False)}. "
+        "Nu ghici. Pentru absențe, luna romană urmată de ':' se aplică zilelor arabe din aceeași rubrică; "
+        "spațiul, virgula, punctul și punctul și virgula separă zile. Pentru note, data trebuie demonstrată în aceeași rubrică. "
+        "Răspunde strict JSON: {\"records\":[{\"category\":...,\"subject\":...,\"kind\":\"grade|absence\","
+        "\"value\":\"\",\"date\":\"DD.MM\",\"motivated\":false,\"legible\":true}]}. "
+        "Dacă nu este sigur și direct lizibil, omite înregistrarea."
+    )
+    reads=[local_vision_read_crop(image[1],prompt), local_vision_read_crop(image[1],prompt)]
+    normalized=[]
+    for payload in reads:
+        current=set()
+        for r in payload.get("records",[]) if isinstance(payload,dict) else []:
+            try:
+                category=str(r.get("category","")).strip(); subject=str(r.get("subject","")).strip()
+                kind=str(r.get("kind","")).strip(); value=str(r.get("value","")).strip()
+                date=normalize_ddmm(r.get("date",""),start.year); motivated=bool(r.get("motivated",False))
+                if not r.get("legible",False) or subject not in allowed_subjects or kind not in {"grade","absence"}:
+                    continue
+                if not date_in_period(date,start,end): continue
+                if kind=="grade" and (not value.isdigit() or not 1<=int(value)<=10): continue
+                if kind=="absence": value=""
+                current.add((category,subject,kind,value,date,motivated))
+            except Exception:
+                continue
+        normalized.append(current)
+    consensus=normalized[0] & normalized[1]
+    out=[]
+    for category,subject,kind,value,date,motivated in sorted(consensus):
+        out.append(ImportProposal(
+            0,category,subject,kind,value,date,motivated,1.0,image[0],True,
+            "Consens exact între două citiri ale modelului vizual local pe același decupaj."
+        ))
+    return out, {"read_1":len(normalized[0]),"read_2":len(normalized[1]),"consensus":len(consensus),
+                 "disagreements":len(normalized[0] ^ normalized[1])}
+
 def _api_key():
     value=os.environ.get("OPENAI_API_KEY","")
     try:
