@@ -1769,6 +1769,9 @@ def _draw_v6_data_overlay(
         LEFT_IDENTITY_RIGHT_X,
         LEFT_SUBJECT_EDGES_X,
         RIGHT_SUBJECT_EDGES_X,
+        RIGHT_CONDUCT_LEFT_X,
+        RIGHT_CONDUCT_RIGHT_X,
+        RIGHT_ABS_TOTAL_RIGHT_X,
         RIGHT_TERMINAL_RIGHT_X,
         STUDENT_BLOCKS,
         output_xy,
@@ -1852,16 +1855,17 @@ def _draw_v6_data_overlay(
             c.drawRightString(rx, ry, annual_state.final_status)
         else:
             # Blocul terminal: purtare, total absențe și nemotivate.
-            terminal_left = edges[-1]
-            terminal_right = RIGHT_TERMINAL_RIGHT_X
-            tw = terminal_right - terminal_left
-            conduct_center = terminal_left + tw * 0.20
-            total_center = terminal_left + tw * 0.55
-            unmotiv_center = terminal_left + tw * 0.83
-            cx, cy = out(conduct_center, (body_bottom + body_top) / 2)
+            conduct_center = (RIGHT_CONDUCT_LEFT_X + RIGHT_CONDUCT_RIGHT_X) / 2
+            total_center = (RIGHT_CONDUCT_RIGHT_X + RIGHT_ABS_TOTAL_RIGHT_X) / 2
+            unmotiv_center = (RIGHT_ABS_TOTAL_RIGHT_X + RIGHT_TERMINAL_RIGHT_X) / 2
             c.setFont(PDF_FONT_BOLD, 5.8)
             if annual_state.conduct_annual_average is not None:
-                c.drawCentredString(cx, cy, _norm(annual_state.conduct_annual_average))
+                conduct_text = _format_catalog_average(annual_state.conduct_annual_average)
+                # Purtarea nu are examen de corigență: V6 marchează deja rândul
+                # intermediar cu X. Valoarea se înscrie la Media și Media anuală.
+                for yline in (block.mean_lines_y[0], block.mean_lines_y[2]):
+                    cx, cy = out(conduct_center, yline - 8.0)
+                    c.drawCentredString(cx, cy, conduct_text)
             cx, cy = out(total_center, block.mean_lines_y[0] - 8.0)
             c.drawCentredString(cx, cy, str(annual_state.total_absences))
             cx, cy = out(unmotiv_center, block.mean_lines_y[0] - 8.0)
