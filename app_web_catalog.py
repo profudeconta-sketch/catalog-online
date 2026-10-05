@@ -21,6 +21,8 @@ import io
 import shutil
 import copy
 from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document, store_new_document
+from conduct_storage import ConductStorageError, load_conduct_registry, save_conduct_grade
+from annual_closure_engine import CLJ_2026_2027_COURSE_INTERVALS
 from leave_pass_storage import (
     STATUS_APPROVED as LEAVE_STATUS_APPROVED,
     STATUS_EXPIRED as LEAVE_STATUS_EXPIRED,
@@ -1033,7 +1035,8 @@ def push_to_github(file_path):
              "profudeconta-sketch/catalog-online-date-private"
               if filename in {
                  GESTIUNE_FILE,
-                 "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx"
+                 "catalog_scolar_clasa_IX_TH_Turda-v15.xlsx",
+                 "registru_purtare_2026_2027.json"
               }
               else "profudeconta-sketch/catalog-online"
         )
@@ -1697,7 +1700,7 @@ with st.sidebar:
 if not os.path.exists(selected_file):
     st.warning(f"⚠️ Fișierul catalog '{selected_file}' nu a fost găsit în directorul curent.")
 
-tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "➕ Adăugare Notă", 
     "❌ Adăugare Absență", 
     "✅ Motivare Absență", 
@@ -1706,7 +1709,8 @@ tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "📈 Centralizator Clasă",
     "📋 Raport Diriginte",
     "👥 Gestiune Elevi",
-    "📁 Documente Elevi"
+    "📁 Documente Elevi",
+    "🧭 Purtare pe intervale"
 ])
 
 elev_options = [f"{e[0]}. {e[1]} (Matr. {e[3]})" for e in ELEVI]
@@ -3479,3 +3483,79 @@ with tab8:
 
 
 render_copyright_footer()
+
+
+# --- TAB 9: PURTARE PE INTERVALE ---
+with tab9:
+    st.subheader("Purtare pe intervalele de cursuri")
+    st.caption(
+        "Nota este acordată de diriginte după consultarea consiliului clasei. "
+        "Absențele nu generează automat nota pe interval; diminuarea pentru "
+        "nefrecventare se aplică mediei anuale la închiderea anului."
+    )
+    elev_idx_p = st.selectbox(
+        "Selectează elevul:",
+        range(len(ELEVI)),
+        format_func=lambda i: elev_options[i],
+        key="elev_purtare_interval",
+    )
+    today_ro = datetime.datetime.now(ZoneInfo("Europe/Bucharest")).date()
+    registry = load_conduct_registry()
+    student_key = str(ELEVI[elev_idx_p][3]).strip()
+    existing = {
+        int(item["interval_number"]): item
+        for item in registry.get("grades", [])
+        if str(item.get("student_key", "")).strip() == student_key
+    }
+
+    for interval in CLJ_2026_2027_COURSE_INTERVALS:
+        current = existing.get(interval.number)
+        label = (
+            f"Intervalul {interval.number}: "
+            f"{interval.start_date.strftime('%d.%m.%Y')}–{interval.end_date.strftime('%d.%m.%Y')}"
+        )
+        if current:
+            st.success(
+                f"{label} — nota {current['grade']}, acordată la {current['awarded_on']}."
+            )
+            continue
+        if today_ro < interval.end_date:
+            st.info(f"{label} — nota poate fi acordată după încheierea intervalului.")
+            continue
+
+        with st.expander(f"{label} — acordă nota"):
+            nota_p = st.number_input(
+                "Nota la purtare",
+                min_value=1,
+                max_value=10,
+                value=10,
+                step=1,
+                key=f"nota_purtare_{interval.number}_{student_key}",
+            )
+            if st.button(
+                f"💾 Salvează nota pentru intervalul {interval.number}",
+                key=f"save_purtare_{interval.number}_{student_key}",
+                use_container_width=True,
+            ):
+                try:
+                    wb_check = openpyxl.load_workbook(selected_file, read_only=True, data_only=False)
+                    try:
+                        resolve_student_row(wb_check, ELEVI[elev_idx_p])
+                    finally:
+                        wb_check.close()
+                    save_conduct_grade(
+                        student_key=student_key,
+                        interval_number=interval.number,
+                        grade=int(nota_p),
+                        awarded_on=today_ro.isoformat(),
+                    )
+                    if not push_to_github("registru_purtare_2026_2027.json"):
+                        st.warning(
+                            "Nota a fost salvată local, dar sincronizarea în sursa privată "
+                            "nu a fost confirmată."
+                        )
+                    else:
+                        st.success("Nota la purtare a fost salvată și sincronizată.")
+                        st.rerun()
+                except (ConductStorageError, Exception) as ex:
+                    st.error(f"Nota la purtare nu a fost salvată: {ex}")
