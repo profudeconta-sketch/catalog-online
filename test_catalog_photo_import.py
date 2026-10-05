@@ -118,6 +118,36 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertTrue(out[0].verifiable)
         self.assertEqual(out[0].value,"8")
 
+    def test_absence_period_and_duplicate_flow(self):
+        from catalog_photo_import import date_in_period
+        start=dt.date(2026,9,30); end=dt.date(2026,10,2)
+        physical=parse_absence_month_group("IX: 29 30")+parse_absence_month_group("X: 1, 2 3")
+        selected=[d for d in physical if date_in_period(d,start,end)]
+        self.assertEqual(selected,["30.09","01.10","02.10"])
+        path=workbook()
+        try:
+            ws=load_workbook(path)
+            sheet=ws["Cultură Generală"]
+            sheet.cell(13,8+21).value="30.09"
+            ws.save(path); ws.close()
+            proposals=[ImportProposal(0,"Cultură Generală","Matematică","absence","",d,confidence=.99,verifiable=True) for d in selected]
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,proposals)
+            self.assertEqual([x[1] for x in result],["DEJA_EXISTENT","NOU","NOU"])
+        finally:
+            os.remove(path)
+
+    def test_motivated_absence_conflict_is_blocked(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); wb["Cultură Generală"].cell(13,8+21).value="01.10"; wb.save(path); wb.close()
+            p=ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",motivated=True,confidence=.99,verifiable=True)
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
+            self.assertEqual(result[0][1],"CONFLICT")
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,result)
+        finally:
+            os.remove(path)
+
     def test_unverifiable_is_not_new(self):
         path=workbook()
         try:
