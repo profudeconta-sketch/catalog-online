@@ -12,10 +12,13 @@ modulelor) sunt intrări explicite; motorul nu le ghicește.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import asdict, dataclass, replace
+from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Mapping, Sequence
+from zoneinfo import ZoneInfo
+import hashlib
+import json
 
 
 class AnnualClosureError(RuntimeError):
@@ -309,6 +312,9 @@ class AnnualClosurePreview:
 class AnnualClosureSnapshot:
     """Structură imuabilă pregătită pentru audit; nu implică persistență."""
     schema_version: int
+    rules_version: str
+    generated_at: str
+    integrity_sha256: str
     school_year: str
     student_key: str
     subjects: tuple[tuple[str, str, int, int, int], ...]
@@ -355,8 +361,11 @@ def build_annual_closure_snapshot(
         )
         for item in preview.subjects
     )
-    return AnnualClosureSnapshot(
-        schema_version=1,
+    snapshot = AnnualClosureSnapshot(
+        schema_version=2,
+        rules_version="etapa-5.6-2026-2027-v1",
+        generated_at=datetime.now(ZoneInfo("Europe/Bucharest")).isoformat(timespec="seconds"),
+        integrity_sha256="",
         school_year="2026-2027",
         student_key=key,
         subjects=subjects,
@@ -373,6 +382,34 @@ def build_annual_closure_snapshot(
         final_status=preview.final_status,
         general_average=None if preview.general_average is None else str(preview.general_average),
     )
+    return seal_annual_closure_snapshot(snapshot)
+
+
+def canonical_snapshot_payload(snapshot: AnnualClosureSnapshot) -> bytes:
+    """Reprezentare deterministă; hashul însuși este exclus din materialul semnat."""
+    payload = asdict(snapshot)
+    payload["integrity_sha256"] = ""
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def snapshot_sha256(snapshot: AnnualClosureSnapshot) -> str:
+    return hashlib.sha256(canonical_snapshot_payload(snapshot)).hexdigest()
+
+
+def seal_annual_closure_snapshot(snapshot: AnnualClosureSnapshot) -> AnnualClosureSnapshot:
+    return replace(snapshot, integrity_sha256=snapshot_sha256(snapshot))
+
+
+def verify_annual_closure_snapshot(snapshot: AnnualClosureSnapshot) -> bool:
+    expected = snapshot.integrity_sha256
+    if not expected or len(expected) != 64:
+        return False
+    return snapshot_sha256(snapshot) == expected
 
 
 def _decimal_grade(value) -> Decimal:
