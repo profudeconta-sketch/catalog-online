@@ -1856,7 +1856,7 @@ def _draw_v6_data_overlay(
             # Zona de conținut se termină înaintea celor trei rânduri de medii.
             # 30 de absențe trebuie să încapă garantat, indiferent de distribuția pe luni.
             content_top = body_top - 13.0
-            content_bottom = min(block.mean_lines_y) + 7.0
+            content_bottom = max(block.mean_lines_y) + 7.0
 
             grade_entries = tuple(subject.grades)
             if len(grade_entries) > 10:
