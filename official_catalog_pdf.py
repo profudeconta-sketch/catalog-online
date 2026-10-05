@@ -669,7 +669,22 @@ def validate_official_catalog_annual_states(
                 f"Situația anuală pentru {student.rm_pg!r} nu conține exact disciplinele clasei."
             )
         for subject, average in subject_values.items():
-            if not isinstance(average, int) or isinstance(average, bool) or not 1 <= average <= 10:
+            if isinstance(average, bool):
+                raise OfficialCatalogError(
+                    f"{subject}: media anuală validată este invalidă pentru {student.rm_pg!r}."
+                )
+            try:
+                numeric_average = Decimal(str(average))
+            except Exception as exc:
+                raise OfficialCatalogError(
+                    f"{subject}: media anuală validată este invalidă pentru {student.rm_pg!r}."
+                ) from exc
+            if (
+                not numeric_average.is_finite()
+                or numeric_average < Decimal("1")
+                or numeric_average > Decimal("10")
+                or numeric_average.as_tuple().exponent < -2
+            ):
                 raise OfficialCatalogError(
                     f"{subject}: media anuală validată este invalidă pentru {student.rm_pg!r}."
                 )
@@ -761,6 +776,21 @@ class OfficialCatalogError(RuntimeError):
 
 def _norm(value) -> str:
     return " ".join(str(value or "").split())
+
+
+def _format_catalog_average(value: object) -> str:
+    """Afișează mediile zecimale cu virgulă, fără a schimba forma canonică stocată."""
+    if value is None or isinstance(value, bool):
+        return _norm(value)
+    try:
+        number = Decimal(str(value))
+    except Exception:
+        return _norm(value)
+    if not number.is_finite():
+        return _norm(value)
+    if number == number.to_integral_value():
+        return str(int(number))
+    return format(number.quantize(Decimal("0.01")), ".2f").replace(".", ",")
 
 
 def _student_from_gestiune(row: Mapping) -> tuple[str, str, str]:
@@ -1419,7 +1449,7 @@ def _draw_marks_spread_placeholder(
                     )
                     for value, yy in row_values:
                         if value is not None:
-                            c.drawCentredString(gx + pair_w / 2, yy, _norm(value))
+                            c.drawCentredString(gx + pair_w / 2, yy, _format_catalog_average(value))
 
             # Etichetele apar în zona de situație școlară, nu într-o
             # pseudo-coloană de disciplină.
@@ -1520,7 +1550,7 @@ def _draw_marks_spread_placeholder(
                     )
                     for value, yy in row_values:
                         if value is not None:
-                            c.drawCentredString(gx + pair_w / 2, yy, _norm(value))
+                            c.drawCentredString(gx + pair_w / 2, yy, _format_catalog_average(value))
 
             if student is not None:
                 attendance = extract_existing_attendance_summary(wb, student)
