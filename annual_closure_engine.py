@@ -1137,16 +1137,27 @@ def build_deferred_to_corigent_record(
     corigent_subjects = tuple(
         name for name, average in resolution.subject_annual_averages if average < 5
     )
+    normalized_results = tuple(
+        AnnualFinalizationSubjectResult(
+            subject_name=str(item.subject_name).strip(),
+            source_status=item.source_status,
+            result_type=item.result_type,
+            resulting_annual_average=AnnualFinalizationSubjectResult.normalize_average(
+                item.resulting_annual_average
+            ),
+        )
+        for item in subject_results
+    )
     record = DeferredToCorigentRecord(
-        schema_version=1,
-        rules_version="etapa-5.6-amanat-corigent-2026-2027-v1",
+        schema_version=2,
+        rules_version="etapa-5.7-amanat-corigent-2026-2027-v2",
         generated_at=datetime.now(ZoneInfo("Europe/Bucharest")).isoformat(timespec="seconds"),
         integrity_sha256="",
         school_year=source_snapshot.school_year,
         student_key=source_snapshot.student_key,
         source_snapshot_sha256=source_snapshot.integrity_sha256,
         deferred_record_sha256=deferred_record.integrity_sha256,
-        deferred_subject_results=tuple(subject_results),
+        deferred_subject_results=normalized_results,
         corigent_subjects=corigent_subjects,
     )
     return seal_deferred_to_corigent_record(record)
