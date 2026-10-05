@@ -1091,3 +1091,170 @@ def derive_deferred_finalization(
         final_general_average=resolution.general_average,
         finalized_on=finalized_on,
     )
+
+
+@dataclass(frozen=True)
+class DeferredToCorigentRecord:
+    """Tranziție imuabilă AMÂNAT -> CORIGENT, fără rescrierea snapshotului."""
+    schema_version: int
+    rules_version: str
+    generated_at: str
+    integrity_sha256: str
+    school_year: str
+    student_key: str
+    source_snapshot_sha256: str
+    deferred_record_sha256: str
+    deferred_subject_results: tuple[AnnualFinalizationSubjectResult, ...]
+    corigent_subjects: tuple[str, ...]
+
+
+def canonical_deferred_to_corigent_payload(record: DeferredToCorigentRecord) -> bytes:
+    payload = asdict(record)
+    payload["integrity_sha256"] = ""
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def deferred_to_corigent_sha256(record: DeferredToCorigentRecord) -> str:
+    return hashlib.sha256(canonical_deferred_to_corigent_payload(record)).hexdigest()
+
+
+def seal_deferred_to_corigent_record(
+    record: DeferredToCorigentRecord,
+) -> DeferredToCorigentRecord:
+    return replace(record, integrity_sha256=deferred_to_corigent_sha256(record))
+
+
+def verify_deferred_to_corigent_record(record: DeferredToCorigentRecord) -> bool:
+    expected = str(record.integrity_sha256 or "")
+    return len(expected) == 64 and deferred_to_corigent_sha256(record) == expected
+
+
+def build_deferred_to_corigent_record(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    deferred_record: AnnualDeferredSituationRecord,
+    subject_results: Sequence[AnnualFinalizationSubjectResult],
+) -> DeferredToCorigentRecord:
+    """Fixează auditabil rezultatul AMÂNAT care conduce la CORIGENT."""
+    resolution = derive_deferred_resolution(
+        source_snapshot=source_snapshot,
+        deferred_record=deferred_record,
+        subject_results=subject_results,
+    )
+    if resolution.status != "CORIGENT":
+        raise AnnualClosureError(
+            "Tranziția AMÂNAT -> CORIGENT poate fi creată numai pentru o rezoluție CORIGENT."
+        )
+    corigent_subjects = tuple(
+        name for name, average in resolution.subject_annual_averages if average < 5
+    )
+    record = DeferredToCorigentRecord(
+        schema_version=1,
+        rules_version="etapa-5.6-amanat-corigent-2026-2027-v1",
+        generated_at=datetime.now(ZoneInfo("Europe/Bucharest")).isoformat(timespec="seconds"),
+        integrity_sha256="",
+        school_year=source_snapshot.school_year,
+        student_key=source_snapshot.student_key,
+        source_snapshot_sha256=source_snapshot.integrity_sha256,
+        deferred_record_sha256=deferred_record.integrity_sha256,
+        deferred_subject_results=tuple(subject_results),
+        corigent_subjects=corigent_subjects,
+    )
+    return seal_deferred_to_corigent_record(record)
+
+
+def derive_deferred_corigent_finalization(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    deferred_record: AnnualDeferredSituationRecord,
+    transition_record: DeferredToCorigentRecord,
+    corigent_results: Sequence[AnnualFinalizationSubjectResult],
+    finalized_on: date,
+) -> AnnualFinalizationRecord:
+    """Definitivează lanțul AMÂNAT -> CORIGENT -> examen(e) de corigență."""
+    if not verify_annual_closure_snapshot(source_snapshot):
+        raise AnnualClosureError("Snapshotul sursă nu trece verificarea SHA-256.")
+    if not verify_annual_deferred_situation_record(deferred_record):
+        raise AnnualClosureError("Anexa AMÂNAT nu trece verificarea SHA-256.")
+    if not verify_deferred_to_corigent_record(transition_record):
+        raise AnnualClosureError("Tranziția AMÂNAT -> CORIGENT nu trece verificarea SHA-256.")
+    if (
+        transition_record.source_snapshot_sha256 != source_snapshot.integrity_sha256
+        or transition_record.deferred_record_sha256 != deferred_record.integrity_sha256
+        or transition_record.student_key != source_snapshot.student_key
+        or transition_record.school_year != source_snapshot.school_year
+    ):
+        raise AnnualClosureError("Lanțul de audit AMÂNAT -> CORIGENT este inconsistent.")
+
+    deferred_resolution = derive_deferred_resolution(
+        source_snapshot=source_snapshot,
+        deferred_record=deferred_record,
+        subject_results=transition_record.deferred_subject_results,
+    )
+    if deferred_resolution.status != "CORIGENT":
+        raise AnnualClosureError("Tranziția stocată nu mai reproduce starea CORIGENT.")
+
+    required = set(transition_record.corigent_subjects)
+    if not required or len(required) > 2:
+        raise AnnualClosureError("Lista disciplinelor de corigență din tranziție este invalidă.")
+
+    replacements = {}
+    normalized = []
+    for item in corigent_results:
+        name = str(item.subject_name).strip()
+        if item.source_status != "CORIGENT":
+            raise AnnualClosureError(f"{name}: rezultatul trebuie să aibă starea sursă CORIGENT.")
+        if item.result_type not in {"CORIGENTA", "REEXAMINARE"}:
+            raise AnnualClosureError(
+                f"{name}: etapa de corigență acceptă numai CORIGENTA sau REEXAMINARE."
+            )
+        if name not in required:
+            raise AnnualClosureError(f"{name}: disciplina nu aparține tranziției CORIGENT.")
+        if name in replacements:
+            raise AnnualClosureError(f"{name}: rezultat de corigență duplicat.")
+        if not isinstance(item.resulting_annual_average, int) or isinstance(
+            item.resulting_annual_average, bool
+        ) or not 1 <= item.resulting_annual_average <= 10:
+            raise AnnualClosureError(
+                f"{name}: media anuală rezultată trebuie să fie un întreg între 1 și 10."
+            )
+        replacements[name] = item.resulting_annual_average
+        normalized.append(item)
+
+    missing = sorted(required.difference(replacements))
+    if missing:
+        raise AnnualClosureError(
+            "Nu poate fi definitivă situația; lipsesc rezultatele de corigență pentru: "
+            + ", ".join(missing)
+            + "."
+        )
+
+    final_averages = dict(deferred_resolution.subject_annual_averages)
+    final_averages.update(replacements)
+    failed = [name for name, average in final_averages.items() if average < 5]
+    conduct = Decimal(str(source_snapshot.conduct_annual_average))
+    if conduct < Decimal("6") or failed:
+        final_status = "REPETENT"
+        general = None
+    else:
+        final_status = "PROMOVAT"
+        values = [Decimal(value) for value in final_averages.values()]
+        values.append(conduct)
+        general = (
+            sum(values, Decimal("0")) / Decimal(len(values))
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    # Actul final rămâne legat de snapshotul anual; traseul intermediar este
+    # verificat criptografic mai sus și va fi păstrat separat la persistență.
+    return build_annual_finalization_record(
+        source_snapshot=source_snapshot,
+        subject_results=tuple(normalized),
+        final_status=final_status,
+        final_general_average=general,
+        finalized_on=finalized_on,
+    )
