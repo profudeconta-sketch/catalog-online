@@ -45,7 +45,8 @@ from leave_pass_storage import (
 from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
     PhotoImportError, ImportProposal, safe_zip_images, pair_catalog_images,
-    analyze_pair_with_vision, compare_with_workbook, apply_confirmed_import,
+    analyze_pair_with_vision, recover_uncertain_proposals,
+    compare_with_workbook, apply_confirmed_import,
 )
 
 
@@ -1854,6 +1855,11 @@ with tab_photo:
                     local = analyze_pair_with_vision(
                         left_img, right_img, names, import_start, import_end, allowed
                     )
+                    # Cazurile slabe primesc automat o a doua citire independentă;
+                    # utilizatorul intervine numai dacă nici aceasta nu demonstrează informația.
+                    local = recover_uncertain_proposals(
+                        left_img, right_img, names, import_start, import_end, allowed, local
+                    )
                     for p in local:
                         all_proposals.append(ImportProposal(
                             student_index=start_idx + p.student_index,
@@ -1869,7 +1875,11 @@ with tab_photo:
                 )
                 st.session_state["photo_import_comparison"] = comparison
                 st.session_state["photo_import_period"] = (str(import_start), str(import_end))
-                st.success("Analiza s-a încheiat. Verifică fiecare propunere înainte de salvare.")
+                blocked = sum(1 for _, status, _ in comparison if status == "NECESITĂ_VERIFICARE")
+                if blocked:
+                    st.warning(f"Analiza automată s-a încheiat. {blocked} caz(uri) au rămas nedemonstrate după a doua citire și sunt blocate.")
+                else:
+                    st.success("Analiza automată s-a încheiat fără cazuri care necesită verificare umană.")
 
             comparison = st.session_state.get("photo_import_comparison")
             if comparison:
