@@ -122,7 +122,8 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
       "În acest caz X este luna octombrie, iar 1, 2 și 5 sunt trei zile distincte; spațiul dintre 2 și 5 este separator, nu formează 25. "
       "Emite câte un record separat pentru fiecare zi, cu date normalizată DD.MM. "
       "Dacă există orice dubiu, păstrează recordul, pune legible=false și confidence corespunzător; nu inventa valoarea.")
-    payload={"model":"gpt-6-luna","input":[{"role":"user","content":[
+    model=os.environ.get("OPENAI_VISION_MODEL","gpt-6-luna")
+    payload={"model":model,"input":[{"role":"user","content":[
       {"type":"input_text","text":prompt},
       {"type":"input_image","image_url":_data_url(left[0],left[1]),"detail":"high"},
       {"type":"input_image","image_url":_data_url(right[0],right[1]),"detail":"high"}]}]}
@@ -167,7 +168,8 @@ def _parse_vision_records(body,student_names,start):
     except Exception as ex:
         raise PhotoImportError("Răspunsul AI nu este JSON valid; verificarea a fost oprită.") from ex
 
-def _vision_request(prompt,left,right,model="gpt-6-luna"):
+def _vision_request(prompt,left,right,model=None):
+    model=model or os.environ.get("OPENAI_VISION_MODEL","gpt-6-luna")
     payload={"model":model,"input":[{"role":"user","content":[
         {"type":"input_text","text":prompt},
         {"type":"input_image","image_url":_data_url(left[0],left[1]),"detail":"high"},
@@ -196,6 +198,9 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
           f"Perioada permisă: {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
           "Răspunde STRICT JSON {\"records\":[...]}; fiecare record conține student_index, category, "
           "subject, kind, value, date DD.MM, motivated, confidence, source_image, legible. "
+          "Pentru ABSENȚE, luna poate apărea o singură dată ca cifră romană urmată de ':', iar zilele arabe care urmează în ACEEAȘI rubrică aparțin acelei luni; "
+          "virgula sau spațiul separă zile distincte (de ex. 'X: 1 2' = 01.10 și 02.10, NU 12.10). "
+          "Nu transfera niciodată luna între elevi, discipline sau rubrici. Emite câte un record separat pentru fiecare zi. "
           "legible=true numai dacă TOATE câmpurile sunt citibile direct din fotografie, fără inferență. Nu ghici.")
         rows=_parse_vision_records(_vision_request(prompt,left,right),student_names,start)
         out=[]
