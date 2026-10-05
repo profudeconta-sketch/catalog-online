@@ -121,6 +121,61 @@ def sync_gestiune_from_private_repo():
         return False
 
 
+def sync_conduct_registry_from_private_repo():
+    filename = "registru_purtare_2026_2027.json"
+    token = os.environ.get("GITHUB_TOKEN") or ""
+    try:
+        if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+            token = token or str(st.secrets["GITHUB_TOKEN"])
+    except Exception:
+        pass
+    if not token:
+        return False
+    url = (
+        "https://api.github.com/repos/profudeconta-sketch/"
+        f"catalog-online-date-private/contents/{filename}?ref=main"
+    )
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "StreamlitApp",
+                "Cache-Control": "no-cache",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        content = base64.b64decode(payload.get("content", ""))
+        if not content:
+            return False
+        temp = filename + ".download.tmp"
+        with open(temp, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        with open(temp, "r", encoding="utf-8") as handle:
+            candidate = json.load(handle)
+        if (
+            candidate.get("schema_version") != 1
+            or candidate.get("school_year") != "2026-2027"
+            or not isinstance(candidate.get("grades"), list)
+        ):
+            raise ValueError("Registru purtare invalid.")
+        if os.path.exists(filename):
+            shutil.copy2(filename, filename + ".bak")
+        os.replace(temp, filename)
+        return True
+    except Exception:
+        try:
+            if os.path.exists(filename + ".download.tmp"):
+                os.remove(filename + ".download.tmp")
+        except Exception:
+            pass
+        return False
+
+
 def load_gestiune_data():
     if not sync_gestiune_from_private_repo():
         st.error(
@@ -3488,6 +3543,12 @@ render_copyright_footer()
 # --- TAB 9: PURTARE PE INTERVALE ---
 with tab9:
     st.subheader("Purtare pe intervalele de cursuri")
+    if not sync_conduct_registry_from_private_repo():
+        st.error(
+            "Registrul notelor la purtare nu a putut fi sincronizat din sursa privată. "
+            "Acordarea notelor este blocată pentru protejarea datelor."
+        )
+        st.stop()
     st.caption(
         "Nota este acordată de diriginte după consultarea consiliului clasei. "
         "Absențele nu generează automat nota pe interval; diminuarea pentru "
