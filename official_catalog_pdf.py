@@ -28,8 +28,16 @@ from reportlab.pdfbase.ttfonts import TTFont
 from annual_closure_engine import (
     AnnualClosureSnapshot,
     AnnualFinalizationRecord,
+    AnnualDeferredSituationRecord,
+    DeferredToCorigentRecord,
+    CorigentSessionRecord,
+    ReexaminationApprovalRecord,
     verify_annual_closure_snapshot,
     verify_annual_finalization_record,
+    verify_annual_deferred_situation_record,
+    verify_deferred_to_corigent_record,
+    verify_corigent_session_record,
+    verify_reexamination_approval_record,
 )
 
 
@@ -441,9 +449,92 @@ class OfficialCatalogAnnualState:
         return values.get(source_key)
 
 
+AnnualAuditRecord = (
+    AnnualDeferredSituationRecord
+    | DeferredToCorigentRecord
+    | CorigentSessionRecord
+    | ReexaminationApprovalRecord
+)
+
+
+def validate_finalization_audit_chain_for_print(
+    snapshot: AnnualClosureSnapshot,
+    finalization: AnnualFinalizationRecord,
+    audit_records: Sequence[AnnualAuditRecord],
+) -> None:
+    """Verifică fail-closed fiecare SHA declarat de actul final înainte de tipărire."""
+    declared = tuple(finalization.audit_chain_sha256)
+    if len(audit_records) != len(declared):
+        raise OfficialCatalogError(
+            "Lanțul de audit declarat de actul final nu a fost furnizat integral."
+        )
+
+    actual: list[str] = []
+    previous_deferred: AnnualDeferredSituationRecord | None = None
+    previous_transition: DeferredToCorigentRecord | None = None
+    previous_session: CorigentSessionRecord | None = None
+
+    for record in audit_records:
+        if isinstance(record, AnnualDeferredSituationRecord):
+            if not verify_annual_deferred_situation_record(record):
+                raise OfficialCatalogError("Anexa AMÂNAT din lanț nu trece verificarea SHA-256.")
+            if (
+                record.source_snapshot_sha256 != snapshot.integrity_sha256
+                or record.student_key != snapshot.student_key
+                or record.school_year != snapshot.school_year
+            ):
+                raise OfficialCatalogError("Anexa AMÂNAT nu aparține snapshotului tipărit.")
+            previous_deferred = record
+        elif isinstance(record, DeferredToCorigentRecord):
+            if not verify_deferred_to_corigent_record(record):
+                raise OfficialCatalogError("Tranziția AMÂNAT→CORIGENT nu trece verificarea SHA-256.")
+            if (
+                previous_deferred is None
+                or record.source_snapshot_sha256 != snapshot.integrity_sha256
+                or record.deferred_record_sha256 != previous_deferred.integrity_sha256
+                or record.student_key != snapshot.student_key
+                or record.school_year != snapshot.school_year
+            ):
+                raise OfficialCatalogError("Tranziția AMÂNAT→CORIGENT nu continuă lanțul furnizat.")
+            previous_transition = record
+        elif isinstance(record, CorigentSessionRecord):
+            if not verify_corigent_session_record(record):
+                raise OfficialCatalogError("Actul primei corigențe nu trece verificarea SHA-256.")
+            if (
+                record.source_snapshot_sha256 != snapshot.integrity_sha256
+                or record.student_key != snapshot.student_key
+                or record.school_year != snapshot.school_year
+            ):
+                raise OfficialCatalogError("Actul primei corigențe nu aparține snapshotului tipărit.")
+            previous_session = record
+        elif isinstance(record, ReexaminationApprovalRecord):
+            if not verify_reexamination_approval_record(record):
+                raise OfficialCatalogError("Aprobarea reexaminării nu trece verificarea SHA-256.")
+            if (
+                previous_session is None
+                or record.source_snapshot_sha256 != snapshot.integrity_sha256
+                or record.corigent_session_sha256 != previous_session.integrity_sha256
+                or record.student_key != snapshot.student_key
+                or record.school_year != snapshot.school_year
+            ):
+                raise OfficialCatalogError("Aprobarea reexaminării nu continuă lanțul furnizat.")
+        else:
+            raise OfficialCatalogError("Lanțul de audit conține un tip de act necunoscut.")
+        actual.append(record.integrity_sha256)
+
+    if tuple(actual) != declared:
+        raise OfficialCatalogError(
+            "Ordinea sau SHA-urile actelor furnizate diferă de lanțul declarat de actul final."
+        )
+
+    if previous_transition is not None and previous_deferred is None:
+        raise OfficialCatalogError("Tranziția CORIGENT nu are anexă AMÂNAT anterioară.")
+
+
 def official_catalog_state_from_records(
     snapshot: AnnualClosureSnapshot,
     finalization: AnnualFinalizationRecord | None = None,
+    audit_records: Sequence[AnnualAuditRecord] = (),
 ) -> OfficialCatalogAnnualState:
     """Adaptează numai înregistrări SHA-256 valide la modelul read-only de tipărire."""
     if not verify_annual_closure_snapshot(snapshot):
@@ -469,6 +560,11 @@ def official_catalog_state_from_records(
     final_status = snapshot.final_status
     general_average = snapshot.general_average
 
+    if finalization is None and audit_records:
+        raise OfficialCatalogError(
+            "Au fost furnizate acte intermediare fără un act final de definitivare."
+        )
+
     if finalization is not None:
         if not verify_annual_finalization_record(finalization):
             raise OfficialCatalogError("Actul de definitivare nu trece verificarea SHA-256.")
@@ -479,6 +575,9 @@ def official_catalog_state_from_records(
             or finalization.source_status != snapshot.final_status
         ):
             raise OfficialCatalogError("Actul de definitivare nu aparține snapshotului anual.")
+        validate_finalization_audit_chain_for_print(
+            snapshot, finalization, audit_records
+        )
         for result in finalization.subject_results:
             name = str(result.subject_name).strip()
             if name not in subject_values:
