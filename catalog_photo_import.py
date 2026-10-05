@@ -54,10 +54,10 @@ def parse_absence_month_group(value, year=2026):
         raise PhotoImportError(f"Grup de absențe fără zile: {value!r}")
     # În catalog zilele pot fi delimitate prin virgulă, punct și virgulă, punct sau spațiu.
     # Nu concatenăm cifre separate: "1 2" înseamnă zilele 1 și 2, nu ziua 12.
-    if re.search(r"[^\d,\s;]",days_raw):
+    if re.search(r"[^\d,;\.\s]",days_raw):
         raise PhotoImportError(f"Separator sau caracter invalid în grupul de absențe: {value!r}")
     tokens=re.findall(r"\d{1,2}",days_raw)
-    residue=re.sub(r"\d{1,2}|[,;\s]","",days_raw)
+    residue=re.sub(r"\d{1,2}|[,;\.\s]","",days_raw)
     if residue or not tokens:
         raise PhotoImportError(f"Zile invalide în grupul de absențe: {value!r}")
     out=[]
