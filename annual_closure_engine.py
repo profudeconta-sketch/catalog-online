@@ -749,3 +749,112 @@ def build_annual_finalization_record(
         finalized_on=finalized_on.isoformat(),
     )
     return seal_annual_finalization_record(record)
+
+
+def derive_annual_finalization(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    subject_results: Sequence[AnnualFinalizationSubjectResult],
+    finalized_on: date,
+) -> AnnualFinalizationRecord:
+    """Derivă situația definitivă exclusiv din snapshot + rezultate ulterioare.
+
+    Funcția este pură față de datele catalogului: nu persistă și nu modifică
+    snapshotul sursă. Pentru CORIGENT, toate disciplinele inițial sub 5 trebuie
+    să aibă rezultat ulterior înainte ca situația să poată deveni definitivă.
+    """
+    if not verify_annual_closure_snapshot(source_snapshot):
+        raise AnnualClosureError("Snapshotul sursă nu trece verificarea SHA-256.")
+    if source_snapshot.final_status not in _ALLOWED_FINALIZATION_SOURCE_STATUSES:
+        raise AnnualClosureError(
+            "Snapshotul sursă nu necesită o definitivare ulterioară."
+        )
+
+    source_subjects: dict[str, int] = {}
+    for row in source_snapshot.subjects:
+        if len(row) != 5:
+            raise AnnualClosureError("Structura disciplinelor din snapshot este invalidă.")
+        name = str(row[0]).strip()
+        annual_average = int(row[2])
+        if not name or name in source_subjects:
+            raise AnnualClosureError("Snapshotul conține discipline invalide sau duplicate.")
+        source_subjects[name] = annual_average
+
+    replacements: dict[str, int] = {}
+    normalized_results = []
+    for item in subject_results:
+        name = str(item.subject_name).strip()
+        if name not in source_subjects:
+            raise AnnualClosureError(
+                f"{name}: disciplina nu există în snapshotul anual sursă."
+            )
+        if item.source_status != source_snapshot.final_status:
+            raise AnnualClosureError(
+                f"{name}: starea sursă a rezultatului nu corespunde snapshotului."
+            )
+        if name in replacements:
+            raise AnnualClosureError(
+                f"{name}: există mai multe rezultate ulterioare în aceeași definitivare."
+            )
+        if item.result_type not in _ALLOWED_FINALIZATION_RESULT_TYPES:
+            raise AnnualClosureError(f"{name}: tip de rezultat ulterior invalid.")
+        if not isinstance(item.resulting_annual_average, int) or isinstance(
+            item.resulting_annual_average, bool
+        ) or not 1 <= item.resulting_annual_average <= 10:
+            raise AnnualClosureError(
+                f"{name}: media anuală rezultată trebuie să fie un întreg între 1 și 10."
+            )
+        replacements[name] = item.resulting_annual_average
+        normalized_results.append(item)
+
+    if not normalized_results:
+        raise AnnualClosureError("Nu există rezultate ulterioare pentru definitivare.")
+
+    if source_snapshot.final_status == "CORIGENT":
+        required = {name for name, average in source_subjects.items() if average < 5}
+        missing = sorted(required.difference(replacements))
+        if missing:
+            raise AnnualClosureError(
+                "Nu poate fi stabilită situația definitivă; lipsesc rezultatele pentru: "
+                + ", ".join(missing)
+                + "."
+            )
+        unexpected = sorted(set(replacements).difference(required))
+        if unexpected:
+            raise AnnualClosureError(
+                "Definitivarea de corigență conține discipline care nu erau corigente: "
+                + ", ".join(unexpected)
+                + "."
+            )
+    else:
+        # Pentru AMÂNAT, snapshotul actual nu codifică încă lista completă a
+        # disciplinelor amânate. Nu ghicim această listă și nu declarăm automat
+        # PROMOVAT doar dintr-un subset de rezultate.
+        raise AnnualClosureError(
+            "Definitivarea automată pentru AMÂNAT necesită mai întâi codificarea "
+            "explicită a disciplinelor neîncheiate în snapshot; motorul refuză să le ghicească."
+        )
+
+    final_subject_averages = dict(source_subjects)
+    final_subject_averages.update(replacements)
+
+    failed = [name for name, average in final_subject_averages.items() if average < 5]
+    conduct = Decimal(str(source_snapshot.conduct_annual_average))
+    if conduct < Decimal("6") or failed:
+        final_status = "REPETENT"
+        final_general_average = None
+    else:
+        final_status = "PROMOVAT"
+        values = [Decimal(value) for value in final_subject_averages.values()]
+        values.append(conduct)
+        final_general_average = (
+            sum(values, Decimal("0")) / Decimal(len(values))
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    return build_annual_finalization_record(
+        source_snapshot=source_snapshot,
+        subject_results=tuple(normalized_results),
+        final_status=final_status,
+        final_general_average=final_general_average,
+        finalized_on=finalized_on,
+    )
