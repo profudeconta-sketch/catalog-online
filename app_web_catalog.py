@@ -23,7 +23,7 @@ import copy
 from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document, store_new_document
 from conduct_storage import ConductStorageError, conduct_grades_for_student, load_conduct_registry, save_conduct_grade
 from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, IX_TH_2026_2027_CLASS_CDEOS_HOURS, build_annual_closure_snapshot, build_student_subject_inputs, preview_annual_closure
-from annual_closure_storage import AnnualClosureStorageError, persist_private_annual_closure_once
+from annual_closure_storage import AnnualClosureStorageError, persist_private_annual_closure_batch_once
 from leave_pass_storage import (
     STATUS_APPROVED as LEAVE_STATUS_APPROVED,
     STATUS_EXPIRED as LEAVE_STATUS_EXPIRED,
@@ -3788,10 +3788,8 @@ with tab9:
                 if len(snapshots) != len(class_results):
                     raise AnnualClosureError("Numărul snapshoturilor nu corespunde clasei validate.")
 
-                persisted = 0
-                for snapshot in snapshots:
-                    persist_private_annual_closure_once(snapshot)
-                    persisted += 1
+                persist_private_annual_closure_batch_once(tuple(snapshots))
+                persisted = len(snapshots)
                 st.success(
                     f"Închiderea situației școlare a fost înregistrată pentru {persisted} elevi. "
                     "Datele primare din Excel nu au fost modificate."
