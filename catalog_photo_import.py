@@ -12,13 +12,26 @@ class ImportProposal:
     motivated:bool=False; confidence:float=0.0; source_image:str=""
     verifiable:bool=True; verification_reason:str=""
 
+_ROMAN_MONTHS={"I":1,"II":2,"III":3,"IV":4,"V":5,"VI":6,"VII":7,"VIII":8,"IX":9,"X":10,"XI":11,"XII":12}
+
 def normalize_ddmm(value, year=2026):
-    raw=str(value or "").strip().replace("/",".").replace("-",".")
-    m=re.fullmatch(r"(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?",raw)
+    raw=str(value or "").strip().upper().replace("/",".").replace("-",".")
+    raw=re.sub(r"\s+","",raw)
+    m=re.fullmatch(r"(\d{1,2})\.([0-9]{1,2}|[IVX]+)(?:\.(\d{2,4}))?",raw)
     if not m: raise PhotoImportError(f"Dată invalidă: {value!r}")
+    month_token=m.group(2)
+    if month_token.isdigit():
+        month=int(month_token)
+    else:
+        month=_ROMAN_MONTHS.get(month_token)
+        if month is None:
+            raise PhotoImportError(f"Lună romană invalidă în data: {value!r}")
     y=int(m.group(3)) if m.group(3) else year
     if y<100:y+=2000
-    return dt.date(y,int(m.group(2)),int(m.group(1))).strftime("%d.%m")
+    try:
+        return dt.date(y,month,int(m.group(1))).strftime("%d.%m")
+    except ValueError as ex:
+        raise PhotoImportError(f"Dată calendaristică invalidă: {value!r}") from ex
 
 def date_in_period(ddmm,start,end):
     d=dt.datetime.strptime(normalize_ddmm(ddmm,start.year),"%d.%m").date().replace(year=start.year)
