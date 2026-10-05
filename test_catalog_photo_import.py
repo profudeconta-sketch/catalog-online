@@ -29,6 +29,15 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertEqual(len(out),1)
         self.assertFalse(out[0].verifiable)
 
+
+    def test_verified_consensus_survives_single_unverified_disagreement(self):
+        agreed=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.96,verifiable=True)
+        isolated=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",confidence=.99,verifiable=False)
+        out=deduplicate_proposals([agreed,isolated])
+        self.assertEqual(len(out),1)
+        self.assertTrue(out[0].verifiable)
+        self.assertEqual(out[0].value,"8")
+
     def test_unverifiable_is_not_new(self):
         path=workbook()
         try:
