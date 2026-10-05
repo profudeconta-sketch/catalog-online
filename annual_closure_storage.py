@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any
 
 from annual_closure_engine import (
-    AnnualClosureError,
     AnnualClosureSnapshot,
     verify_annual_closure_snapshot,
 )
@@ -102,6 +101,12 @@ def register_annual_closure_once(
         stored = check.get("snapshots", {}).get(key)
         if stored != payload:
             raise AnnualClosureStorageError("Verificarea registrului temporar a eșuat.")
+        try:
+            stored_snapshot = AnnualClosureSnapshot(**stored)
+        except Exception as exc:
+            raise AnnualClosureStorageError("Snapshotul temporar nu poate fi reconstruit.") from exc
+        if not verify_annual_closure_snapshot(stored_snapshot):
+            raise AnnualClosureStorageError("SHA-256 al snapshotului temporar este invalid.")
         if target.exists():
             shutil.copy2(target, backup)
         os.replace(temp_name, target)
@@ -113,6 +118,13 @@ def register_annual_closure_once(
         raise
 
     final = load_annual_closure_registry(target)
-    if final["snapshots"].get(key) != payload:
+    final_payload = final["snapshots"].get(key)
+    if final_payload != payload:
         raise AnnualClosureStorageError("Verificarea după scriere a registrului anual a eșuat.")
+    try:
+        final_snapshot = AnnualClosureSnapshot(**final_payload)
+    except Exception as exc:
+        raise AnnualClosureStorageError("Snapshotul final nu poate fi reconstruit.") from exc
+    if not verify_annual_closure_snapshot(final_snapshot):
+        raise AnnualClosureStorageError("SHA-256 al snapshotului final este invalid.")
     return final
