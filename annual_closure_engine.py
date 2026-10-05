@@ -13,12 +13,87 @@ modulelor) sunt intrări explicite; motorul nu le ghicește.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Mapping, Sequence
 
 
 class AnnualClosureError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class SchoolYearCourseInterval:
+    number: int
+    start_date: date
+    end_date: date
+
+
+# Structura anului școlar 2026–2027 pentru județul Cluj.
+# Aceste intervale calendaristice NU sunt modulele tehnologice M1–M6.
+CLJ_2026_2027_COURSE_INTERVALS: tuple[SchoolYearCourseInterval, ...] = (
+    SchoolYearCourseInterval(1, date(2026, 9, 7), date(2026, 10, 23)),
+    SchoolYearCourseInterval(2, date(2026, 11, 2), date(2026, 12, 22)),
+    SchoolYearCourseInterval(3, date(2027, 1, 11), date(2027, 2, 12)),
+    SchoolYearCourseInterval(4, date(2027, 2, 22), date(2027, 4, 23)),
+    SchoolYearCourseInterval(5, date(2027, 5, 5), date(2027, 6, 18)),
+)
+
+
+@dataclass(frozen=True)
+class ConductIntervalGrade:
+    interval_number: int
+    grade: Decimal
+    awarded_on: date
+
+
+def validate_conduct_interval_grades(
+    grades: Sequence[ConductIntervalGrade],
+    *,
+    as_of: date | None = None,
+) -> tuple[Decimal, ...]:
+    """Validează cele 5 note primare la purtare; nu le calculează și nu le modifică."""
+    cutoff = as_of or date.today()
+    by_interval = {}
+    for item in grades:
+        if item.interval_number in by_interval:
+            raise AnnualClosureError(
+                f"Există mai multe note la purtare pentru intervalul {item.interval_number}."
+            )
+        interval = next(
+            (x for x in CLJ_2026_2027_COURSE_INTERVALS if x.number == item.interval_number),
+            None,
+        )
+        if interval is None:
+            raise AnnualClosureError(
+                f"Interval calendaristic invalid pentru purtare: {item.interval_number}."
+            )
+        grade = _decimal_grade(item.grade)
+        if item.awarded_on < interval.end_date:
+            raise AnnualClosureError(
+                f"Nota la purtare pentru intervalul {item.interval_number} "
+                "nu poate fi acordată înainte de ultima zi a intervalului."
+            )
+        if item.awarded_on > cutoff:
+            raise AnnualClosureError("Data notei la purtare este în viitor.")
+        by_interval[item.interval_number] = grade
+
+    completed = [
+        interval.number
+        for interval in CLJ_2026_2027_COURSE_INTERVALS
+        if interval.end_date <= cutoff
+    ]
+    missing = [number for number in completed if number not in by_interval]
+    if missing:
+        raise AnnualClosureError(
+            "Lipsesc notele la purtare pentru intervalele încheiate: "
+            + ", ".join(map(str, missing))
+            + "."
+        )
+    return tuple(
+        by_interval[number]
+        for number in sorted(by_interval)
+    )
 
 
 # Clasa a IX-a TH, 2026–2027.
