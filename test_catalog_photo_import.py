@@ -339,6 +339,21 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertEqual(call.call_count, 2)
         sleep.assert_called_once()
 
+    def test_rate_limit_exceeded_is_retryable_even_if_message_mentions_billing(self):
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{"ok": true}'
+        err = urllib.error.HTTPError("https://api.openai.com/v1/responses", 429, "Too Many Requests", {}, None)
+        err.read = lambda: b'{"error":{"code":"rate_limit_exceeded","message":"Rate limit reached; check plan and billing limits."}}'
+        with patch("catalog_photo_import.urllib.request.urlopen", side_effect=[err, Response()]) as call, \
+             patch("catalog_photo_import.time.sleep") as sleep, \
+             patch("catalog_photo_import.random.uniform", return_value=0):
+            result = _openai_json_request(object(), "Test", max_attempts=3)
+        self.assertTrue(result["ok"])
+        self.assertEqual(call.call_count, 2)
+        sleep.assert_called_once()
+
     def test_openai_quota_429_does_not_retry(self):
         err = urllib.error.HTTPError("https://api.openai.com/v1/responses", 429, "Too Many Requests", {}, None)
         err.read = lambda: b'{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}'
