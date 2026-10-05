@@ -112,3 +112,39 @@ def save_conduct_grade(
             raise
         raise ConductStorageError("Nota la purtare nu a putut fi salvată.") from exc
     return record
+
+
+def conduct_grades_for_student(student_key: str, path: str = REGISTRY_FILE):
+    """Returnează cele 5 note în ordinea intervalelor; fail-closed dacă setul e incomplet."""
+    key = str(student_key).strip()
+    data = load_conduct_registry(path)
+    rows = [
+        item for item in data["grades"]
+        if str(item.get("student_key", "")).strip() == key
+    ]
+    by_interval = {}
+    for item in rows:
+        number = int(item.get("interval_number", -1))
+        if number in by_interval:
+            raise ConductStorageError(
+                f"Există înregistrări duplicate pentru intervalul {number}."
+            )
+        by_interval[number] = item
+    expected = {item.number for item in CLJ_2026_2027_COURSE_INTERVALS}
+    if set(by_interval) != expected:
+        missing = sorted(expected.difference(by_interval))
+        extra = sorted(set(by_interval).difference(expected))
+        details = []
+        if missing:
+            details.append("lipsesc intervalele " + ", ".join(map(str, missing)))
+        if extra:
+            details.append("intervale invalide " + ", ".join(map(str, extra)))
+        raise ConductStorageError(
+            "Situația la purtare nu este completă pentru închiderea anuală: "
+            + "; ".join(details)
+            + "."
+        )
+    return tuple(
+        int(by_interval[number]["grade"])
+        for number in sorted(expected)
+    )
