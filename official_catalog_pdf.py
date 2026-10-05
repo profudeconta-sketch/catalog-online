@@ -802,6 +802,77 @@ def _draw_students_grid(
         if phones:
             c.drawString(cols[8] + 1, y, phones[:24])
 
+@dataclass(frozen=True)
+class GeneralStatistics:
+    recorded_students: int
+    active_students: int
+    transferred_students: int
+    withdrawn_students: int
+    total_absences: int
+    unmotivated_absences: int
+
+
+def extract_general_statistics(wb, students: Sequence[StudentIdentity], gest_by_rm: Mapping[str, Mapping]) -> GeneralStatistics:
+    """P30: numai valori direct verificabile; fără inferențe privind rezultatul școlar."""
+    active = transferred = withdrawn = total_abs = unmotivated = 0
+    ws = wb["Absențe & Purtare"]
+    for student in students:
+        status = _norm(gest_by_rm[student.rm_pg].get("status_scolar", "ACTIV")).upper()
+        if status == "ACTIV":
+            active += 1
+        elif status == "TRANSFERAT":
+            transferred += 1
+        elif status == "RETRAS":
+            withdrawn += 1
+        else:
+            raise OfficialCatalogError(f"Stare școlară necunoscută pentru {student.rm_pg!r}: {status!r}.")
+
+        total_value = ws.cell(row=student.row, column=7).value
+        unmotivated_value = ws.cell(row=student.row, column=5).value
+        if total_value not in (None, ""):
+            total_abs += int(total_value)
+        if unmotivated_value not in (None, ""):
+            unmotivated += int(unmotivated_value)
+
+    return GeneralStatistics(
+        recorded_students=len(students),
+        active_students=active,
+        transferred_students=transferred,
+        withdrawn_students=withdrawn,
+        total_absences=total_abs,
+        unmotivated_absences=unmotivated,
+    )
+
+
+def _draw_general_statistics(c: canvas.Canvas, stats: GeneralStatistics) -> None:
+    """Prototip P30; rubricile fără sursă administrativă rămân necompletate."""
+    x_label, x_value = 42, 430
+    y, step = A4[1] - 92, 24
+    rows = (
+        ("Elevi existenți în evidența clasei", stats.recorded_students),
+        ("Elevi activi în evidența curentă", stats.active_students),
+        ("Elevi cu starea curentă TRANSFERAT", stats.transferred_students),
+        ("Elevi cu starea curentă RETRAS", stats.withdrawn_students),
+        ("Total absențe", stats.total_absences),
+        ("Din care nemotivate", stats.unmotivated_absences),
+        ("Elevi veniți în cursul anului", None),
+        ("Elevi plecați în cursul anului", None),
+        ("Promovați", None),
+        ("Corigenți", None),
+        ("Repetenți", None),
+        ("Amânați", None),
+        ("Abandon școlar", None),
+    )
+    c.setFont(PDF_FONT, 7)
+    for label, value in rows:
+        c.drawString(x_label, y, label)
+        c.line(x_label + 210, y - 2, x_value + 55, y - 2)
+        if value is not None:
+            c.setFont(PDF_FONT_BOLD, 7)
+            c.drawRightString(x_value + 50, y, str(value))
+            c.setFont(PDF_FONT, 7)
+        y -= step
+
 def _draw_marks_spread_placeholder(
     c: canvas.Canvas,
     wb,
@@ -1207,8 +1278,8 @@ def generate_official_catalog_prototype(
         # P30: statistica anuală; fără inferențe administrative.
         _draw_page_frame(c, 30, "Situația generală asupra mișcării și frecvenței elevilor și a rezultatelor obținute")
         _draw_prototype_notice(c)
-        c.setFont(PDF_FONT, 8)
-        c.drawString(42, A4[1] - 85, "Rubricile statistice vor fi populate numai din surse validate.")
+        general_stats = extract_general_statistics(wb, students, gest_by_rm)
+        _draw_general_statistics(c, general_stats)
         c.showPage()
 
         # P31: ultima pagină utilizată – proces-verbal.
