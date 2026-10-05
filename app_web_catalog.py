@@ -3760,12 +3760,12 @@ with tab9:
                 st.info(f"Media generală anuală preliminară: {preview.general_average}")
             if preview.ready_for_final_closure:
                 st.success(
-                    "Validarea preliminară nu a identificat blocaje pentru închiderea definitivă. "
+                    "Validarea preliminară nu a identificat blocaje pentru închiderea situației școlare. "
                     "Nu s-a efectuat nicio scriere."
                 )
             else:
                 st.warning(
-                    "Situația poate fi simulată, dar NU este pregătită pentru închiderea definitivă."
+                    "Situația poate fi simulată, dar NU este pregătită pentru închiderea situației școlare."
                 )
                 for blocker in preview.readiness_blockers:
                     st.warning(blocker)
