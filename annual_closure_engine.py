@@ -21,6 +21,58 @@ class AnnualClosureError(RuntimeError):
     pass
 
 
+# Clasa a IX-a TH, 2026–2027.
+# TC/CS: 30 săptămâni conform planului-cadru aplicabil.
+# Modulele M1–M4: volumele nominale din curriculumul de specialitate publicat
+# de Minister pentru domeniul Turism și alimentație.
+IX_TH_2026_2027_ANNUAL_HOURS: Mapping[str, int] = {
+    "Limba și literatura română": 90,
+    "Limba engleză (L1)": 60,
+    "Limba franceză (L2)": 30,
+    "Matematică": 60,
+    "Fizică": 30,
+    "Chimie": 30,
+    "Biologie": 30,
+    "Istorie": 30,
+    "Geografie": 30,
+    "Logică, argumentare și comunicare": 30,
+    "Religie": 30,
+    "Arte vizuale și educație plastică": 30,
+    "Educație fizică": 30,
+    "Informatică / TIC": 30,
+    "M1 – Bazele contabilității": 60,
+    "M2 – Etică și comunicare": 60,
+    "M3 – Structuri de primire turistică": 60,
+    "M4 – Procese și calitate în HoReCa": 120,
+}
+
+# M5/M6 nu sunt ghicite: planul/curriculumul fixează plafoanele CDEOȘ,
+# iar oferta concretă a școlii trebuie furnizată explicit motorului.
+IX_TH_2026_2027_CDEOS_MAX_HOURS: Mapping[str, int] = {
+    "M5 – CDEOȘ – Stagii de pregătire practică": 150,
+    "M6 – Curriculum pentru aprofundare și inserție profesională": 30,
+}
+
+
+def official_annual_hours(subject_name: str, school_cdeos_hours: Mapping[str, int] | None = None) -> int:
+    if subject_name in IX_TH_2026_2027_ANNUAL_HOURS:
+        return IX_TH_2026_2027_ANNUAL_HOURS[subject_name]
+    if subject_name in IX_TH_2026_2027_CDEOS_MAX_HOURS:
+        if not school_cdeos_hours or subject_name not in school_cdeos_hours:
+            raise AnnualClosureError(
+                f"{subject_name}: numărul de ore CDEOȘ aprobat pentru clasă trebuie "
+                "furnizat explicit; plafonul din plan nu este presupus ca volum efectiv."
+            )
+        hours = int(school_cdeos_hours[subject_name])
+        maximum = IX_TH_2026_2027_CDEOS_MAX_HOURS[subject_name]
+        if hours <= 0 or hours > maximum:
+            raise AnnualClosureError(
+                f"{subject_name}: {hours} ore este în afara intervalului aprobat 1–{maximum}."
+            )
+        return hours
+    raise AnnualClosureError(f"Nu există volum anual oficial configurat pentru {subject_name!r}.")
+
+
 @dataclass(frozen=True)
 class SubjectInput:
     name: str
