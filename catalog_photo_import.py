@@ -120,7 +120,10 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
       "legible=true NUMAI dacă studentul, disciplina, tipul, valoarea și data pot fi citite direct din fotografie, fără presupuneri. "
       "Pentru ABSENȚE, catalogul fizic poate scrie luna o singură dată cu cifre romane urmată de două puncte, de exemplu 'X: 1, 2 5'. "
       "În acest caz X este luna octombrie, iar 1, 2 și 5 sunt trei zile distincte; spațiul dintre 2 și 5 este separator, nu formează 25. "
-      "Emite câte un record separat pentru fiecare zi, cu date normalizată DD.MM. "
+      "Emite câte un record separat pentru fiecare zi, cu data normalizată DD.MM. "
+      "Pentru NOTE, înscrierea fizică poate avea forma NOTĂ/ZI, iar luna poate fi indicată contextual în ACEEAȘI rubrică. "
+      "Acceptă data numai dacă luna este demonstrabilă vizual în aceeași rubrică; nu transfera luna de la alt elev, altă disciplină sau altă rubrică. "
+      "Dacă se vede numai ziua, dar luna nu poate fi demonstrată, păstrează recordul cu legible=false; NU presupune luna din intervalul cerut. "
       "Dacă există orice dubiu, păstrează recordul, pune legible=false și confidence corespunzător; nu inventa valoarea.")
     model=os.environ.get("OPENAI_VISION_MODEL","gpt-6-luna")
     payload={"model":model,"input":[{"role":"user","content":[
@@ -205,6 +208,8 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
           "Pentru ABSENȚE, luna poate apărea o singură dată ca cifră romană urmată de ':', iar zilele arabe care urmează în ACEEAȘI rubrică aparțin acelei luni; "
           "virgula sau spațiul separă zile distincte (de ex. 'X: 1 2' = 01.10 și 02.10, NU 12.10). "
           "Nu transfera niciodată luna între elevi, discipline sau rubrici. Emite câte un record separat pentru fiecare zi. "
+          "Pentru NOTE, forma fizică poate fi NOTĂ/ZI, cu luna indicată contextual în ACEEAȘI rubrică. Data este lizibilă numai dacă luna este demonstrabilă vizual acolo; "
+          "nu deduce luna din perioada cerută și nu o împrumuta din altă rubrică. "
           "legible=true numai dacă TOATE câmpurile sunt citibile direct din fotografie, fără inferență. Nu ghici.")
         rows=_parse_vision_records(_vision_request(prompt,left,right),student_names,start)
         out=[]
