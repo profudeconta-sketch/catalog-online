@@ -1454,6 +1454,51 @@ def build_corigent_session_record(
     return seal_corigent_session_record(record)
 
 
+def build_deferred_corigent_session_record(
+    *,
+    source_snapshot: AnnualClosureSnapshot,
+    deferred_record: AnnualDeferredSituationRecord,
+    transition_record: DeferredToCorigentRecord,
+    corigent_results: Sequence[AnnualFinalizationSubjectResult],
+) -> CorigentSessionRecord:
+    """Construiește sesiunea CORIGENT provenită din AMANAT și păstrează întregul lanț."""
+    if not verify_annual_closure_snapshot(source_snapshot):
+        raise AnnualClosureError("Snapshotul sursă nu trece verificarea SHA-256.")
+    if not verify_annual_deferred_situation_record(deferred_record):
+        raise AnnualClosureError("Anexa AMANAT nu trece verificarea SHA-256.")
+    if not verify_deferred_to_corigent_record(transition_record):
+        raise AnnualClosureError("Tranziția AMANAT -> CORIGENT nu trece verificarea SHA-256.")
+    if (
+        deferred_record.source_snapshot_sha256 != source_snapshot.integrity_sha256
+        or transition_record.source_snapshot_sha256 != source_snapshot.integrity_sha256
+        or transition_record.deferred_record_sha256 != deferred_record.integrity_sha256
+        or deferred_record.student_key != source_snapshot.student_key
+        or transition_record.student_key != source_snapshot.student_key
+        or deferred_record.school_year != source_snapshot.school_year
+        or transition_record.school_year != source_snapshot.school_year
+    ):
+        raise AnnualClosureError("Lanțul AMANAT -> CORIGENT nu aparține snapshotului furnizat.")
+
+    resolution = derive_deferred_resolution(
+        source_snapshot=source_snapshot,
+        deferred_record=deferred_record,
+        subject_results=transition_record.deferred_subject_results,
+    )
+    if resolution.status != "CORIGENT":
+        raise AnnualClosureError("Tranziția furnizată nu produce o situație CORIGENT.")
+
+    return build_corigent_session_record(
+        source_snapshot=source_snapshot,
+        corigent_subjects=transition_record.corigent_subjects,
+        base_subject_annual_averages=resolution.subject_annual_averages,
+        corigent_results=corigent_results,
+        upstream_audit_chain_sha256=(
+            deferred_record.integrity_sha256,
+            transition_record.integrity_sha256,
+        ),
+    )
+
+
 def validate_reexamination_approval_for_outcome(
     *,
     source_snapshot: AnnualClosureSnapshot,
