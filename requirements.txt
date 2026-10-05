@@ -2,3 +2,4 @@ streamlit
 openpyxl
 reportlab
 fontpkg-noto-sans==2.15
+pypdf>=5.0
