@@ -1832,6 +1832,9 @@ with tab_photo:
                     "Analiza și orice scriere sunt blocate până la încărcarea arhivei complete."
                 )
             st.success(f"Structură validată: {len(images)} fotografii, {len(pairs)} perechi stânga/dreapta.")
+            import_flash = st.session_state.pop("photo_import_success_flash", None)
+            if import_flash:
+                st.success(import_flash)
 
             zoom = st.slider("Zoom pentru verificarea scrisului olograf", 100, 250, 150, 25, key="photo_zoom")
             pair_no = st.selectbox(
@@ -1936,7 +1939,12 @@ with tab_photo:
                                 shutil.copy2(backup, selected_file)
                             raise PhotoImportError("Sincronizarea privată nu a fost confirmată; backup-ul local a fost restaurat.")
                         st.session_state.pop("photo_import_comparison", None)
-                        st.success(f"Import confirmat: {changed} înregistrări noi. Suprapunerile nu au fost duplicate.")
+                        st.session_state["photo_import_success_flash"] = (
+                            f"Import finalizat cu succes: {changed} înregistrări noi. "
+                            "Backup-ul a fost creat, catalogul a fost recalculat, "
+                            "verificarea post-import a confirmat înregistrările ca DEJA_EXISTENT, "
+                            "iar copia privată a fost sincronizată. Suprapunerile nu au fost duplicate."
+                        )
                         st.rerun()
                     else:
                         st.info("Nu a fost necesară nicio modificare.")
