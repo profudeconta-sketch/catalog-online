@@ -3633,7 +3633,7 @@ def build_class_annual_closure_previews(file_path):
     repetat foarte lent al openpyxl în modul read_only.
     """
     results = []
-    wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+    wb = openpyxl.load_workbook(file_path, read_only=False, data_only=True)
     try:
         required_sheets = ("Cultură Generală", "Module Tehnologice", "Absențe & Purtare", "Centralizator Medii")
         for sheet_name in required_sheets:
