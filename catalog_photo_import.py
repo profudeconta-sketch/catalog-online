@@ -151,7 +151,7 @@ def _api_key():
     if not value: raise PhotoImportError("Lipsește OPENAI_API_KEY din Streamlit Secrets.")
     return value
 
-def _openai_json_request(req, context, max_attempts=5):
+def _openai_json_request(req, context, max_attempts=3):
     """Apel OpenAI robust: retry numai pentru limitări temporare; erorile de cotă rămân fail-closed."""
     for attempt in range(1, max_attempts + 1):
         try:
@@ -186,9 +186,9 @@ def _openai_json_request(req, context, max_attempts=5):
                 ) from ex
             retry_after = ex.headers.get("Retry-After")
             try:
-                delay = float(retry_after) if retry_after else min(60.0, 2.0 ** attempt)
+                delay = min(15.0, float(retry_after)) if retry_after else min(15.0, 2.0 ** attempt)
             except (TypeError, ValueError):
-                delay = min(60.0, 2.0 ** attempt)
+                delay = min(15.0, 2.0 ** attempt)
             time.sleep(max(1.0, delay) + random.uniform(0.0, 0.75))
         except Exception as ex:
             if isinstance(ex, PhotoImportError):
