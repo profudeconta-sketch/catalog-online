@@ -78,7 +78,8 @@ class SubjectInput:
     name: str
     grades: tuple[Decimal, ...]
     unmotivated_absences: int
-    annual_hours: int | None
+    motivated_absences: int = 0
+    annual_hours: int | None = None
     weekly_hours: Decimal | None = None
     is_module: bool = False
     ends_during_year: bool = False
@@ -90,6 +91,7 @@ class SubjectResult:
     raw_average: Decimal
     annual_average: int
     unmotivated_absences: int
+    motivated_absences: int
     annual_hours: int
     minimum_grade_reference: int
     has_minimum_grade_reference: bool
@@ -161,6 +163,7 @@ def calculate_subject(subject: SubjectInput) -> SubjectResult:
         raw_average=raw,
         annual_average=annual,
         unmotivated_absences=subject.unmotivated_absences,
+        motivated_absences=subject.motivated_absences,
         annual_hours=subject.annual_hours,
         minimum_grade_reference=minimum_reference,
         has_minimum_grade_reference=len(grades) >= minimum_reference,
@@ -241,15 +244,18 @@ def preview_annual_closure(
 ) -> AnnualClosurePreview:
     results = tuple(calculate_subject(s) for s in subjects)
     total_unmotivated = sum(s.unmotivated_absences for s in results)
+    subject_motivated = sum(s.motivated_absences for s in results)
+    if motivated_absences != subject_motivated:
+        raise AnnualClosureError(
+            "Totalul absențelor motivate nu corespunde sumei pe discipline/module."
+        )
     total_absences = total_unmotivated + motivated_absences
     base, penalty, conduct = calculate_conduct(
         interval_conduct_grades, total_unmotivated, results
     )
     blockers = []
     for result in results:
-        total_subject_absences = next(
-            s.unmotivated_absences for s in subjects if s.name == result.name
-        )
+        total_subject_absences = result.unmotivated_absences + result.motivated_absences
         if (
             total_subject_absences >= result.annual_hours * 0.50
             and not result.has_minimum_grade_reference
