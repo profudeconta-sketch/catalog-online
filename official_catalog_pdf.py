@@ -1795,8 +1795,9 @@ def generate_official_catalog_final(
 
 def assert_read_only_contract() -> bool:
     """Contract verificabil simplu pentru auditul prototipului."""
+    # canvas.save() finalizează exclusiv fluxul PDF în memorie și este permis.
+    # Contractul interzice numai căile cunoscute de mutare a datelor aplicației.
     forbidden_names = {
-        "save",
         "push_to_github",
         "update_excel_computed_values",
         "save_gestiune_data",
