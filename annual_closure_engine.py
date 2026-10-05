@@ -305,6 +305,76 @@ class AnnualClosurePreview:
     blockers: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class AnnualClosureSnapshot:
+    """Structură imuabilă pregătită pentru audit; nu implică persistență."""
+    schema_version: int
+    school_year: str
+    student_key: str
+    subjects: tuple[tuple[str, str, int, int, int], ...]
+    interval_conduct_grades: tuple[int, ...]
+    total_unmotivated_absences: int
+    total_motivated_absences: int
+    total_absences: int
+    conduct_base_average: str
+    conduct_penalty_points: int
+    conduct_penalty_total_absences: int
+    conduct_penalty_subject_thresholds: int
+    conduct_penalty_rule: str
+    conduct_annual_average: str
+    final_status: str
+    general_average: str | None
+
+
+def build_annual_closure_snapshot(
+    *,
+    student_key: str,
+    preview: AnnualClosurePreview,
+    interval_conduct_grades: Sequence[Decimal],
+) -> AnnualClosureSnapshot:
+    """Construiește snapshotul numai dacă preview-ul este eligibil pentru închidere."""
+    key = str(student_key).strip()
+    if not key:
+        raise AnnualClosureError("Snapshotul anual necesită identificatorul stabil al elevului.")
+    if not preview.ready_for_final_closure:
+        raise AnnualClosureError(
+            "Snapshotul anual nu poate fi construit cât timp există blocaje de închidere."
+        )
+    if len(interval_conduct_grades) != len(CLJ_2026_2027_COURSE_INTERVALS):
+        raise AnnualClosureError("Snapshotul necesită toate cele 5 note la purtare.")
+    conduct_grades = tuple(
+        int(_decimal_grade(value)) for value in interval_conduct_grades
+    )
+    subjects = tuple(
+        (
+            item.name,
+            str(item.raw_average),
+            item.annual_average,
+            item.unmotivated_absences,
+            item.motivated_absences,
+        )
+        for item in preview.subjects
+    )
+    return AnnualClosureSnapshot(
+        schema_version=1,
+        school_year="2026-2027",
+        student_key=key,
+        subjects=subjects,
+        interval_conduct_grades=conduct_grades,
+        total_unmotivated_absences=preview.total_unmotivated_absences,
+        total_motivated_absences=preview.total_motivated_absences,
+        total_absences=preview.total_absences,
+        conduct_base_average=str(preview.conduct_base_average),
+        conduct_penalty_points=preview.conduct_penalty_points,
+        conduct_penalty_total_absences=preview.conduct_penalty_total_absences,
+        conduct_penalty_subject_thresholds=preview.conduct_penalty_subject_thresholds,
+        conduct_penalty_rule=preview.conduct_penalty_rule,
+        conduct_annual_average=str(preview.conduct_annual_average),
+        final_status=preview.final_status,
+        general_average=None if preview.general_average is None else str(preview.general_average),
+    )
+
+
 def _decimal_grade(value) -> Decimal:
     try:
         grade = Decimal(str(value))
