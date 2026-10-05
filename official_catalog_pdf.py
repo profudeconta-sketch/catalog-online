@@ -1945,11 +1945,16 @@ def _draw_v6_data_overlay(
             nx, ny = out(83.0, block.top_y - 77.0)
             c.drawString(nx, ny, student.nr_matr)
 
-            rm_value, page_value = _split_rm_page_for_v6(student.rm_pg)
-            vx, vy = out(69.0, block.top_y - 97.0)
-            c.drawString(vx, vy, rm_value)
-            px, py = out(135.0, block.top_y - 97.0)
-            c.drawString(px, py, page_value)
+            # RM/PG este informație obligatorie. Se tipărește integral după „p.”,
+            # deasupra punctajului, exact în forma validată din gestiune (ex. RM100/10).
+            # Astfel nu se pierde nicio componentă prin separarea v./p.
+            rm_pg_x, rm_pg_y = out(135.0, block.top_y - 97.0)
+            rm_pg_size = _fit_text(
+                c, student.rm_pg, (x_right - 135.0 - 4.0) * 1.4,
+                PDF_FONT, 5.8, 4.6
+            )
+            c.setFont(PDF_FONT, rm_pg_size)
+            c.drawString(rm_pg_x, rm_pg_y, student.rm_pg)
 
             # Media generală și mențiunile situației școlare sunt evidențiate bold.
             c.setFont(PDF_FONT_BOLD, 5.4)
