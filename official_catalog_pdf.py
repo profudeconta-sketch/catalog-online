@@ -1988,14 +1988,18 @@ def _draw_v6_data_overlay(
                     cx, cy = out(conduct_center, yline - 8.0)
                     c.drawCentredString(cx, cy, conduct_text)
             if current_mode:
-                current_absences = tuple(
-                    entry
-                    for subject in subject_data
-                    for entry in subject.absences
-                    if subject.source_key is not None
-                )
-                total_absences = len(current_absences)
-                unmotivated_absences = sum(1 for entry in current_absences if not entry.motivated)
+                attendance = extract_existing_attendance_summary(wb, student)
+                try:
+                    total_absences = int(attendance.total or 0)
+                    unmotivated_absences = int(attendance.unmotivated or 0)
+                except (TypeError, ValueError) as exc:
+                    raise OfficialCatalogError(
+                        f"Totalurile curente de absențe sunt invalide pentru {student.rm_pg!r}."
+                    ) from exc
+                if total_absences < 0 or unmotivated_absences < 0 or unmotivated_absences > total_absences:
+                    raise OfficialCatalogError(
+                        f"Totalurile curente de absențe sunt incoerente pentru {student.rm_pg!r}."
+                    )
             else:
                 total_absences = annual_state.total_absences
                 unmotivated_absences = annual_state.total_unmotivated_absences
@@ -2292,16 +2296,6 @@ def generate_official_catalog_current(
         current_states = {student.rm_pg: _blank_current_state(student.rm_pg) for student in students}
 
         body_pages: list[bytes] = []
-        class_total_absences = 0
-        class_unmotivated_absences = 0
-        for student in students:
-            for source_key in tuple(CATALOG_P3_SOURCE_KEYS) + tuple(CATALOG_P4_SOURCE_KEYS):
-                if source_key is None:
-                    continue
-                absences = extract_absence_entries(wb, student, source_key)
-                class_total_absences += len(absences)
-                class_unmotivated_absences += sum(1 for entry in absences if not entry.motivated)
-
         for spread_index in range(13):
             group = students[spread_index * 3 : spread_index * 3 + 3]
             for side in ("stanga", "dreapta"):
@@ -2322,8 +2316,8 @@ def generate_official_catalog_current(
             withdrawn_students=base_stats.withdrawn_students,
             added_dated_students=base_stats.added_dated_students,
             departed_dated_students=base_stats.departed_dated_students,
-            total_absences=class_total_absences,
-            unmotivated_absences=class_unmotivated_absences,
+            total_absences=base_stats.total_absences,
+            unmotivated_absences=base_stats.unmotivated_absences,
             promoted_students=None,
             corigent_students=None,
             repeat_students=None,
