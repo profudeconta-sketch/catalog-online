@@ -808,13 +808,15 @@ class GeneralStatistics:
     active_students: int
     transferred_students: int
     withdrawn_students: int
+    added_dated_students: int
+    departed_dated_students: int
     total_absences: int
     unmotivated_absences: int
 
 
 def extract_general_statistics(wb, students: Sequence[StudentIdentity], gest_by_rm: Mapping[str, Mapping]) -> GeneralStatistics:
     """P30: numai valori direct verificabile; fără inferențe privind rezultatul școlar."""
-    active = transferred = withdrawn = total_abs = unmotivated = 0
+    active = transferred = withdrawn = added_dated = departed_dated = total_abs = unmotivated = 0
     ws = wb["Absențe & Purtare"]
     for student in students:
         status = _norm(gest_by_rm[student.rm_pg].get("status_scolar", "ACTIV")).upper()
@@ -826,6 +828,19 @@ def extract_general_statistics(wb, students: Sequence[StudentIdentity], gest_by_
             withdrawn += 1
         else:
             raise OfficialCatalogError(f"Stare școlară necunoscută pentru {student.rm_pg!r}: {status!r}.")
+
+        history = gest_by_rm[student.rm_pg].get("istoric_miscare", [])
+        if history is not None and not isinstance(history, list):
+            raise OfficialCatalogError(f"Istoric de mișcare invalid pentru {student.rm_pg!r}.")
+        event_types = []
+        for event in history or []:
+            if not isinstance(event, Mapping) or not _norm(event.get("data")):
+                raise OfficialCatalogError(f"Eveniment de mișcare invalid pentru {student.rm_pg!r}.")
+            event_types.append(_norm(event.get("tip")).upper())
+        if "ADAUGAT" in event_types:
+            added_dated += 1
+        if any(t in {"TRANSFERAT", "RETRAS"} for t in event_types):
+            departed_dated += 1
 
         total_value = ws.cell(row=student.row, column=7).value
         unmotivated_value = ws.cell(row=student.row, column=5).value
@@ -839,6 +854,8 @@ def extract_general_statistics(wb, students: Sequence[StudentIdentity], gest_by_
         active_students=active,
         transferred_students=transferred,
         withdrawn_students=withdrawn,
+        added_dated_students=added_dated,
+        departed_dated_students=departed_dated,
         total_absences=total_abs,
         unmotivated_absences=unmotivated,
     )
@@ -855,8 +872,8 @@ def _draw_general_statistics(c: canvas.Canvas, stats: GeneralStatistics) -> None
         ("Elevi cu starea curentă RETRAS", stats.withdrawn_students),
         ("Total absențe", stats.total_absences),
         ("Din care nemotivate", stats.unmotivated_absences),
-        ("Elevi veniți în cursul anului", None),
-        ("Elevi plecați în cursul anului", None),
+        ("Elevi veniți – evenimente ADAUGAT datate", stats.added_dated_students),
+        ("Elevi plecați – evenimente TRANSFERAT/RETRAS datate", stats.departed_dated_students),
         ("Promovați", None),
         ("Corigenți", None),
         ("Repetenți", None),
