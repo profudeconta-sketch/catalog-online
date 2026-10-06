@@ -58,6 +58,15 @@ class NelutuMascotTests(unittest.TestCase):
         self.assertNotIn("http://",html.lower())
         self.assertNotIn("https://",html.lower())
 
+    def test_parent_portal_uses_small_click_assistant_not_giant_mascot(self):
+        with open("app_parinti.py","r",encoding="utf-8") as handle:
+            source=handle.read()
+        self.assertIn('st.popover("🤠 Neluțu"',source)
+        self.assertIn("întreabă-mă orișâce vrei tu... da’ nu pre mult, că mă ieftinesc",source)
+        self.assertIn('st.toast("🤠 Servus!',source)
+        self.assertNotIn('with st.expander("🤠 Neluțu — ajutorul simpatic din Portal"',source)
+        self.assertNotIn('render_nelutu_mascot(_nelutu_state',source)
+
     def test_no_external_or_script_dependencies(self):
         html=render_nelutu_mascot()
         low=html.lower()
