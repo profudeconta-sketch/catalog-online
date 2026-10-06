@@ -36,6 +36,15 @@ def _notify_teacher_phone(event):
     except (PhoneDeliveryError,DocumentStorageError,ValueError) as ex:
         return False,str(ex)
 
+def _register_teacher_alert(**kwargs):
+    """Nu lasă subsistemul de notificare să schimbe rezultatul operației primare."""
+    try:
+        event,_=ensure_notification(recipient=RECIPIENT_TEACHER,**kwargs)
+        ok,error=_notify_teacher_phone(event)
+        return event,ok,error
+    except (DocumentStorageError,ValueError) as ex:
+        return None,False,str(ex)
+
 st.set_page_config(
     page_title="Portal Părinți - Catalog IX TH",
     page_icon="👨‍👩‍👧‍👦",
@@ -734,16 +743,15 @@ else:
                                 reason_code=reason_code,
                                 expected_revision=current_leave_request.get("revision") if current_leave_request else None,
                             )
-                            _event,_=ensure_notification(
-                                recipient=RECIPIENT_TEACHER,event_type="CERERE_INVOIRE",source_type="INVOIRE",
+                            _event,_sms_ok,_sms_error=_register_teacher_alert(
+                                event_type="CERERE_INVOIRE",source_type="INVOIRE",
                                 source_id=_leave_record["id"],source_revision=_leave_record.get("revision",1),
                                 student_key=_leave_record["student_key"],title="Cerere de învoire nouă",
                                 message="Catalog Online: a fost primită o cerere de învoire care necesită verificare.",
                                 created_at_utc=_leave_record.get("transmitted_at_utc"),
                             )
-                            _sms_ok,_sms_error=_notify_teacher_phone(_event)
                             if not _sms_ok:
-                                st.warning("Cererea este transmisă și vizibilă în Inbox; notificarea SMS nu a fost confirmată.")
+                                st.warning("Cererea este transmisă și vizibilă în registrul principal; notificarea SMS nu a fost confirmată.")
                             st.success(
                                 "✅ Solicitarea a fost transmisă profesorului diriginte și este în "
                                 "așteptarea aprobării. Elevul poate părăsi unitatea de învățământ "
@@ -818,16 +826,15 @@ else:
                         recipient_role="DIRIGINTE",
                     )
                     store_new_document(record, validated_bytes)
-                    _event,_=ensure_notification(
-                        recipient=RECIPIENT_TEACHER,event_type="DOCUMENT_PARINTE",source_type="DOCUMENT",
+                    _event,_sms_ok,_sms_error=_register_teacher_alert(
+                        event_type="DOCUMENT_PARINTE",source_type="DOCUMENT",
                         source_id=record["id"],student_key=record["student_key"],
                         title="Document nou de la părinte/reprezentant legal",
                         message="Catalog Online: a fost primit un document nou de la un părinte. Accesați Inbox-ul dirigintelui.",
                         created_at_utc=record.get("created_at_utc"),
                     )
-                    _sms_ok,_sms_error=_notify_teacher_phone(_event)
                     if not _sms_ok:
-                        st.warning("Documentul este transmis și vizibil în Inbox; notificarea SMS nu a fost confirmată.")
+                        st.warning("Documentul este transmis și vizibil în registrul principal; notificarea SMS nu a fost confirmată.")
                     st.success(
                         "✅ Documentul a fost salvat și înregistrat. Transmiterea a fost confirmată."
                     )
@@ -1043,16 +1050,15 @@ else:
                                 document_id=record["id"],
                                 parent_name=selected_parent[0],
                             )
-                            _event,_=ensure_notification(
-                                recipient=RECIPIENT_TEACHER,event_type="DOCUMENT_PARINTE",source_type="DOCUMENT",
+                            _event,_sms_ok,_sms_error=_register_teacher_alert(
+                                event_type="DOCUMENT_PARINTE",source_type="DOCUMENT",
                                 source_id=record["id"],student_key=record["student_key"],
                                 title="Motivare/Scutire transmisă de părinte",
                                 message="Catalog Online: a fost primită o motivare/scutire de la un părinte. Accesați Inbox-ul dirigintelui.",
                                 created_at_utc=record.get("created_at_utc"),
                             )
-                            _sms_ok,_sms_error=_notify_teacher_phone(_event)
                             if not _sms_ok:
-                                st.warning("Cererea este transmisă și vizibilă în Inbox; notificarea SMS nu a fost confirmată.")
+                                st.warning("Cererea este transmisă și vizibilă în registrul principal; notificarea SMS nu a fost confirmată.")
                             st.session_state.pop("excuse_preview_pdf", None)
                             st.success(
                                 "✅ Cererea a fost transmisă cu succes dirigintelui și este considerată depusă. "
