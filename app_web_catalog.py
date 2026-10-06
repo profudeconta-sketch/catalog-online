@@ -278,6 +278,17 @@ def _deliver_parent_sms(event, student_rm_pg):
             errors.append(str(ex))
     return delivered,errors
 
+def _register_parent_alert(student_rm_pg, **kwargs):
+    """Înregistrează/livrează notificarea fără a altera operația principală deja confirmată."""
+    try:
+        event,created=ensure_notification(recipient=RECIPIENT_PARENT,**kwargs)
+        if not created:
+            return event,False,0,[]
+        sent,errors=_deliver_parent_sms(event,student_rm_pg)
+        return event,True,sent,errors
+    except (DocumentStorageError,ValueError) as ex:
+        return None,False,0,[str(ex)]
+
 def get_current_elevi_and_pins():
     g_data = load_gestiune_data()
     elevi_list = []
@@ -3611,16 +3622,15 @@ with tab8:
                     recipient_role="PARINTE",
                 )
                 store_new_document(record, validated_content)
-                _event,_=ensure_notification(
-                    recipient=RECIPIENT_PARENT,event_type="DOCUMENT_SCOALA",source_type="DOCUMENT",
+                _event,_created,_sent,_errors=_register_parent_alert(
+                    doc_student[3],event_type="DOCUMENT_SCOALA",source_type="DOCUMENT",
                     source_id=record["id"],student_key=record["student_key"],
                     title="Comunicare nouă din partea dirigintelui",
                     message="Catalog Online: aveți o nouă comunicare din partea dirigintelui. Accesați Portalul Părinților pentru detalii.",
                     created_at_utc=record.get("created_at_utc"),
                 )
-                _sent,_errors=_deliver_parent_sms(_event,doc_student[3])
                 if not _sent:
-                    st.warning("Documentul este transmis în portal, dar notificarea SMS nu a fost confirmată.")
+                    st.warning("Documentul este transmis în portal; notificarea SMS nu a fost confirmată.")
                 st.success(
                     "Documentul a fost transmis și înregistrat în siguranță pentru "
                     "părintele/reprezentantul legal al elevului selectat."
