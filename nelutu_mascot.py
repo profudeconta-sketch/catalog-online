@@ -9,8 +9,6 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
     state=state if state in _ALLOWED_STATES else "idle"
     msg=escape(str(message or "Servus! Eu-s Neluțu."))
     serious=state=="serious"
-    eyes="• •" if not serious else "• •"
-    mouth="⌣" if not serious else "—"
     return f"""<div class="nelutu-wrap nelutu-{state}" role="img" aria-label="Neluțu, mascota sistemului">
 <style>
 .nelutu-wrap{{display:flex;align-items:center;gap:18px;padding:18px 20px;border:1px solid #d7c29a;border-radius:22px;background:linear-gradient(135deg,#fff9eb,#f3ead7);box-shadow:0 8px 28px rgba(80,58,25,.10);overflow:hidden}}
@@ -37,7 +35,7 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
 @keyframes nelutu-nod{{0%,100%{{transform:rotate(0)}}50%{{transform:rotate(5deg) translateY(3px)}}}}
 @media (prefers-reduced-motion:reduce){{.nelutu-wrap *{{animation:none!important}}}}
 </style>
-<div class="nelutu-avatar" aria-hidden="true"><div class="nelutu-hat"></div><div class="nelutu-head"><div class="nelutu-eyes">{eyes}</div><div class="nelutu-mouth">{mouth}</div></div><div class="nelutu-body"></div><div class="nelutu-shirt"></div></div>
+<div class="nelutu-avatar" aria-hidden="true"><div class="nelutu-hat"></div><div class="nelutu-head"><div class="nelutu-brow left"></div><div class="nelutu-brow right"></div><div class="nelutu-eye left"><span class="nelutu-pupil"></span></div><div class="nelutu-eye right"><span class="nelutu-pupil"></span></div><div class="nelutu-nose"></div><div class="nelutu-cheek left"></div><div class="nelutu-cheek right"></div><div class="nelutu-mouth"></div></div><div class="nelutu-body"></div><div class="nelutu-shirt"></div></div>
 <div class="nelutu-bubble"><strong>Neluțu</strong>{msg}</div></div>"""
 
 def visual_contract()->dict:
