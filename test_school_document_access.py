@@ -88,6 +88,34 @@ class SchoolDocumentAccessTests(unittest.TestCase):
             second["confirmation_document"]["id"],
         )
 
+    def test_registry_conflict_retries_without_duplicate_or_different_receipt(self):
+        fake_pdf=b"%PDF-1.4\nreceipt\n%%EOF"
+        writes={"registry":0}
+
+        def conflict_once(path,content,expected_sha=None,message=""):
+            if path==ds.REGISTRY_PATH:
+                writes["registry"]+=1
+                if writes["registry"]==1:
+                    self.registry_sha="registry-concurrent"
+                    raise ds.DocumentConflictError("simulated concurrent update")
+            return self.private_write(path,content,expected_sha,message)
+
+        with patch.object(ds,"private_read",self.private_read), \
+             patch.object(ds,"private_write",conflict_once), \
+             patch.object(ds,"generate_school_document_receipt_pdf",return_value=fake_pdf):
+            result=ds.register_first_school_document_access(
+                student_rm_pg=self.student_rm,
+                student_name="Elev Test",
+                document_id=self.source_id,
+            )
+
+        confirmations=[x for x in self.registry["documents"] if x.get("category")=="CONFIRMARE_PRIMIRE"]
+        self.assertTrue(result["created"])
+        self.assertEqual(writes["registry"],2)
+        self.assertEqual(len(confirmations),1)
+        self.assertEqual(len(self.files),1)
+        self.assertEqual(confirmations[0]["source_document_id"],self.source_id)
+
     def test_access_is_rejected_for_another_authenticated_student(self):
         with self.assertRaises(ds.DocumentStorageError):
             self._run_access("RM-OTHER")
