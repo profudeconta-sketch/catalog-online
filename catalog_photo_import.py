@@ -298,6 +298,83 @@ def _candidate_cell_crops(left,right,student_count,items):
                     out.append(all_crops[student*cols+col])
     return out
 
+def _fixed_cell_crops(image, student_count, layout="left"):
+    """Celule deterministe: poziția fixează elevul, disciplina și subrubrica.
+    GPT nu primește și nu poate schimba identitatea celulei.
+    """
+    try:
+        from PIL import Image
+    except Exception:
+        return []
+    im=Image.open(io.BytesIO(image[1])).convert("RGB")
+    w,h=im.size
+    if layout=="left":
+        x0,x1=int(w*0.382),w
+        row_tops=(0.075,0.360,0.670)
+    elif layout=="right":
+        x0,x1=int(w*0.150),int(w*0.855)
+        row_tops=(0.075,0.345,0.640)
+    else:
+        raise PhotoImportError("Șablon fizic de pagină necunoscut.")
+    subjects=VERIFIED_LAYOUT_ONLINE[layout]
+    cols=len(subjects); row_height=0.095
+    out=[]
+    for student in range(min(student_count,3)):
+        y0=int(h*row_tops[student]); y1=min(h,int(h*(row_tops[student]+row_height)))
+        for col,subject in enumerate(subjects):
+            if not subject:
+                continue
+            cx0=x0+(x1-x0)*col//cols; cx1=x0+(x1-x0)*(col+1)//cols
+            # Formularul are două subcoloane fizice în fiecare disciplină: Absențe | Note.
+            mid=(cx0+cx1)//2
+            for kind,sx0,sx1 in (("absence",cx0,mid),("grade",mid,cx1)):
+                pad=max(1,int(w*0.0015))
+                crop=im.crop((max(0,sx0-pad),y0,min(w,sx1+pad),y1))
+                buf=io.BytesIO(); crop.save(buf,format="JPEG",quality=96)
+                out.append({
+                    "student_index":student,"subject":subject,"kind":kind,
+                    "source_image":layout,
+                    "name":f"{PurePosixPath(image[0]).stem}-{layout}-e{student+1}-d{col+1}-{kind}.jpg",
+                    "data":buf.getvalue(),
+                })
+    return out
+
+def analyze_pair_fixed_cells(left,right,student_names,start,end,return_usage=False,max_cost_usd=None):
+    """Ultimul benchmark: o cerere per celulă cu identitatea fixată local.
+    Modelul citește numai conținutul, nu elevul/disciplina/categoria/tipul.
+    """
+    cells=_fixed_cell_crops(left,len(student_names),"left")+_fixed_cell_crops(right,len(student_names),"right")
+    usage={"input_tokens":0,"output_tokens":0,"total_tokens":0,"model":os.environ.get("OPENAI_VISION_MODEL","gpt-5.4-mini")}
+    out=[]
+    for cell in cells:
+        if max_cost_usd is not None and vision_usage_cost_usd(usage)>=float(max_cost_usd):
+            break
+        prompt=(f"Această imagine este NUMAI interiorul subrubricii fizice {cell['kind']} pentru un singur elev și o singură disciplină. "
+                f"Extrage exclusiv înscrierile lizibile cu data în intervalul {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
+                "Nu identifica elevul, disciplina sau rubrica; acestea sunt deja fixate de geometrie. "
+                "Pentru absence, luna poate fi romană urmată de ':' și apoi zile separate; X:1 2 înseamnă 01.10 și 02.10. "
+                "Pentru grade, răspunde numai dacă nota și data/luna sunt demonstrabile în această celulă. "
+                "Nu deduce motivarea unei absențe: motivated=true numai dacă există un marcaj vizual explicit de motivare în celulă. "
+                "Răspunde STRICT JSON {\"records\":[{\"value\":\"\",\"date\":\"DD.MM\",\"motivated\":false,\"legible\":true,\"confidence\":0.0}]}. "
+                "Dacă nu există înscriere demonstrabilă în interval, records trebuie să fie [].")
+        body,u=_vision_request(prompt,left,right,student_count=1,return_usage=True,images=[(cell["name"],cell["data"])])
+        for k in ("input_tokens","output_tokens","total_tokens"): usage[k]+=u[k]
+        rows=_parse_vision_records(body,student_names,start)
+        for r in rows:
+            try:
+                date=normalize_ddmm(r["date"],start.year)
+                if not date_in_period(date,start,end) or not bool(r.get("legible",False)): continue
+                val=str(r.get("value","")).strip()
+                if cell["kind"]=="grade" and (not val.isdigit() or not 1<=int(val)<=10): continue
+                out.append(ImportProposal(cell["student_index"],_canonical_category(cell["subject"]),cell["subject"],cell["kind"],
+                    val,date,bool(r.get("motivated",False)) if cell["kind"]=="absence" else False,float(r.get("confidence",0)),
+                    cell["source_image"],False,"Citire din celulă cu identitate fixată geometric; necesită a doua citire identică pentru consens.",
+                    cell["subject"],True))
+            except Exception:
+                continue
+    # Fail closed: acest benchmark nu promovează încă nimic automat; verificăm mai întâi acuratețea brută.
+    return (out,usage) if return_usage else out
+
 def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects,return_usage=False):
     prompt=("Analizează două fotografii ale aceleiași deschideri de catalog școlar românesc. "
       f"Elevii de sus în jos sunt exact {json.dumps(student_names,ensure_ascii=False)}. "
