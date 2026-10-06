@@ -1864,7 +1864,11 @@ with tab_photo:
                         who = names[p.student_index] if 0 <= p.student_index < len(names) else f"elev {p.student_index+1}"
                         what = f"nota {p.value}" if p.kind == "grade" else ("absență motivată" if p.motivated else "absență")
                         gate = "VERIFICABILĂ" if p.verifiable else "NECESITĂ VERIFICARE"
-                        rubric = p.physical_label or "—"\n                        mapped = p.subject or "NEMAPATĂ — blocată la scriere"\n                        st.write(f"{gate} — {who} — rubrică fizică: {rubric} — mapare online: {mapped} — {what} — {p.date} — încredere declarată {p.confidence:.0%}")\n                        if p.verification_reason:\n                            st.caption(p.verification_reason)
+                        rubric = p.physical_label or "—"
+                        mapped = p.subject or "NEMAPATĂ — blocată la scriere"
+                        st.write(f"{gate} — {who} — rubrică fizică: {rubric} — mapare online: {mapped} — {what} — {p.date} — încredere declarată {p.confidence:.0%}")
+                        if p.verification_reason:
+                            st.caption(p.verification_reason)
                 else:
                     st.warning("Modelul nu a produs nicio propunere validă pentru intervalul selectat.")
                 st.caption("Rezultatul acestui test este izolat: nu intră în lista de verificare și nu poate ajunge la butonul de scriere.")
