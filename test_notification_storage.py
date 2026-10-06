@@ -44,6 +44,32 @@ class NotificationStorageTests(unittest.TestCase):
             self.assertEqual(len(events),2)
             self.assertEqual({e["event_type"] for e in events},{"DOCUMENT_PARINTE","CERERE_INVOIRE"})
 
+    def test_reconcile_supersedes_old_leave_revision_without_losing_history(self):
+        docs={"schema_version":1,"documents":[]}
+        leaves_v1={"schema_version":1,"requests":[
+            {"id":"l1","student_key":"S1","revision":1,"transmitted_at_utc":"2026-10-06T10:00:00+00:00"}
+        ]}
+        leaves_v2={"schema_version":1,"requests":[
+            {"id":"l1","student_key":"S1","revision":2,"transmitted_at_utc":"2026-10-06T10:05:00+00:00"}
+        ]}
+        with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write), \
+             patch.object(ns,"load_registry",return_value=(docs,None)), \
+             patch.object(ns,"load_leave_pass_registry",return_value=(leaves_v1,None)):
+            self.assertEqual(ns.reconcile_teacher_inbox(),1)
+        with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write), \
+             patch.object(ns,"load_registry",return_value=(docs,None)), \
+             patch.object(ns,"load_leave_pass_registry",return_value=(leaves_v2,None)):
+            self.assertEqual(ns.reconcile_teacher_inbox(),1)
+            all_events=ns.list_notifications(recipient=ns.RECIPIENT_TEACHER)
+            unread=ns.list_notifications(recipient=ns.RECIPIENT_TEACHER,unread_only=True)
+            self.assertEqual(len(all_events),2)
+            self.assertEqual(len(unread),1)
+            old=[e for e in all_events if e.get("source_revision")=="1"][0]
+            current=[e for e in all_events if e.get("source_revision")=="2"][0]
+            self.assertEqual(old.get("superseded_by_revision"),"2")
+            self.assertIsNotNone(old.get("superseded_at_utc"))
+            self.assertFalse(current.get("superseded_at_utc"))
+
     def test_parent_notification_is_derived_only_from_school_documents(self):
         docs={"schema_version":1,"documents":[
             {"id":"s1","direction":"SCOALA_PARINTE","student_key":"S1","created_at_utc":"2026-10-06T11:00:00+00:00"},
