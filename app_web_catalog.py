@@ -46,7 +46,7 @@ from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
     PhotoImportError, ImportProposal, safe_zip_images, pair_catalog_images,
     compare_with_workbook, apply_confirmed_import, analyze_pair_with_vision,
-    recover_uncertain_proposals,
+    recover_uncertain_proposals, vision_usage_cost_usd,
 
 )
 
@@ -1852,7 +1852,8 @@ with tab_photo:
                 allowed = [name for name, _ in DISCIPLINE_CG] + [name for name, _ in MODULE_TH]
                 with st.spinner("Analizez perechea selectată și verific independent rezultatele..."):
                     first_rows, api_usage = analyze_pair_with_vision(left, right, names, import_start, import_end, allowed, return_usage=True)
-                    api_rows, verify_usage = recover_uncertain_proposals(left, right, names, import_start, import_end, allowed, first_rows, return_usage=True)
+                    pair_budget = float(os.environ.get("OPENAI_PHOTO_PAIR_MAX_USD","0.10"))
+                    api_rows, verify_usage = recover_uncertain_proposals(left, right, names, import_start, import_end, allowed, first_rows, return_usage=True, max_cost_usd=pair_budget, prior_usage=api_usage)
                     api_usage = {"input_tokens": api_usage.get("input_tokens",0) + verify_usage.get("input_tokens",0), "output_tokens": api_usage.get("output_tokens",0) + verify_usage.get("output_tokens",0), "total_tokens": api_usage.get("total_tokens",0) + verify_usage.get("total_tokens",0), "model": api_usage.get("model","gpt-5.4-mini")}
                 st.session_state["photo_api_test_results"] = (pair_no, api_rows, api_usage)
             api_test = st.session_state.get("photo_api_test_results")
