@@ -1818,7 +1818,7 @@ try:
     reconcile_teacher_inbox()
     _student_name_by_key={normalize_student_key(e[3]): e[1] for e in ELEVI}
     _teacher_notifications=list_notifications(recipient=RECIPIENT_TEACHER)
-    _teacher_unread=[n for n in _teacher_notifications if not n.get("read_at_utc")]
+    _teacher_unread=list_notifications(recipient=RECIPIENT_TEACHER,unread_only=True)
     with st.expander(f"🔔 Inbox diriginte — {len(_teacher_unread)} necitite", expanded=bool(_teacher_unread)):
         if not _teacher_notifications:
             st.info("Nu există documente sau solicitări noi de la părinți.")
