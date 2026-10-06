@@ -1890,9 +1890,10 @@ with tab_photo:
                     grade_value = ""
                     motivated = st.checkbox("Absența este marcată ca motivată în fotografia catalogului", key="photo_manual_motivated")
 
+            confirmation_fingerprint = f"{archive_id}:{pair_no}:{student_idx}:{category}:{subject}:{kind_label}:{record_date}:{grade_value}:{motivated}"
             direct_check = st.checkbox(
                 "Confirm că am verificat direct fotografia afișată și că elevul, disciplina, valoarea/starea și data sunt lizibile fără presupuneri.",
-                key="photo_manual_direct_check"
+                key="photo_manual_direct_check_" + __import__("hashlib").sha256(confirmation_fingerprint.encode()).hexdigest()[:16]
             )
             if st.button("➕ Adaugă în lista de verificare", disabled=not direct_check, key="photo_manual_add"):
                 proposal = ImportProposal(
