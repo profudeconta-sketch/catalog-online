@@ -29,6 +29,10 @@ class PhotoImportSafetyTests(unittest.TestCase):
         d=ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",True,verifiable=True)
         with self.assertRaises(PhotoImportError): validate_proposal_batch([c,d])
 
+    def test_vision_usage_cost_uses_configured_gpt54_mini_rates(self):
+        import catalog_photo_import as cpi
+        self.assertAlmostEqual(cpi.vision_usage_cost_usd({"input_tokens":1_000_000,"output_tokens":1_000_000}),5.25)
+
     def test_physical_header_mapping_ignores_only_quote_noise(self):
         allowed=["Limba Engleză","Matematică"]
         self.assertEqual(map_physical_label_to_online('Limba „ Engleză',"Cultură Generală",allowed),"Limba Engleză")
