@@ -531,7 +531,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
 
     votes,examples=consensus(passes)
     unresolved=[p for k,p in examples.items() if votes.get(k,0)<2]
-    if unresolved:
+    if unresolved and not budget_exhausted():
         third_targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
                         "kind":p.kind,"source_image":p.source_image}
                        for p in unresolved]
