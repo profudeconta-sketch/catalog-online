@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/notification-center
+      - feature/free-whatsapp-notifications
 jobs:
   test:
     runs-on: ubuntu-latest
