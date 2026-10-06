@@ -1,0 +1,215 @@
+"""Registru separat pentru notificari si inbox.
+
+Nu modifica Excelul si nu schimba registrele-sursa. Evenimentele sunt idempotente
+dupa (recipient, event_type, source_type, source_id, source_revision).
+"""
+from __future__ import annotations
+import datetime as dt
+import hashlib
+import json
+from document_storage import DOCUMENT_ROOT, DocumentConflictError, DocumentStorageError, load_registry, private_read, private_write
+from leave_pass_storage import load_leave_pass_registry
+
+NOTIFICATION_REGISTRY_PATH=f"{DOCUMENT_ROOT}/registru_notificari.json"
+RECIPIENT_TEACHER="DIRIGINTE"
+RECIPIENT_PARENT="PARINTE"
+
+def _event_id(recipient,event_type,source_type,source_id,source_revision=""):
+    raw="|".join(map(str,(recipient,event_type,source_type,source_id,source_revision)))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+
+def load_notification_registry():
+    raw,sha=private_read(NOTIFICATION_REGISTRY_PATH)
+    if raw is None:
+        return {"schema_version":1,"events":[]},None
+    try: data=json.loads(raw.decode("utf-8"))
+    except Exception as ex: raise DocumentStorageError("Registrul notificărilor este invalid.") from ex
+    if data.get("schema_version")!=1 or not isinstance(data.get("events"),list):
+        raise DocumentStorageError("Structura registrului notificărilor este invalidă.")
+    return data,sha
+
+def save_notification_registry(registry,expected_sha):
+    if registry.get("schema_version")!=1 or not isinstance(registry.get("events"),list):
+        raise DocumentStorageError("Registrul notificărilor nu poate fi salvat.")
+    raw=json.dumps(registry,ensure_ascii=False,indent=2,sort_keys=True).encode("utf-8")
+    return private_write(NOTIFICATION_REGISTRY_PATH,raw,expected_sha=expected_sha,message="Actualizare registru notificari")
+
+def ensure_notification(*,recipient,event_type,source_type,source_id,student_key,
+                        source_revision="",title="",message="",created_at_utc=None):
+    eid=_event_id(recipient,event_type,source_type,source_id,source_revision)
+    for _ in range(3):
+        registry,sha=load_notification_registry()
+        matches=[x for x in registry["events"] if x.get("id")==eid]
+        if len(matches)>1: raise DocumentConflictError("Evenimentul de notificare este duplicat.")
+        if matches: return dict(matches[0]),False
+        event={
+            "id":eid,"schema_version":1,"recipient":str(recipient),"event_type":str(event_type),
+            "source_type":str(source_type),"source_id":str(source_id),"source_revision":str(source_revision or ""),
+            "student_key":str(student_key),"title":str(title),"message":str(message),
+            "created_at_utc":created_at_utc or dt.datetime.now(dt.timezone.utc).isoformat(),
+            "read_at_utc":None,"delivery_status":"PENDING","delivered_at_utc":None,
+        }
+        registry["events"].append(event)
+        try:
+            save_notification_registry(registry,sha); return dict(event),True
+        except DocumentConflictError: continue
+    raise DocumentConflictError("Notificarea nu a putut fi înregistrată în siguranță.")
+
+def list_notifications(*,recipient,unread_only=False,student_key=None):
+    registry,_=load_notification_registry()
+    out=[]
+    for x in registry["events"]:
+        if x.get("recipient")!=recipient: continue
+        if unread_only and (x.get("read_at_utc") or x.get("superseded_at_utc")): continue
+        if student_key is not None and x.get("student_key")!=str(student_key): continue
+        out.append(dict(x))
+    return sorted(out,key=lambda x:x.get("created_at_utc",""),reverse=True)
+
+def mark_notification_read(event_id,recipient):
+    for _ in range(3):
+        registry,sha=load_notification_registry()
+        matches=[x for x in registry["events"] if x.get("id")==str(event_id) and x.get("recipient")==recipient]
+        if len(matches)!=1: raise DocumentStorageError("Notificarea nu există pentru destinatar.")
+        event=matches[0]
+        if event.get("read_at_utc"): return dict(event),False
+        event["read_at_utc"]=dt.datetime.now(dt.timezone.utc).isoformat()
+        try:
+            save_notification_registry(registry,sha); return dict(event),True
+        except DocumentConflictError: continue
+    raise DocumentConflictError("Citirea notificării nu a putut fi confirmată.")
+
+
+def supersede_teacher_leave_notifications(source_id,current_revision):
+    """Marchează numai în registrul secundar reviziile vechi; sursa primară rămâne neatinsă."""
+    current_revision=int(current_revision or 1)
+    for _ in range(3):
+        registry,sha=load_notification_registry()
+        changed=False
+        now=dt.datetime.now(dt.timezone.utc).isoformat()
+        for event in registry["events"]:
+            if (
+                event.get("recipient")==RECIPIENT_TEACHER
+                and event.get("source_type")=="INVOIRE"
+                and event.get("source_id")==str(source_id)
+                and int(event.get("source_revision") or 1)<current_revision
+                and not event.get("superseded_at_utc")
+            ):
+                event["superseded_at_utc"]=now
+                event["superseded_by_revision"]=str(current_revision)
+                changed=True
+        if not changed:
+            return 0
+        try:
+            save_notification_registry(registry,sha)
+            return 1
+        except DocumentConflictError:
+            continue
+    raise DocumentConflictError("Reviziile vechi ale notificării nu au putut fi actualizate în siguranță.")
+
+
+def reconcile_teacher_inbox():
+    """Derivă idempotent Inbox-ul din sursele primare; nu modifică sursele."""
+    docs,_=load_registry()
+    leaves,_=load_leave_pass_registry()
+    created=0
+    for item in docs.get("documents",[]):
+        if item.get("direction")!="PARINTE_SCOALA":
+            continue
+        _,was_created=ensure_notification(
+            recipient=RECIPIENT_TEACHER,event_type="DOCUMENT_PARINTE",source_type="DOCUMENT",
+            source_id=item.get("id"),student_key=item.get("student_key"),
+            title="Document nou de la părinte/reprezentant legal",
+            message="A fost primit un document nou în Portalul Părinților.",
+            created_at_utc=item.get("created_at_utc"),
+        )
+        created+=int(was_created)
+    for item in leaves.get("requests",[]):
+        _,was_created=ensure_notification(
+            recipient=RECIPIENT_TEACHER,event_type="CERERE_INVOIRE",source_type="INVOIRE",
+            source_id=item.get("id"),source_revision=item.get("revision",1),
+            student_key=item.get("student_key"),
+            title="Cerere de învoire nouă",
+            message="A fost primită o cerere de învoire care necesită verificare.",
+            created_at_utc=item.get("transmitted_at_utc"),
+        )
+        created+=int(was_created)
+        supersede_teacher_leave_notifications(item.get("id"),item.get("revision",1))
+    return created
+
+
+def reconcile_parent_inbox(student_key):
+    """Derivă notificările părintelui din documentele Școală→Părinte."""
+    docs,_=load_registry()
+    created=0
+    for item in docs.get("documents",[]):
+        if item.get("direction")!="SCOALA_PARINTE" or item.get("student_key")!=str(student_key):
+            continue
+        event,was_created=ensure_notification(
+            recipient=RECIPIENT_PARENT,event_type="DOCUMENT_SCOALA",source_type="DOCUMENT",
+            source_id=item.get("id"),student_key=item.get("student_key"),
+            title="Comunicare nouă din partea dirigintelui",
+            message="Aveți o nouă comunicare în Portalul Părinților. Accesați portalul pentru detalii.",
+            created_at_utc=item.get("created_at_utc"),
+        )
+        created+=int(was_created)
+        if item.get("first_accessed_at_utc") and not event.get("read_at_utc"):
+            mark_notification_read(event["id"],RECIPIENT_PARENT)
+    return created
+
+
+def mark_parent_source_read(student_key, source_id):
+    registry,_=load_notification_registry()
+    matches=[
+        x for x in registry["events"]
+        if x.get("recipient")==RECIPIENT_PARENT
+        and x.get("student_key")==str(student_key)
+        and x.get("source_id")==str(source_id)
+    ]
+    if len(matches)>1:
+        raise DocumentConflictError("Există mai multe notificări pentru același document.")
+    if not matches:
+        return None,False
+    return mark_notification_read(matches[0]["id"],RECIPIENT_PARENT)
+
+
+def delivery_needs_retry(event_id,recipient,delivery_key):
+    """True numai dacă această destinație nu are deja o livrare acceptată/trimisă."""
+    registry,_=load_notification_registry()
+    matches=[
+        x for x in registry["events"]
+        if x.get("id")==str(event_id) and x.get("recipient")==recipient
+    ]
+    if len(matches)!=1:
+        raise DocumentStorageError("Notificarea nu există pentru verificarea livrării.")
+    delivery=(matches[0].get("deliveries") or {}).get(str(delivery_key)) or {}
+    return str(delivery.get("status") or "").strip().lower() not in {
+        "accepted","queued","sent","delivered"
+    }
+
+
+def record_delivery(event_id,recipient,delivery_key,status,provider_id=None):
+    """Păstrează starea livrării fără numărul de telefon în registru."""
+    for _ in range(3):
+        registry,sha=load_notification_registry()
+        matches=[x for x in registry["events"] if x.get("id")==str(event_id) and x.get("recipient")==recipient]
+        if len(matches)!=1: raise DocumentStorageError("Notificarea nu există pentru livrare.")
+        event=matches[0]
+        deliveries=event.setdefault("deliveries",{})
+        now=dt.datetime.now(dt.timezone.utc).isoformat()
+        normalized_status=str(status or "").strip().lower()
+        deliveries[str(delivery_key)]={
+            "status":normalized_status,"provider_id":str(provider_id or ""),
+            "updated_at_utc":now,
+        }
+        successful_statuses={"accepted","queued","sent","delivered"}
+        has_success=any(
+            str(d.get("status") or "").strip().lower() in successful_statuses
+            for d in deliveries.values()
+        )
+        event["delivery_status"]="DELIVERED" if has_success else "PENDING"
+        if has_success and not event.get("delivered_at_utc"):
+            event["delivered_at_utc"]=now
+        try:
+            save_notification_registry(registry,sha); return dict(event)
+        except DocumentConflictError: continue
+    raise DocumentConflictError("Starea livrării nu a putut fi salvată.")

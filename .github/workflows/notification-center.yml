@@ -1,0 +1,19 @@
+name: Notification center tests
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/notification-center
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt
+      - name: Compile notification and apps
+        run: python -m py_compile notification_storage.py phone_delivery.py document_storage.py school_document_receipt_pdf.py leave_pass_storage.py app_web_catalog.py app_parinti.py
+      - name: Notification unit tests
+        run: python -m unittest -v test_notification_storage.py test_phone_delivery.py test_notification_integration.py test_school_document_access.py test_notification_end_to_end.py

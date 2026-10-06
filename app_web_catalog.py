@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 import re
 from zoneinfo import ZoneInfo
 import os
@@ -22,7 +23,7 @@ import io
 import shutil
 import time
 import copy
-from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document, store_new_document
+from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, normalize_student_key, parent_excuse_usage, read_registered_document, store_new_document
 from conduct_storage import ConductStorageError, conduct_grades_for_student, load_conduct_registry, save_conduct_grade
 from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, IX_TH_2026_2027_CLASS_CDEOS_HOURS, build_annual_closure_snapshot, build_student_subject_inputs, preview_annual_closure
 from annual_closure_storage import AnnualClosureStorageError, load_private_annual_closure_snapshots, persist_private_annual_closure_batch_once
@@ -40,9 +41,12 @@ from leave_pass_storage import (
     STATUS_REFUSED as LEAVE_STATUS_REFUSED,
     approve_leave_request,
     get_leave_request_for_day,
+    load_leave_pass_registry,
     read_approved_leave_pass,
     refuse_leave_request,
 )
+from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_notification_read, reconcile_teacher_inbox, delivery_needs_retry, record_delivery
+from phone_delivery import PhoneDeliveryError, normalize_ro_phone, send_sms
 from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
     PhotoImportError, ImportProposal, safe_zip_images, pair_catalog_images,
@@ -245,6 +249,47 @@ def save_gestiune_data(data):
             pass
         st.error(f"Eroare la salvarea datelor elevilor: {ex}")
         return False
+
+def _parent_phones_for_rm(student_rm_pg):
+    target=str(student_rm_pg or "").strip().casefold()
+    phones=[]
+    for row in load_gestiune_data():
+        if str(row.get("matricol","")).strip().casefold()!=target:
+            continue
+        for field in ("telefon_mama","telefon_tata"):
+            value=str(row.get(field,"")).strip()
+            if value:
+                try: phones.append(normalize_ro_phone(value))
+                except ValueError: pass
+        break
+    return list(dict.fromkeys(phones))
+
+def _deliver_parent_sms(event, student_rm_pg):
+    phones=_parent_phones_for_rm(student_rm_pg)
+    if not phones:
+        return 0,["Nu există un număr parental valid."]
+    delivered=0; errors=[]
+    for phone in phones:
+        try:
+            key=hashlib.sha256(phone.encode("utf-8")).hexdigest()[:16]
+            if not delivery_needs_retry(event["id"],RECIPIENT_PARENT,key):
+                delivered+=1
+                continue
+            result=send_sms(phone,event.get("message") or "Catalog Online: aveți o actualizare nouă în Portalul Părinților.")
+            record_delivery(event["id"],RECIPIENT_PARENT,key,result.get("status"),result.get("message_sid"))
+            delivered+=1
+        except (PhoneDeliveryError,DocumentStorageError,ValueError) as ex:
+            errors.append(str(ex))
+    return delivered,errors
+
+def _register_parent_alert(student_rm_pg, **kwargs):
+    """Înregistrează/livrează notificarea fără a altera operația principală deja confirmată."""
+    try:
+        event,created=ensure_notification(recipient=RECIPIENT_PARENT,**kwargs)
+        sent,errors=_deliver_parent_sms(event,student_rm_pg)
+        return event,created,sent,errors
+    except (DocumentStorageError,ValueError) as ex:
+        return None,False,0,[str(ex)]
 
 def get_current_elevi_and_pins():
     g_data = load_gestiune_data()
@@ -1769,6 +1814,74 @@ with st.sidebar:
 if not os.path.exists(selected_file):
     st.warning(f"⚠️ Fișierul catalog '{selected_file}' nu a fost găsit în directorul curent.")
 
+# Inbox global diriginte: derivat din registrele primare, independent de elevul selectat.
+try:
+    reconcile_teacher_inbox()
+    _student_name_by_key={normalize_student_key(e[3]): e[1] for e in ELEVI}
+    _teacher_notifications=list_notifications(recipient=RECIPIENT_TEACHER)
+    _teacher_unread=list_notifications(recipient=RECIPIENT_TEACHER,unread_only=True)
+    with st.expander(f"🔔 Inbox diriginte — {len(_teacher_unread)} necitite", expanded=bool(_teacher_unread)):
+        if not _teacher_notifications:
+            st.info("Nu există documente sau solicitări noi de la părinți.")
+        for _n in _teacher_notifications[:100]:
+            _name=_student_name_by_key.get(_n.get("student_key"),"Elev")
+            if _n.get("superseded_at_utc"):
+                _status=f"↪ înlocuită de revizia {_n.get('superseded_by_revision','curentă')}"
+            else:
+                _status="🆕 NECITIT" if not _n.get("read_at_utc") else "✓ văzut"
+            st.markdown(f"**{_status} — {_n.get('title','Notificare')}**  \nElev: **{_name}**  \n{_n.get('message','')}")
+            if _n.get("superseded_at_utc"):
+                st.caption("Această formă rămâne în istoric pentru trasabilitate. Consultați revizia curentă a solicitării.")
+                st.divider()
+                continue
+            _source_type=_n.get("source_type")
+            _source_id=_n.get("source_id")
+            _student_key=_n.get("student_key")
+            if _source_type=="DOCUMENT":
+                try:
+                    _doc_record,_doc_content=read_registered_document(_student_key,_source_id)
+                    _mime=_doc_record.get("mime_type") or "application/octet-stream"
+                    _filename=_doc_record.get("original_filename") or f"document_{_source_id}"
+                    if st.download_button(
+                        "📄 Deschide / descarcă documentul",
+                        data=_doc_content,file_name=_filename,mime=_mime,
+                        key=f"inbox_open_doc_{_n['id']}",
+                    ):
+                        mark_notification_read(_n["id"],RECIPIENT_TEACHER)
+                        st.rerun()
+                except DocumentStorageError as _source_error:
+                    st.error(f"Documentul sursă nu poate fi deschis în siguranță: {_source_error}")
+            elif _source_type=="INVOIRE":
+                try:
+                    _leave_registry,_=load_leave_pass_registry()
+                    _leave_matches=[
+                        item for item in _leave_registry.get("requests",[])
+                        if str(item.get("id"))==str(_source_id)
+                        and item.get("student_key")==str(_student_key)
+                        and str(item.get("revision",1))==str(_n.get("source_revision") or 1)
+                    ]
+                    if len(_leave_matches)!=1:
+                        raise DocumentStorageError("Solicitarea sursă nu există în revizia notificată.")
+                    _leave=dict(_leave_matches[0])
+                    with st.expander("📋 Deschide solicitarea de învoire"):
+                        st.write(f"Data: {_leave.get('request_date','-')}")
+                        st.write(f"Ora plecării: {_leave.get('departure_time','-')}")
+                        st.write(f"Motiv: {_leave.get('reason_label','-')}")
+                        st.write(f"Stare: {_leave.get('status','-')}")
+                        if not _n.get("read_at_utc") and st.button(
+                            "Confirmă vizualizarea solicitării",
+                            key=f"inbox_open_leave_{_n['id']}",
+                        ):
+                            mark_notification_read(_n["id"],RECIPIENT_TEACHER)
+                            st.rerun()
+                except DocumentStorageError as _source_error:
+                    st.error(f"Solicitarea sursă nu poate fi deschisă în siguranță: {_source_error}")
+            else:
+                st.warning("Tipul sursei notificării nu este recunoscut; notificarea rămâne necitită.")
+            st.divider()
+except DocumentStorageError as _inbox_error:
+    st.warning(f"Inbox-ul nu a putut fi sincronizat în siguranță: {_inbox_error}")
+
 tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7, tab8, tab9, tab_photo = st.tabs([
     "➕ Adăugare Notă", 
     "❌ Adăugare Absență", 
@@ -2604,6 +2717,7 @@ with tab4:
             e_info = ELEVI[elev_idx_v]
             st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[3]}) | Cod PIN Părinți: `{e_info[4] if len(e_info)>4 else '1234'}`")
             
+            _academic_payload=[]
             for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
                 st.markdown(f"#### {cat_title}")
                 ws = wb[sheet_n]
@@ -2643,6 +2757,33 @@ with tab4:
                         "Medie": media_str
                     })
                 st.dataframe(rows_data, use_container_width=True, hide_index=True)
+                _academic_payload.extend(rows_data)
+            _academic_fingerprint=hashlib.sha256(
+                json.dumps(_academic_payload,ensure_ascii=False,sort_keys=True).encode("utf-8")
+            ).hexdigest()
+            if st.button(
+                "📱 Informează părintele despre actualizarea situației școlare",
+                type="primary",use_container_width=True,
+                key=f"notify_parent_school_state_{e_info[0]}",
+            ):
+                _event,_created=ensure_notification(
+                    recipient=RECIPIENT_PARENT,
+                    event_type="SITUATIE_SCOLARA_ACTUALIZATA",
+                    source_type="CATALOG",
+                    source_id=normalize_student_key(e_info[3]),
+                    source_revision=_academic_fingerprint,
+                    student_key=normalize_student_key(e_info[3]),
+                    title="Situația școlară a fost actualizată",
+                    message="Situația școlară din Catalog Online a fost verificată și actualizată. Accesați Portalul Părinților pentru detalii.",
+                )
+                if _created:
+                    _sent,_errors=_deliver_parent_sms(_event,e_info[3])
+                    if _sent:
+                        st.success(f"✅ Informarea a fost înregistrată și transmisă pe {_sent} număr(e) parental(e).")
+                    else:
+                        st.warning("Informarea a fost înregistrată în portal, dar SMS-ul nu a fost confirmat.")
+                else:
+                    st.info("ℹ️ Părintele a fost deja informat pentru această versiune a situației școlare.")
             wb.close()
         except Exception as ex:
             st.error(f"Eroare la citire fișă: {ex}")
@@ -3530,6 +3671,15 @@ with tab8:
                     recipient_role="PARINTE",
                 )
                 store_new_document(record, validated_content)
+                _event,_created,_sent,_errors=_register_parent_alert(
+                    doc_student[3],event_type="DOCUMENT_SCOALA",source_type="DOCUMENT",
+                    source_id=record["id"],student_key=record["student_key"],
+                    title="Comunicare nouă din partea dirigintelui",
+                    message="Catalog Online: aveți o nouă comunicare din partea dirigintelui. Accesați Portalul Părinților pentru detalii.",
+                    created_at_utc=record.get("created_at_utc"),
+                )
+                if not _sent:
+                    st.warning("Documentul este transmis în portal; notificarea SMS nu a fost confirmată.")
                 st.success(
                     "Documentul a fost transmis și înregistrat în siguranță pentru "
                     "părintele/reprezentantul legal al elevului selectat."
