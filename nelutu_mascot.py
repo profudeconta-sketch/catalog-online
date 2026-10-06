@@ -44,9 +44,10 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
   <path d="M31 164 L34 128 Q40 113 55 109 L95 109 Q111 113 117 128 L120 164Z" fill="#49352b" stroke="#2f211c" stroke-width="3"/>
   <path d="M54 113 Q75 121 96 113 L101 164 L49 164Z" fill="#fffaf0" stroke="#5c4436" stroke-width="2"/>
   <path d="M55 124 L48 155 M95 124 L102 155" stroke="#b23a32" stroke-width="3"/>
-  <path d="M43 143 Q75 149 107 143 L109 157 Q75 164 41 157Z" fill="#8a2f2a" stroke="#3a241d" stroke-width="2"/>
-  <path id="nelutu-brau-loop" d="M45 151 Q75 156 105 151" fill="none"/>
-  <text font-size="5.2" font-weight="800" fill="#fff8df" letter-spacing=".35"><textPath href="#nelutu-brau-loop" startOffset="0%">PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST • PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST</textPath></text>
+  <path class="nelutu-brau" d="M35 137 Q75 145 115 137 L117 160 Q75 168 33 160Z" fill="#8a2f2a" stroke="#3a241d" stroke-width="2"/>
+  <text class="nelutu-brau-title" x="75" y="148" text-anchor="middle" font-size="7.2" font-weight="900" fill="#fff8df">PRIMU’ AI</text>
+  <text class="nelutu-brau-subtitle" x="75" y="156.5" text-anchor="middle" font-size="5.8" font-weight="900" fill="#fff8df">DIN ARDEAL</text>
+  <title>PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST • PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST</title>
 
   <path d="M66 122 l5 5 -5 5 5 5 -5 5 M84 122 l-5 5 5 5 -5 5 5 5" fill="none" stroke="#b23a32" stroke-width="2"/>
   <!-- urechi -->
@@ -84,15 +85,14 @@ def render_nelutu_corner_nudge() -> str:
     return """<style>
 .nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{position:absolute;right:86px;bottom:50px;width:min(390px,72vw);padding:13px 15px;border:2px solid #b98b45;border-radius:16px;background:#fffaf0;color:#241d17;font-size:1rem;font-weight:800;line-height:1.35;box-shadow:0 7px 22px rgba(55,38,20,.20);opacity:0;visibility:hidden}
 .nelutu-corner .nelutu-wrap::before{content:"No, ce-ai găsit pe-acolo? Dacă-i bai, zi-i lu’ Neluțu. Dacă nu-i bai, putem scormoni numa’ de curiozitate. 🤠";animation:nelutu-curious-first 15s ease 1 forwards}
-.nelutu-corner .nelutu-wrap::after{content:"";animation:nelutu-curious-loop 67s step-end 1 forwards}
+.nelutu-corner .nelutu-wrap::after{content:"";animation:nelutu-curious-loop 45s step-end 15s 1 forwards}
 @keyframes nelutu-curious-first{0%,32%{opacity:0;visibility:hidden;transform:translateY(5px)}34%,96%{opacity:1;visibility:visible;transform:translateY(0)}100%{opacity:0;visibility:hidden}}
 @keyframes nelutu-curious-loop{
-0%,1%{content:"";opacity:0;visibility:hidden}
-2%,17%{content:"No,... zâ drept te ajută Neluțu! zâ nu-ț șie rusâne? că de nu api mai binie merem acasă, că vin lupii șâ tăt ne rup!";opacity:1;visibility:visible}
-18%,27%{content:"";opacity:0;visibility:hidden}
-28%,37%,48%,57%,68%,77%{content:"No? mai stăm aci mult sau merem...";opacity:1;visibility:visible}
-38%,47%,58%,67%,78%,89%{content:"";opacity:0;visibility:hidden}
-90%,100%{content:"No! Io mă pui să mă culc ș-apăi mă huțuri tu când să mă scol... numa vezi... huțură-mă-ncet că io când mă scol, mă sâ ridic...";opacity:1;visibility:visible}
+0%,14%{content:"No,... zâ drept te ajută Neluțu! zâ nu-ț șie rusâne? că de nu api mai binie merem acasă, că vin lupii șâ tăt ne rup!";opacity:1;visibility:visible}
+15%,16%{content:"";opacity:0;visibility:hidden}
+17%,25%,33%,41%,49%,57%,65%,73%,81%,89%,97%{content:"No? mai stăm aci mult sau merem...";opacity:1;visibility:visible}
+26%,32%,42%,48%,58%,64%,74%,80%,90%,96%{content:"";opacity:0;visibility:hidden}
+100%{content:"No! Io mă pui să mă culc ș-apăi mă huțuri tu când să mă scol... numa vezi... huțură-mă-ncet că io când mă scol, mă sâ ridic...";opacity:1;visibility:visible}
 }
 @media(max-width:640px){.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{right:64px;bottom:38px;width:min(285px,70vw);font-size:.86rem;max-height:34vh;overflow:auto}}
 @media(prefers-reduced-motion:reduce){.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{animation:none;display:none}}
