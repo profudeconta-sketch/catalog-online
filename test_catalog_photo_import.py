@@ -236,17 +236,22 @@ class PhotoImportSafetyTests(unittest.TestCase):
             body,usage=cpi._vision_request("x",("left.jpg",b"bad"),("right.jpg",b"bad"),images=[("cell.jpg",b"abc")],return_usage=True)
         self.assertEqual(usage["total_tokens"],2)
 
-    def test_physical_cell_crops_keep_student_and_column_identity(self):
+    def test_physical_cell_crops_use_distinct_page_templates(self):
         from PIL import Image
         import io
         im=Image.new("RGB",(1500,2000),"white"); buf=io.BytesIO(); im.save(buf,format="JPEG")
-        crops=_discipline_cell_crops(("8.jpeg",buf.getvalue()),3,10)
-        self.assertEqual(len(crops),30)
-        self.assertEqual(crops[0][0],"8-e1-d1.jpg")
-        self.assertEqual(crops[-1][0],"8-e3-d10.jpg")
-        sample=Image.open(io.BytesIO(crops[0][1]))
-        self.assertLess(sample.width,300)
-        self.assertLess(sample.height,600)
+        left=_discipline_cell_crops(("8.jpeg",buf.getvalue()),3,"left")
+        right=_discipline_cell_crops(("9.jpeg",buf.getvalue()),3,"right")
+        self.assertEqual(len(left),33)
+        self.assertEqual(len(right),42)
+        self.assertEqual(left[0][0],"8-left-e1-d1.jpg")
+        self.assertEqual(left[-1][0],"8-left-e3-d11.jpg")
+        self.assertEqual(right[0][0],"9-right-e1-d1.jpg")
+        self.assertEqual(right[-1][0],"9-right-e3-d14.jpg")
+        for _name,data in left+right:
+            sample=Image.open(io.BytesIO(data))
+            self.assertLess(sample.width,180)
+            self.assertLess(sample.height,400)
 
     def test_student_band_crops_preserve_count(self):
         try:
