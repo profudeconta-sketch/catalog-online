@@ -88,8 +88,8 @@ class NelutuMascotTests(unittest.TestCase):
                        "mă pui să mă culc","huțură-mă-ncet"):
             self.assertIn(phrase,html)
         self.assertIn("font-weight:800",html)
-        self.assertIn("nelutu-curious-first 15s",html)
-        self.assertIn("nelutu-curious-loop 45s step-end 15s",html)
+        self.assertIn("nelutu-curious-first 42s",html)
+        self.assertIn("nelutu-curious-later 390s step-end 42s",html)
         self.assertIn("prefers-reduced-motion:reduce",html)
         self.assertNotIn("<script",html.lower())
         self.assertNotIn("http://",html.lower())
