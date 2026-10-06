@@ -194,6 +194,22 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertFalse(out[0].verifiable)
 
 
+    def test_recovery_promotes_two_independent_legible_reads(self):
+        import catalog_photo_import as cpi
+        from unittest.mock import patch
+        from PIL import Image
+        import io, json
+        im=Image.new("RGB",(1500,2000),"white"); buf=io.BytesIO(); im.save(buf,format="JPEG")
+        first=ImportProposal(0,"Cultură Generală","Matematică","absence","","30.09",False,.7,"left",False,"candidat","Matematică",True)
+        body={"output_text":json.dumps({"records":[{"student_index":0,"category":"Cultură Generală","physical_label":"Matematică","subject":"","kind":"absence","value":"","date":"30.09","motivated":False,"confidence":0.8,"source_image":"left","legible":True}]})}
+        usage={"input_tokens":10,"output_tokens":5,"total_tokens":15,"model":"gpt-5.4-mini"}
+        with patch.object(cpi,"_vision_request",return_value=(body,usage)) as call:
+            out,_=cpi.recover_uncertain_proposals(("8.jpeg",buf.getvalue()),("9.jpeg",buf.getvalue()),["Elev"],dt.date(2026,9,30),dt.date(2026,10,2),["Matematică"],[first],return_usage=True)
+        self.assertEqual(call.call_count,1)
+        self.assertEqual(len(out),1)
+        self.assertTrue(out[0].verifiable)
+        self.assertIn("2 citiri",out[0].verification_reason)
+
     def test_verified_consensus_survives_single_unverified_disagreement(self):
         agreed=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.96,verifiable=True)
         isolated=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",confidence=.99,verifiable=False)
