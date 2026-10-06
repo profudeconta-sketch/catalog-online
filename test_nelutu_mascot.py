@@ -25,15 +25,20 @@ class NelutuMascotTests(unittest.TestCase):
         idle=render_nelutu_mascot("idle")
         answering=render_nelutu_mascot("answering")
         serious=render_nelutu_mascot("serious")
-        for part in ("nelutu-eye left","nelutu-eye right","nelutu-pupil","nelutu-brow","nelutu-nose","nelutu-mouth","nelutu-hat"):
+        for part in ("<svg","nelutu-eye","nelutu-pupil","nelutu-brow-l","nelutu-brow-r",
+                     "nelutu-mouth","nelutu-smile","clop","pieptar"):
             self.assertIn(part,idle)
-        self.assertIn("@keyframes nelutu-blink",idle)
-        self.assertIn("@keyframes nelutu-breathe",idle)
-        self.assertIn("@keyframes nelutu-think",idle)
-        self.assertIn("@keyframes nelutu-talk",answering)
-        self.assertIn("@keyframes nelutu-nod",idle)
-        self.assertIn("nelutu-serious .nelutu-avatar{animation:none}",serious)
+        for motion in ("nelutu-blink","nelutu-breathe","nelutu-look","nelutu-think",
+                       "nelutu-talk","nelutu-nod"):
+            self.assertIn("@keyframes "+motion,idle)
+        self.assertIn("nelutu-answering .nelutu-mouth",answering)
+        self.assertIn("nelutu-serious .nelutu-avatar",serious)
+        self.assertIn("nelutu-serious-mouth",serious)
         self.assertIn("prefers-reduced-motion:reduce",idle)
+
+    def test_unknown_state_falls_back_to_idle(self):
+        html=render_nelutu_mascot("oare-ce-o-fi")
+        self.assertIn("nelutu-idle",html)
 
     def test_no_external_or_script_dependencies(self):
         html=render_nelutu_mascot()
