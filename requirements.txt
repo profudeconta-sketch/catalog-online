@@ -1,11 +1,6 @@
---extra-index-url https://download.pytorch.org/whl/cpu
 streamlit
 openpyxl
 reportlab
 fontpkg-noto-sans==2.15
 pypdf>=5.0
 Pillow>=10.0
-torch==2.8.0
-torchvision==0.23.0
-transformers==4.56.2
-num2words>=0.5.14
