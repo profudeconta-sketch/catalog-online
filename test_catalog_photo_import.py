@@ -29,6 +29,16 @@ class PhotoImportSafetyTests(unittest.TestCase):
         d=ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",True,verifiable=True)
         with self.assertRaises(PhotoImportError): validate_proposal_batch([c,d])
 
+    def test_physical_header_mapping_ignores_only_quote_noise(self):
+        allowed=["Limba Engleză","Matematică"]
+        self.assertEqual(map_physical_label_to_online('Limba „ Engleză',"Cultură Generală",allowed),"Limba Engleză")
+        self.assertIsNone(map_physical_label_to_online("Engleză","Cultură Generală",allowed))
+
+    def test_legible_evidence_is_distinct_from_final_verification(self):
+        p=ImportProposal(0,"Cultură Generală","Matematică","absence","","30.09",False,0.7,"left",False,"candidat","Matematică",True)
+        self.assertFalse(p.verifiable)
+        self.assertTrue(p.legible_evidence)
+
     def test_semantic_identity_uses_physical_label_when_online_mapping_missing(self):
         from catalog_photo_import import _semantic_key
         a=ImportProposal(0,"Cultură Generală","","absence","","01.10",False,0.7,"x",False,"","Matematică fizică")
