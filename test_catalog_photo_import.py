@@ -519,9 +519,9 @@ class PhotoImportSafetyTests(unittest.TestCase):
         source = Path("app_web_catalog.py").read_text(encoding="utf-8")
         block = source[source.index("# --- IMPORT FOTO CATALOG FIZIC (FĂRĂ AI EXTERN) ---"):
                        source.index("# --- GENERATOARE PDF ---")]
-        self.assertIn("analyze_pair_with_vision(", block)
+        self.assertIn("analyze_pair_fixed_cells(", block)
         self.assertIn("return_usage=True", block)
-        self.assertIn("recover_uncertain_proposals(", block)
+        self.assertIn("CANDIDAT CELULĂ FIXĂ", block)
         self.assertNotIn("OPENAI_API_KEY", block)
         self.assertIn("Transcriere verificată din fotografia afișată", block)
         self.assertIn("compare_with_workbook(", block)
