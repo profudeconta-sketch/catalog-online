@@ -10,8 +10,8 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
     msg=escape(str(message or "Servus! Eu-s Neluțu."))
     return f"""<div class="nelutu-wrap nelutu-{state}" role="img" aria-label="Neluțu, mascota sistemului">
 <style>
-.nelutu-wrap{{display:flex;align-items:center;gap:22px;padding:18px 22px;border:1px solid #dfc28d;border-radius:24px;background:linear-gradient(135deg,#fffaf0,#f5ead5);box-shadow:0 8px 28px rgba(80,58,25,.10);overflow:hidden}}
-.nelutu-avatar{{width:142px;height:154px;flex:0 0 142px;filter:drop-shadow(0 5px 4px rgba(70,45,25,.16));animation:nelutu-breathe 3s ease-in-out infinite;transform-origin:50% 95%}}
+.nelutu-wrap{{display:flex;align-items:flex-end;gap:16px;padding:14px 18px;border:1px solid #dfc28d;border-radius:24px;background:linear-gradient(135deg,#fffaf0,#f5ead5);box-shadow:0 8px 28px rgba(80,58,25,.10);overflow:hidden}}
+.nelutu-avatar{{width:96px;height:106px;flex:0 0 96px;filter:drop-shadow(0 5px 4px rgba(70,45,25,.16));animation:nelutu-breathe 3s ease-in-out infinite;transform-origin:50% 95%}}
 .nelutu-svg{{width:100%;height:100%;overflow:visible}}
 .nelutu-eye{{transform-box:fill-box;transform-origin:center;animation:nelutu-blink 4.7s infinite}}
 .nelutu-pupil{{animation:nelutu-look 6s ease-in-out infinite}}
@@ -26,7 +26,7 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
 .nelutu-serious .nelutu-smile{{display:none}} .nelutu-serious .nelutu-serious-mouth{{display:block}}
 .nelutu-serious .nelutu-brow-l{{transform:rotate(8deg);transform-origin:center}} .nelutu-serious .nelutu-brow-r{{transform:rotate(-8deg);transform-origin:center}}
 .nelutu-serious-mouth{{display:none}}
-.nelutu-bubble{{font-size:1.02rem;line-height:1.48;max-width:760px;color:#2e2925}}
+.nelutu-bubble{{font-size:1.02rem;line-height:1.48;max-width:760px;color:#2e2925;align-self:center}}
 .nelutu-bubble strong{{display:block;font-size:1.18rem;margin-bottom:4px;color:#29231f}}
 @keyframes nelutu-breathe{{0%,100%{{transform:translateY(0) rotate(0)}}50%{{transform:translateY(-4px) rotate(.5deg)}}}}
 @keyframes nelutu-blink{{0%,45%,49%,100%{{transform:scaleY(1)}}47%{{transform:scaleY(.08)}}}}
