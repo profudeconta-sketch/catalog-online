@@ -2226,12 +2226,15 @@ with tab1:
         nota_val = st.number_input("Notă (1 - 10):", min_value=1, max_value=10, value=10, step=1)
         data_nota = st.text_input("Data Notei (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_n")
         
-    if st.button("💾 Salvează Nota în Catalog", type="primary", use_container_width=True):\n        data_nota = _normalize_manual_ddmm(data_nota)
+    if st.button("💾 Salvează Nota în Catalog", type="primary", use_container_width=True):
+        data_nota = _normalize_manual_ddmm(data_nota)
         if not os.path.exists(selected_file):
             st.error(f"Fișierul {selected_file} nu există!")
         else:
             try:
-                backup = selected_file + ".manual.bak"\n                shutil.copy2(selected_file, backup)\n                wb = openpyxl.load_workbook(selected_file)
+                backup = selected_file + ".manual.bak"
+                shutil.copy2(selected_file, backup)
+                wb = openpyxl.load_workbook(selected_file)
                 sheet_name = "Cultură Generală" if cat_n == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
                 student_row = resolve_student_row(wb, ELEVI[elev_idx_n])
