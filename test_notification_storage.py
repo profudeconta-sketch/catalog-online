@@ -130,6 +130,27 @@ class NotificationStorageTests(unittest.TestCase):
             repeated=ns.record_delivery(event["id"],ns.RECIPIENT_PARENT,"phone-a","delivered","SM1")
             self.assertEqual(repeated.get("delivered_at_utc"),first_at)
 
+    def test_delivery_retry_is_allowed_only_until_success_for_same_destination(self):
+        with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write):
+            event,_=ns.ensure_notification(
+                recipient=ns.RECIPIENT_PARENT,event_type="X",source_type="D",
+                source_id="retry-1",student_key="S1"
+            )
+            self.assertTrue(ns.delivery_needs_retry(
+                event["id"],ns.RECIPIENT_PARENT,"phone-a"
+            ))
+            ns.record_delivery(event["id"],ns.RECIPIENT_PARENT,"phone-a","failed")
+            self.assertTrue(ns.delivery_needs_retry(
+                event["id"],ns.RECIPIENT_PARENT,"phone-a"
+            ))
+            ns.record_delivery(event["id"],ns.RECIPIENT_PARENT,"phone-a","queued","SM1")
+            self.assertFalse(ns.delivery_needs_retry(
+                event["id"],ns.RECIPIENT_PARENT,"phone-a"
+            ))
+            self.assertTrue(ns.delivery_needs_retry(
+                event["id"],ns.RECIPIENT_PARENT,"phone-b"
+            ))
+
     def test_failed_delivery_does_not_erase_another_successful_delivery(self):
         with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write):
             event,_=ns.ensure_notification(
