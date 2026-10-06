@@ -78,7 +78,7 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
 def render_nelutu_corner_nudge() -> str:
     """Îndemn vizual local după inactivitate; fără JS, rețea, date sau acțiuni."""
     return """<style>
-.nelutu-corner .nelutu-wrap::after{content:"No? Dacă vrei, te ajut io... dacă nu, hai să merem de aici, că vin lupii și tăt ne rup. 🐺";position:absolute;right:86px;bottom:50px;width:245px;padding:10px 12px;border:1px solid #dfc28d;border-radius:16px;background:#fffaf0;color:#2e2925;font-size:.88rem;line-height:1.3;box-shadow:0 6px 20px rgba(55,38,20,.16);opacity:0;visibility:hidden;animation:nelutu-nudge 18s ease 1 forwards}
+.nelutu-corner .nelutu-wrap::after{content:"No, ce-ai găsit pe-acolo? Dacă-i bai, zi-i lu’ Neluțu. Dacă nu-i bai, putem scormoni numa’ de curiozitate. 🤠";position:absolute;right:86px;bottom:50px;width:245px;padding:10px 12px;border:1px solid #dfc28d;border-radius:16px;background:#fffaf0;color:#2e2925;font-size:.88rem;line-height:1.3;box-shadow:0 6px 20px rgba(55,38,20,.16);opacity:0;visibility:hidden;animation:nelutu-nudge 14s ease 1 forwards}
 @keyframes nelutu-nudge{0%,72%{opacity:0;visibility:hidden;transform:translateY(5px)}78%,96%{opacity:1;visibility:visible;transform:translateY(0)}100%{opacity:0;visibility:hidden}}
 @media(max-width:640px){.nelutu-corner .nelutu-wrap::after{right:64px;bottom:38px;width:205px;font-size:.78rem}}
 @media(prefers-reduced-motion:reduce){.nelutu-corner .nelutu-wrap::after{animation:none;display:none}}
