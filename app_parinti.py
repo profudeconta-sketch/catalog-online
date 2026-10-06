@@ -459,7 +459,7 @@ else:
 
     # Neluțu rămâne vizibil discret în colț pe tot parcursul sesiunii autentificate.
     st.markdown(render_nelutu_corner("idle"), unsafe_allow_html=True)
-st.markdown(render_nelutu_corner_nudge(), unsafe_allow_html=True)
+    st.markdown(render_nelutu_corner_nudge(), unsafe_allow_html=True)
 
     # --- NELUȚU: asistent local, gratuit, exclusiv read-only ---
     with st.expander("🤠 Neluțu — ajutorul simpatic din Portal", expanded=False):
