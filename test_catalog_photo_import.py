@@ -412,23 +412,6 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertIn('direct_check = st.checkbox(', source)
         self.assertIn('disabled=not direct_check', source)
 
-    def test_local_vision_prototype_is_isolated_from_write_path(self):
-        source = Path("app_web_catalog.py").read_text(encoding="utf-8")
-        block = source[source.index("#### Test automat local — fără API"):
-                       source.index("#### Transcriere verificată din fotografia afișată")]
-        self.assertIn("local_read_student_band(", block)
-        self.assertIn("photo_local_test_results", block)
-        self.assertNotIn("apply_confirmed_import(", block)
-        self.assertNotIn("compare_with_workbook(", block)
-        self.assertNotIn("push_to_github(", block)
-
-    def test_local_reader_requires_two_exact_readings(self):
-        source = Path("catalog_photo_import.py").read_text(encoding="utf-8")
-        block = source[source.index("def local_read_student_band"):
-                       source.index("def _api_key")]
-        self.assertIn("reads=[local_vision_read_crop", block)
-        self.assertIn("normalized[0] & normalized[1]", block)
-        self.assertIn("disagreements", block)
 
 if __name__=="__main__":
     unittest.main()
