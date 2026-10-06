@@ -138,7 +138,8 @@ class NelutuTests(unittest.TestCase):
     def test_docent_serious_case_suppresses_big_joke(self):
         for q in ("copilul a fost batut","amenintare la scoala","bullying si abuz"):
             a=n.answer_with_context(q)
-            self.assertTrue(a.serious); self.assertNotIn("😂",a.text)
+            self.assertTrue(a.serious, f"{q!r} routed to {a.intent!r}: {a.text}")
+            self.assertNotIn("😂",a.text)
 
     def test_docent_does_not_invent_reason_for_unmotivated_absence(self):
         ctx=n.build_student_context(total_absente=2,absente_nemotivate=2,absente_motivate=0)
