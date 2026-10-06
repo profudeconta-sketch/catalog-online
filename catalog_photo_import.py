@@ -223,7 +223,7 @@ def _student_band_crops(image, count):
         out.append((f"{PurePosixPath(image[0]).stem}-elev-{idx+1}.jpg",buf.getvalue()))
     return out
 
-def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects):
+def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects,return_usage=False):
     prompt=("Analizează două fotografii ale aceleiași deschideri de catalog școlar românesc. "
       f"Elevii de sus în jos sunt exact {json.dumps(student_names,ensure_ascii=False)}. "
       f"Folosește pentru subject NUMAI una dintre denumirile exacte: {json.dumps(allowed_subjects,ensure_ascii=False)}. "
@@ -267,6 +267,9 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
             reason="" if verifiable else "Citirea nu este suficient de clară pentru scriere automată; necesită verificare."
             out.append(ImportProposal(idx,str(r["category"]).strip(),str(r["subject"]).strip(),kind,val,date,bool(r.get("motivated",False)),conf,str(r.get("source_image","")),verifiable,reason))
         except Exception: continue
+    if return_usage:
+        usage = body.get("usage", {}) if isinstance(body, dict) else {}
+        return out, {"input_tokens": int(usage.get("input_tokens", 0) or 0), "output_tokens": int(usage.get("output_tokens", 0) or 0), "total_tokens": int(usage.get("total_tokens", 0) or 0), "model": model}
     return out
 
 
