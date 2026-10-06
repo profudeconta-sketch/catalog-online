@@ -114,6 +114,34 @@ class NotificationStorageTests(unittest.TestCase):
                 recipient=ns.RECIPIENT_PARENT,student_key="S1",unread_only=True
             ),[])
 
+    def test_delivery_records_first_success_timestamp_and_preserves_it(self):
+        with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write):
+            event,_=ns.ensure_notification(
+                recipient=ns.RECIPIENT_PARENT,event_type="X",source_type="D",
+                source_id="1",student_key="S1"
+            )
+            pending=ns.record_delivery(event["id"],ns.RECIPIENT_PARENT,"phone-a","failed")
+            self.assertEqual(pending["delivery_status"],"PENDING")
+            self.assertIsNone(pending.get("delivered_at_utc"))
+            delivered=ns.record_delivery(event["id"],ns.RECIPIENT_PARENT,"phone-a","queued","SM1")
+            first_at=delivered.get("delivered_at_utc")
+            self.assertEqual(delivered["delivery_status"],"DELIVERED")
+            self.assertIsNotNone(first_at)
+            repeated=ns.record_delivery(event["id"],ns.RECIPIENT_PARENT,"phone-a","delivered","SM1")
+            self.assertEqual(repeated.get("delivered_at_utc"),first_at)
+
+    def test_failed_delivery_does_not_erase_another_successful_delivery(self):
+        with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write):
+            event,_=ns.ensure_notification(
+                recipient=ns.RECIPIENT_PARENT,event_type="X",source_type="D",
+                source_id="2",student_key="S1"
+            )
+            ns.record_delivery(event["id"],ns.RECIPIENT_PARENT,"phone-a","sent","SM1")
+            result=ns.record_delivery(event["id"],ns.RECIPIENT_PARENT,"phone-b","failed")
+            self.assertEqual(result["delivery_status"],"DELIVERED")
+            self.assertIsNotNone(result.get("delivered_at_utc"))
+            self.assertEqual(result["deliveries"]["phone-b"]["status"],"failed")
+
     def test_academic_update_notifies_once_per_verified_version(self):
         with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write):
             args=dict(recipient=ns.RECIPIENT_PARENT,event_type="SITUATIE_SCOLARA_ACTUALIZATA",
