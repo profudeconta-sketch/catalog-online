@@ -20,6 +20,7 @@ on:
       - feature/nelutu-click-assistant
       - feature/nelutu-fresh-answer-state
       - feature/nelutu-portal-expert
+      - feature/nelutu-ardelean-ai-brau
     paths:
       - "app_web_catalog.py"
       - "nelutu_mascot.py"

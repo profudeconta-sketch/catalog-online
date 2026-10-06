@@ -35,6 +35,15 @@ class NelutuMascotTests(unittest.TestCase):
         self.assertIn("nelutu-serious .nelutu-avatar",serious)
         self.assertIn("nelutu-serious-mouth",serious)
         self.assertIn("prefers-reduced-motion:reduce",idle)
+    def test_ardelean_ai_brau_identity_is_local_and_repeated(self):
+        html=render_nelutu_mascot()
+        self.assertGreaterEqual(html.count("PRIMU’ AI DIN ARDEAL"),2)
+        self.assertGreaterEqual(html.count("NELUȚU-AL NOST"),2)
+        self.assertIn("nelutu-brau-loop",html)
+        self.assertNotIn("http://",html.lower())
+        self.assertNotIn("https://",html.lower())
+        self.assertNotIn("<script",html.lower())
+
 
     def test_parent_portal_invalidates_stale_nelutu_answer(self):
         with open("app_parinti.py", "r", encoding="utf-8") as handle:
