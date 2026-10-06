@@ -45,8 +45,8 @@ from leave_pass_storage import (
     read_approved_leave_pass,
     refuse_leave_request,
 )
-from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_notification_read, reconcile_teacher_inbox, delivery_needs_retry, record_delivery
-from phone_delivery import PhoneDeliveryError, normalize_ro_phone, send_sms
+from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_notification_read, reconcile_teacher_inbox
+from whatsapp_delivery import normalize_ro_phone, whatsapp_link
 from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
     PhotoImportError, ImportProposal, safe_zip_images, pair_catalog_images,
@@ -264,32 +264,24 @@ def _parent_phones_for_rm(student_rm_pg):
         break
     return list(dict.fromkeys(phones))
 
-def _deliver_parent_sms(event, student_rm_pg):
-    phones=_parent_phones_for_rm(student_rm_pg)
-    if not phones:
-        return 0,["Nu există un număr parental valid."]
-    delivered=0; errors=[]
-    for phone in phones:
+def _parent_whatsapp_links(student_rm_pg, message):
+    """Construiește linkuri WhatsApp gratuite; nu trimite automat și nu confirmă livrarea."""
+    links=[]
+    for phone in _parent_phones_for_rm(student_rm_pg):
         try:
-            key=hashlib.sha256(phone.encode("utf-8")).hexdigest()[:16]
-            if not delivery_needs_retry(event["id"],RECIPIENT_PARENT,key):
-                delivered+=1
-                continue
-            result=send_sms(phone,event.get("message") or "Catalog Online: aveți o actualizare nouă în Portalul Părinților.")
-            record_delivery(event["id"],RECIPIENT_PARENT,key,result.get("status"),result.get("message_sid"))
-            delivered+=1
-        except (PhoneDeliveryError,DocumentStorageError,ValueError) as ex:
-            errors.append(str(ex))
-    return delivered,errors
+            links.append(whatsapp_link(phone,message))
+        except ValueError:
+            pass
+    return list(dict.fromkeys(links))
 
 def _register_parent_alert(student_rm_pg, **kwargs):
-    """Înregistrează/livrează notificarea fără a altera operația principală deja confirmată."""
+    """Înregistrează notificarea internă; WhatsApp rămâne doar opțiune manuală gratuită."""
     try:
         event,created=ensure_notification(recipient=RECIPIENT_PARENT,**kwargs)
-        sent,errors=_deliver_parent_sms(event,student_rm_pg)
-        return event,created,sent,errors
-    except (DocumentStorageError,ValueError) as ex:
-        return None,False,0,[str(ex)]
+        links=_parent_whatsapp_links(student_rm_pg,event.get("message") or "Catalog Online: aveți o actualizare nouă în Portalul Părinților.")
+        return event,created,links
+    except (DocumentStorageError,ValueError):
+        return None,False,[]
 
 def get_current_elevi_and_pins():
     g_data = load_gestiune_data()
@@ -2777,11 +2769,10 @@ with tab4:
                     message="Situația școlară din Catalog Online a fost verificată și actualizată. Accesați Portalul Părinților pentru detalii.",
                 )
                 if _created:
-                    _sent,_errors=_deliver_parent_sms(_event,e_info[3])
-                    if _sent:
-                        st.success(f"✅ Informarea a fost înregistrată și transmisă pe {_sent} număr(e) parental(e).")
-                    else:
-                        st.warning("Informarea a fost înregistrată în portal, dar SMS-ul nu a fost confirmat.")
+                    _wa_links=_parent_whatsapp_links(_event,e_info[3]) if False else _parent_whatsapp_links(e_info[3],_event.get("message") or "")
+                    st.success("✅ Informarea a fost înregistrată în Portalul Părinților.")
+                    for _idx,_wa in enumerate(_wa_links):
+                        st.link_button(f"📲 Deschide WhatsApp pentru părinte {(_idx+1)}",_wa,use_container_width=True)
                 else:
                     st.info("ℹ️ Părintele a fost deja informat pentru această versiune a situației școlare.")
             wb.close()
@@ -3671,15 +3662,15 @@ with tab8:
                     recipient_role="PARINTE",
                 )
                 store_new_document(record, validated_content)
-                _event,_created,_sent,_errors=_register_parent_alert(
+                _event,_created,_wa_links=_register_parent_alert(
                     doc_student[3],event_type="DOCUMENT_SCOALA",source_type="DOCUMENT",
                     source_id=record["id"],student_key=record["student_key"],
                     title="Comunicare nouă din partea dirigintelui",
                     message="Catalog Online: aveți o nouă comunicare din partea dirigintelui. Accesați Portalul Părinților pentru detalii.",
                     created_at_utc=record.get("created_at_utc"),
                 )
-                if not _sent:
-                    st.warning("Documentul este transmis în portal; notificarea SMS nu a fost confirmată.")
+                for _idx,_wa in enumerate(_wa_links):
+                    st.link_button(f"📲 Deschide WhatsApp pentru părinte {(_idx+1)}",_wa,use_container_width=True)
                 st.success(
                     "Documentul a fost transmis și înregistrat în siguranță pentru "
                     "părintele/reprezentantul legal al elevului selectat."
