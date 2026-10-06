@@ -12,7 +12,7 @@ from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentSto
 from parent_excuse_pdf import generate_parent_excuse_pdf
 from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_parent_source_read, reconcile_parent_inbox
 from whatsapp_delivery import teacher_phone, whatsapp_link
-from nelutu_assistant import QUICK_TOPICS as NELUTU_QUICK_TOPICS, answer as nelutu_answer
+from nelutu_assistant import QUICK_TOPICS as NELUTU_QUICK_TOPICS, answer_with_context as nelutu_answer
 from nelutu_mascot import render_nelutu_corner, render_nelutu_corner_nudge, render_nelutu_mascot
 from leave_pass_storage import (
     REASONS as LEAVE_PASS_REASONS,
@@ -493,10 +493,11 @@ else:
         _nelutu_current_prompt = _nelutu_question.strip() or (
             _nelutu_topic if _nelutu_topic != "— alege o temă —" else ""
         )
+        _nelutu_context = st.session_state.get("nelutu_authorized_context", {"facts": []})
         _nelutu_ask = st.button("💬 No, zi!", use_container_width=True, key="nelutu_ask")
         if _nelutu_ask and _nelutu_current_prompt:
             st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
-            st.session_state["nelutu_answered_reply"] = nelutu_answer(_nelutu_current_prompt)
+            st.session_state["nelutu_answered_reply"] = nelutu_answer(_nelutu_current_prompt, _nelutu_context)
         _kept_prompt, _nelutu_reply = _nelutu_fresh_reply(
             st.session_state.get("nelutu_answered_prompt"),
             st.session_state.get("nelutu_answered_reply"),
@@ -1276,6 +1277,17 @@ else:
                         'tot_abs': tot_abs_val,
                         'abs_nem': t_nem,
                         'abs_mot': t_mot
+                    }
+                    st.session_state["nelutu_authorized_context"] = {
+                        "facts": [
+                            {"keywords": ("media generala", "media mea"), "answer": f"Media generală afișată acum este {safe_float_str(mg_val)}."},
+                            {"keywords": ("media cultura", "cultura generala"), "answer": f"Media pentru cultura generală afișată este {safe_float_str(mcg_val)}."},
+                            {"keywords": ("media module", "module tehnologice"), "answer": f"Media modulelor tehnologice afișată este {safe_float_str(mth_val)}."},
+                            {"keywords": ("nota la purtare", "purtare"), "answer": f"Nota la purtare afișată acum este {purtare_val}."},
+                            {"keywords": ("cate absente", "total absente", "absente am"), "answer": f"Portalul afișează {tot_abs_val} absențe în total: {t_nem} nemotivate și {t_mot} motivate."},
+                            {"keywords": ("absente nemotivate", "nemotivate"), "answer": f"Portalul afișează {t_nem} absențe nemotivate. Datele disponibile aici arată starea lor, nu și o cauză individuală pentru care fiecare a rămas nemotivată; pentru cauza concretă trebuie verificată înregistrarea școlii/dirigintele."},
+                            {"keywords": ("absente motivate", "motivate"), "answer": f"Portalul afișează {t_mot} absențe motivate."},
+                        ]
                     }
 
             # Clasament medii
