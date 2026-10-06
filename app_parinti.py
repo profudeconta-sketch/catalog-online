@@ -10,8 +10,8 @@ import base64
 
 from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentStorageError, build_document_record, store_new_document, parent_excuse_usage, validate_parent_excuse_hours, register_transmitted_parent_excuse, find_parent_excuse_document, list_student_documents, normalize_student_key, read_registered_document, register_first_school_document_access
 from parent_excuse_pdf import generate_parent_excuse_pdf
-from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_parent_source_read, reconcile_parent_inbox, delivery_needs_retry, record_delivery
-from phone_delivery import PhoneDeliveryError, send_sms, teacher_phone
+from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_parent_source_read, reconcile_parent_inbox
+from whatsapp_delivery import teacher_phone, whatsapp_link
 from leave_pass_storage import (
     REASONS as LEAVE_PASS_REASONS,
     STATUS_APPROVED as LEAVE_STATUS_APPROVED,
@@ -23,29 +23,23 @@ from leave_pass_storage import (
     submit_or_reformulate_leave_request,
 )
 
-def _notify_teacher_phone(event):
-    """Livrarea telefonică este secundară: nu anulează o transmitere primară reușită."""
+def _teacher_whatsapp_link(event):
+    """Link WhatsApp gratuit; părintele decide și efectuează manual trimiterea."""
     phone=teacher_phone()
     if not phone:
-        return False,"Serviciul SMS pentru diriginte nu este configurat."
+        return None
     try:
-        key=hashlib.sha256(phone.encode("utf-8")).hexdigest()[:16]
-        if not delivery_needs_retry(event["id"],RECIPIENT_TEACHER,key):
-            return True,None
-        result=send_sms(phone,event.get("message") or "Catalog Online: aveți o solicitare nouă de la un părinte.")
-        record_delivery(event["id"],RECIPIENT_TEACHER,key,result.get("status"),result.get("message_sid"))
-        return True,None
-    except (PhoneDeliveryError,DocumentStorageError,ValueError) as ex:
-        return False,str(ex)
+        return whatsapp_link(phone,event.get("message") or "Catalog Online: aveți o solicitare nouă de la un părinte.")
+    except ValueError:
+        return None
 
 def _register_teacher_alert(**kwargs):
-    """Nu lasă subsistemul de notificare să schimbe rezultatul operației primare."""
+    """Notificarea internă este oficială; WhatsApp este doar alertă manuală opțională."""
     try:
         event,_=ensure_notification(recipient=RECIPIENT_TEACHER,**kwargs)
-        ok,error=_notify_teacher_phone(event)
-        return event,ok,error
-    except (DocumentStorageError,ValueError) as ex:
-        return None,False,str(ex)
+        return event,_teacher_whatsapp_link(event)
+    except (DocumentStorageError,ValueError):
+        return None,None
 
 st.set_page_config(
     page_title="Portal Părinți - Catalog IX TH",
@@ -747,15 +741,15 @@ else:
                                 reason_code=reason_code,
                                 expected_revision=current_leave_request.get("revision") if current_leave_request else None,
                             )
-                            _event,_sms_ok,_sms_error=_register_teacher_alert(
+                            _event,_wa_link=_register_teacher_alert(
                                 event_type="CERERE_INVOIRE",source_type="INVOIRE",
                                 source_id=_leave_record["id"],source_revision=_leave_record.get("revision",1),
                                 student_key=_leave_record["student_key"],title="Cerere de învoire nouă",
                                 message="Catalog Online: a fost primită o cerere de învoire care necesită verificare.",
                                 created_at_utc=_leave_record.get("transmitted_at_utc"),
                             )
-                            if not _sms_ok:
-                                st.warning("Cererea este transmisă și vizibilă în registrul principal; notificarea SMS nu a fost confirmată.")
+                            if _wa_link:
+                                st.link_button("📲 Deschide WhatsApp către diriginte",_wa_link,use_container_width=True)
                             st.success(
                                 "✅ Solicitarea a fost transmisă profesorului diriginte și este în "
                                 "așteptarea aprobării. Elevul poate părăsi unitatea de învățământ "
@@ -830,15 +824,15 @@ else:
                         recipient_role="DIRIGINTE",
                     )
                     store_new_document(record, validated_bytes)
-                    _event,_sms_ok,_sms_error=_register_teacher_alert(
+                    _event,_wa_link=_register_teacher_alert(
                         event_type="DOCUMENT_PARINTE",source_type="DOCUMENT",
                         source_id=record["id"],student_key=record["student_key"],
                         title="Document nou de la părinte/reprezentant legal",
                         message="Catalog Online: a fost primit un document nou de la un părinte. Accesați Inbox-ul dirigintelui.",
                         created_at_utc=record.get("created_at_utc"),
                     )
-                    if not _sms_ok:
-                        st.warning("Documentul este transmis și vizibil în registrul principal; notificarea SMS nu a fost confirmată.")
+                    if _wa_link:
+                        st.link_button("📲 Deschide WhatsApp către diriginte",_wa_link,use_container_width=True)
                     st.success(
                         "✅ Documentul a fost salvat și înregistrat. Transmiterea a fost confirmată."
                     )
@@ -1054,15 +1048,15 @@ else:
                                 document_id=record["id"],
                                 parent_name=selected_parent[0],
                             )
-                            _event,_sms_ok,_sms_error=_register_teacher_alert(
+                            _event,_wa_link=_register_teacher_alert(
                                 event_type="DOCUMENT_PARINTE",source_type="DOCUMENT",
                                 source_id=record["id"],student_key=record["student_key"],
                                 title="Motivare/Scutire transmisă de părinte",
                                 message="Catalog Online: a fost primită o motivare/scutire de la un părinte. Accesați Inbox-ul dirigintelui.",
                                 created_at_utc=record.get("created_at_utc"),
                             )
-                            if not _sms_ok:
-                                st.warning("Cererea este transmisă și vizibilă în registrul principal; notificarea SMS nu a fost confirmată.")
+                            if _wa_link:
+                                st.link_button("📲 Deschide WhatsApp către diriginte",_wa_link,use_container_width=True)
                             st.session_state.pop("excuse_preview_pdf", None)
                             st.success(
                                 "✅ Cererea a fost transmisă cu succes dirigintelui și este considerată depusă. "
