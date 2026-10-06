@@ -12,7 +12,7 @@ from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentSto
 from parent_excuse_pdf import generate_parent_excuse_pdf
 from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_parent_source_read, reconcile_parent_inbox
 from whatsapp_delivery import teacher_phone, whatsapp_link
-from nelutu_assistant import QUICK_TOPICS as NELUTU_QUICK_TOPICS, answer as nelutu_answer
+from nelutu_assistant import QUICK_TOPICS as NELUTU_QUICK_TOPICS, answer_with_context as nelutu_answer
 from nelutu_mascot import render_nelutu_corner, render_nelutu_corner_nudge, render_nelutu_mascot
 from leave_pass_storage import (
     REASONS as LEAVE_PASS_REASONS,
@@ -493,10 +493,13 @@ else:
         _nelutu_current_prompt = _nelutu_question.strip() or (
             _nelutu_topic if _nelutu_topic != "— alege o temă —" else ""
         )
+        _nelutu_context = {"facts": [
+            {"keywords": ("portal", "cum folosesc portalul"), "answer": "Ești autentificat în Portalul Părinților; pot explica orice zonă vizibilă aici, fără să modific date."}
+        ]}
         _nelutu_ask = st.button("💬 No, zi!", use_container_width=True, key="nelutu_ask")
         if _nelutu_ask and _nelutu_current_prompt:
             st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
-            st.session_state["nelutu_answered_reply"] = nelutu_answer(_nelutu_current_prompt)
+            st.session_state["nelutu_answered_reply"] = nelutu_answer(_nelutu_current_prompt, _nelutu_context)
         _kept_prompt, _nelutu_reply = _nelutu_fresh_reply(
             st.session_state.get("nelutu_answered_prompt"),
             st.session_state.get("nelutu_answered_reply"),

@@ -30,13 +30,82 @@ def _has_any(q:str, words:Iterable[str])->bool:
 def _src(k:str):
     return LEGAL_SOURCES[k]
 
+PORTAL_KNOWLEDGE = {
+    "scoala": "Fila Școală conține comunicările și documentele trimise de școală. Un document nou rămâne neaccesat până la deschiderea lui din contul autentificat; WhatsApp este doar alertă și nu ține locul confirmării interne.",
+    "invoire": "Fila Învoire arată solicitarea zilei curente, starea ei și, dacă este aprobată, biletul de voie. Cererea în așteptare nu este aprobare; biletul de voie nu motivează automat absențele.",
+    "documente": "Fila Documente permite trimiterea și consultarea documentelor părinte→școală: dosar personal, scutiri medicale, dosar bursă și motivare absențe părinte.",
+    "dosar personal": "Dosarul personal permite selectarea tipului de document, încărcarea PDF/JPG/JPEG/PNG și transmiterea către diriginte.",
+    "scutiri medicale": "Zona Scutiri medicale este pentru documentele medicale transmise dirigintelui; documentul încărcat și transmiterea sunt operații distincte de simpla selectare a fișierului.",
+    "dosar bursa": "Dosarul de bursă este împărțit în Merit, Socială–venit, Socială–orfan, Socială–medicală, Mame minore și CES. Neluțu explică interfața, nu decide eligibilitatea.",
+    "motivare absente parinte": "Zona de motivare arată orele disponibile din plafon, persoana care transmite, elevul, adresa, numărul matricol, data absenței și numărul de ore. Previzualizarea PDF nu transmite cererea și nu consumă ore; transmiterea finală o înregistrează.",
+    "documente deja transmise": "Lista documentelor deja transmise permite consultarea și descărcarea documentului înregistrat și, dacă este configurat, deschiderea manuală a WhatsApp către diriginte.",
+    "note": "Situația școlară afișează note pe discipline/module și mediile calculate din datele disponibile. Neluțu poate explica valorile din contextul autorizat, dar nu le poate modifica.",
+    "absente": "Pentru fiecare disciplină/modul portalul afișează totalul absențelor și separă nemotivatele de motivate. O absență este afișată conform stării existente în catalog; Neluțu nu inventează motivul unei stări dacă acesta nu este disponibil în context.",
+    "medii": "Portalul calculează și afișează media culturii generale, media modulelor tehnologice și media generală din datele disponibile, plus poziția școlară calculată.",
+    "purtare": "Portalul afișează nota la purtare disponibilă/calculată conform logicii aplicației. Neluțu o explică, dar nu o modifică și nu substituie decizia școlii unde este necesară.",
+    "actualizeaza datele": "Butonul Actualizează Datele reîncarcă datele disponibile portalului; Neluțu nu îl apasă în locul părintelui.",
+    "whatsapp": "Butoanele WhatsApp deschid un mesaj pregătit pentru trimitere manuală. WhatsApp nu înlocuiește notificarea sau confirmarea internă din portal.",
+    "deschide documentul": "Butonul de deschidere a documentului școlii înregistrează accesarea conform fluxului portalului și permite apoi descărcarea documentului.",
+    "previzualizare pdf": "Previzualizarea PDF permite verificarea cererii înainte de transmitere; nu este depunere și nu consumă plafonul.",
+}
+
+def portal_topics()->tuple[str,...]:
+    return tuple(PORTAL_KNOWLEDGE)
+
+def _context_lookup(q:str, context:dict|None):
+    if not context:
+        return None
+    # Contextul este construit exclusiv din date deja autorizate pentru elevul autentificat.
+    nq=_norm(q)
+    for item in context.get("facts", ()):
+        keys=tuple(item.get("keywords", ()))
+        if keys and _has_any(nq, keys):
+            return str(item.get("answer") or "").strip() or None
+    return None
+
+def build_student_context(*, media_generala=None, media_cultura=None, media_module=None,
+                          purtare=None, total_absente=None, absente_nemotivate=None,
+                          absente_motivate=None, discipline=None)->dict:
+    """Construiește numai fapte deja calculate/autorizate de portal; nu citește și nu scrie stocare."""
+    facts=[]
+    def put(keys, text):
+        facts.append({"keywords": tuple(keys), "answer": text})
+    if media_generala is not None: put(("media generala","media mea"), f"Media generală afișată acum este {media_generala}.")
+    if media_cultura is not None: put(("media cultura","cultura generala"), f"Media pentru cultura generală afișată este {media_cultura}.")
+    if media_module is not None: put(("media module","module tehnologice"), f"Media modulelor tehnologice afișată este {media_module}.")
+    if purtare is not None: put(("nota la purtare","purtare"), f"Nota la purtare afișată acum este {purtare}.")
+    if total_absente is not None:
+        put(("cate absente","total absente","absente am"), f"Portalul afișează {total_absente} absențe în total: {absente_nemotivate or 0} nemotivate și {absente_motivate or 0} motivate.")
+    if absente_nemotivate is not None:
+        put(("absente nemotivate","nemotivate"), f"Portalul afișează {absente_nemotivate} absențe nemotivate. Contextul arată starea, nu dovedește cauza individuală pentru care fiecare a rămas nemotivată.")
+    if absente_motivate is not None: put(("absente motivate","motivate"), f"Portalul afișează {absente_motivate} absențe motivate.")
+    for row in (discipline or ()):
+        name=str(row.get("name") or "").strip()
+        if not name: continue
+        put((name,), f"La {name}, portalul afișează: note {row.get('notes','—')}; absențe {row.get('absences','—')}; media actuală {row.get('average','—')}.")
+    return {"facts": facts}
+
+def answer_with_context(question:str, context:dict|None=None)->NelutuAnswer:
+    q=_norm(question)
+    # Siguranța are prioritate absolută față de potrivirea cu o filă/componentă.
+    safety = answer(question)
+    if safety.intent == "safety":
+        return safety
+    contextual=_context_lookup(q, context)
+    if contextual:
+        return NelutuAnswer("authorized_context", "No, aici pot să mă uit la ce-ți arată chiar portalul tău. 😄 " + contextual + " Eu îți explic ce-i înregistrat; nu schimb nimic.")
+    for topic, explanation in PORTAL_KNOWLEDGE.items():
+        if _has_any(q, (topic,)):
+            return NelutuAnswer("portal_component", "No binie mă. 😄 " + explanation + " Dacă-mi spui ce anume vezi acolo, îl desfacem fir cu fir; io am vreme, rotițele n-au autobuz de prins. 😂")
+    return answer(question)
+
 def answer(question:str)->NelutuAnswer:
     q=_norm(question)
     if not q:
         return NelutuAnswer("empty","No, amu m-ai prins cu traista goală. 😄 Scrie-mi ce vrei să afli și-mi pun rotițele la lucru. N-or fi ele de moară, da' se-nvârt. 😂")
 
     # Pericol/situații sensibile: Neluțu rămâne empatic, iar poanta se dă singură mai încet.
-    if _has_any(q,("violenta","lovit","batut","bullying","hartuit","abuz","amenintat","sinucidere","autovatam","drog","agresiune","pericol")):
+    if _has_any(q,("violenta","lovit","batut","bataie","bullying","hartuit","abuz","amenintat","amenintare","sinucidere","autovatam","drog","agresiune","pericol")):
         return NelutuAnswer("safety","Îmi pare rău că e vorba despre o situație serioasă. Aici Neluțu pune glumele în cui. Dacă există pericol imediat, cere ajutor serviciilor de urgență. Pentru o situație școlară, anunță cât mai repede dirigintele și conducerea școlii. Eu pot explica portalul și regulile generale, dar nu pot investiga cazul și nu pot înlocui un specialist.",serious=True)
 
     if _has_any(q,("cum functioneaza nelutu","ce poti face","ce stii sa faci","esti ai","inteligenta artificiala")):
@@ -82,6 +151,24 @@ def answer(question:str)->NelutuAnswer:
         return NelutuAnswer("hello","Ie mă, servus! Eu-s Neluțu. 😄 Mocan digital de pe Valea Arieșului: iute la minte, molcom la vorbă și cu rotițele unse cât să nu scârțâie prin portal. 😂 Nu mă supăr, nu judec și nu modific nimic în catalog. Întreabă-mă; dacă nu știu, îți spun. Îi mai sănătos decât să scot adevărul din clop.")
 
     return NelutuAnswer("fallback","No, amu m-ai băgat oleacă-n ceață. 😄 Nu vreau să scot un răspuns din clop doar ca să par deștept. Spune-mi altfel sau alege o temă: portal, note, absențe, învoire, documente, burse, înștiințări ori drepturi. Dacă-i un caz pe care nu-l pot lămuri sigur, te trimit la omul competent — mai bine Neluțu prudent decât Neluțu morișcă. 😂")
+
+# Contract invariabil: doctor în portal, dar cu caracterul lui Neluțu și cu mâinile în buzunar.
+EXPERT_CONTRACT = {
+    "scope": "portal_parent_authenticated_context_only",
+    "read_only": True,
+    "never_invent": True,
+    "never_judge": True,
+    "infinite_patience": True,
+    "self_ironic_humor": True,
+    "regional_voice": "Valea Ariesului, grai de mocan; iute la minte, molcom la vorba",
+    "serious_topics_suppress_playful_humor": True,
+    "no_cross_student_access": True,
+    "no_secret_access": True,
+    "no_paid_or_external_ai": True,
+}
+
+def expert_contract()->dict:
+    return dict(EXPERT_CONTRACT)
 
 def read_only_contract()->dict:
     return {"writes_primary_data":False,"writes_files":False,"calls_paid_ai":False,"calls_external_ai":False,"can_change_grades":False,"can_send_documents":False,"can_approve_requests":False,"reads_secrets":False,"reads_student_records":False}
