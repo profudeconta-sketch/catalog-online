@@ -448,7 +448,8 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
     necesare pentru promovarea automată; a treia citire rulează numai pentru cazurile
     fără consens după primele două.
     """
-    def read_pass(pass_no, targets, complete=False):
+    def read_pass(pass_no, targets, complete=False, targets_source=None):
+        targets_source=targets_source or []
         scope=("o citire COMPLETĂ a ambelor pagini, inclusiv înscrieri omise anterior"
                if complete else "o reverificare focalizată a candidaților nerezolvați")
         target_hint="" if complete else (
@@ -468,9 +469,15 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
           "Pentru NOTE, forma fizică poate fi NOTĂ/ZI, cu luna indicată contextual în ACEEAȘI rubrică. Data este lizibilă numai dacă luna este demonstrabilă vizual acolo; "
           "nu deduce luna din perioada cerută și nu o împrumuta din altă rubrică. "
           "legible=true numai dacă TOATE câmpurile sunt citibile direct din fotografie, fără inferență. Nu ghici.")
-        # Reverificarea primește celule fizice înguste: antetul coloanei + un singur elev.
-        focused=_discipline_cell_crops(left,len(student_names),"left")+_discipline_cell_crops(right,len(student_names),"right")
-        body, pass_usage=_vision_request(prompt,left,right,student_count=len(student_names),return_usage=True,images=focused)
+        if complete:
+            # A doua citire completă rămâne independentă, dar folosește doar cele 6 benzi compacte.
+            selected=_student_band_crops(left,len(student_names))+_student_band_crops(right,len(student_names))
+        else:
+            # A treia citire primește exclusiv celulele candidaților încă nerezolvați.
+            selected=_candidate_cell_crops(left,right,len(student_names),targets_source)
+        if not selected:
+            return []
+        body, pass_usage=_vision_request(prompt,left,right,student_count=len(student_names),return_usage=True,images=selected)
         usage_totals["input_tokens"] += pass_usage["input_tokens"]
         usage_totals["output_tokens"] += pass_usage["output_tokens"]
         usage_totals["total_tokens"] += pass_usage["total_tokens"]
@@ -502,7 +509,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
         return vision_usage_cost_usd(combined) >= float(max_cost_usd)
     targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
               "kind":p.kind,"source_image":p.source_image} for p in items if not p.verifiable]
-    second=[] if budget_exhausted() else read_pass(2,targets,complete=True)
+    second=[] if budget_exhausted() else read_pass(2,targets,complete=True,targets_source=items)
     passes=[items,second]
 
     def consensus(pass_lists):
@@ -523,7 +530,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
         third_targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
                         "kind":p.kind,"source_image":p.source_image}
                        for p in unresolved]
-        third=read_pass(3,third_targets,complete=False)
+        third=read_pass(3,third_targets,complete=False,targets_source=unresolved)
         passes.append(third)
         votes,examples=consensus(passes)
 
