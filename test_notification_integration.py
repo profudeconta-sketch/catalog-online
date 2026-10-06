@@ -29,6 +29,29 @@ class NotificationIntegrationGuards(unittest.TestCase):
         mark=p.index("mark_parent_source_read(",receipt)
         self.assertLess(open_button,receipt)
         self.assertLess(receipt,mark)
+    def test_teacher_inbox_has_no_manual_mark_read_button(self):
+        p=self.teacher
+        inbox=p.index("# Inbox global diriginte")
+        tabs=p.index("tab1, tab2",inbox)
+        block=p[inbox:tabs]
+        self.assertNotIn("Marchează ca văzut",block)
+
+    def test_teacher_document_read_requires_validated_source_access(self):
+        p=self.teacher
+        inbox=p.index("# Inbox global diriginte")
+        source=p.index("read_registered_document(_student_key,_source_id)",inbox)
+        mark=p.index('mark_notification_read(_n["id"],RECIPIENT_TEACHER)',source)
+        self.assertLess(source,mark)
+
+    def test_teacher_leave_read_requires_exact_notified_revision(self):
+        p=self.teacher
+        inbox=p.index("# Inbox global diriginte")
+        source=p.index("load_leave_pass_registry()",inbox)
+        revision=p.index('str(item.get("revision",1))==str(_n.get("source_revision") or 1)',source)
+        mark=p.index('mark_notification_read(_n["id"],RECIPIENT_TEACHER)',revision)
+        self.assertLess(source,revision)
+        self.assertLess(revision,mark)
+
     def test_academic_alert_requires_explicit_button(self):
         p=self.teacher
         button=p.index("Informează părintele despre actualizarea situației școlare")
