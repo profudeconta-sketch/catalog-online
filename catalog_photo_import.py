@@ -142,7 +142,7 @@ def pair_catalog_images(images,skip_cover=True):
         raise PhotoImportError("După tratarea explicită a copertei, numărul fotografiilor stânga/dreapta nu este par.")
     return [(work[i],work[i+1]) for i in range(0,len(work),2)]
 
-_LOCAL_VISION_MODEL = "HuggingFaceTB/SmolVLM2-256M-Video-Instruct"
+_LOCAL_VISION_MODEL = "HuggingFaceTB/SmolVLM2-500M-Video-Instruct"
 _LOCAL_MODEL_CACHE = None
 
 def local_vision_available():
