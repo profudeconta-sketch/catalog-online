@@ -6,7 +6,7 @@ import unittest
 import urllib.error
 from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
-from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, pair_catalog_images, deduplicate_proposals, compare_with_workbook, apply_confirmed_import, _student_band_crops, absence_day_segmentations, resolve_concatenated_absence_days, _openai_json_request, map_physical_label_to_online, validate_proposal_batch
+from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, pair_catalog_images, deduplicate_proposals, compare_with_workbook, apply_confirmed_import, _student_band_crops, absence_day_segmentations, resolve_concatenated_absence_days, _openai_json_request, map_physical_label_to_online, validate_proposal_batch, _discipline_cell_crops
 
 CG=[("Matematică",8)]
 TH=[]
@@ -217,6 +217,18 @@ class PhotoImportSafetyTests(unittest.TestCase):
             result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
             self.assertEqual(result[0][1],"NECESITĂ_VERIFICARE_UMANĂ")
         finally: os.remove(path)
+
+    def test_physical_cell_crops_keep_student_and_column_identity(self):
+        from PIL import Image
+        import io
+        im=Image.new("RGB",(1500,2000),"white"); buf=io.BytesIO(); im.save(buf,format="JPEG")
+        crops=_discipline_cell_crops(("8.jpeg",buf.getvalue()),3,7)
+        self.assertEqual(len(crops),21)
+        self.assertEqual(crops[0][0],"8-e1-c1.jpg")
+        self.assertEqual(crops[-1][0],"8-e3-c7.jpg")
+        sample=Image.open(io.BytesIO(crops[0][1]))
+        self.assertLess(sample.width,300)
+        self.assertLess(sample.height,600)
 
     def test_student_band_crops_preserve_count(self):
         try:
