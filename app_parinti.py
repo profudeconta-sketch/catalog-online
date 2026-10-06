@@ -479,7 +479,8 @@ else:
     </style>
     """, unsafe_allow_html=True)
     with st.popover("🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST", use_container_width=False):
-        st.markdown("**🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST**")\n        st.caption("No, întreabă-mă orișâce vrei tu... da’ nu pre mult, că mă ieftinesc. 😄")
+        st.markdown("**🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST**")
+        st.caption("No, întreabă-mă orișâce vrei tu... da’ nu pre mult, că mă ieftinesc. 😄")
         _nelutu_topic = st.selectbox(
             "Poți porni de aici:",
             ["— alege o temă —", *NELUTU_QUICK_TOPICS],
