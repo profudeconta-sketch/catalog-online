@@ -87,6 +87,10 @@ def build_student_context(*, media_generala=None, media_cultura=None, media_modu
 
 def answer_with_context(question:str, context:dict|None=None)->NelutuAnswer:
     q=_norm(question)
+    # Siguranța are prioritate absolută față de potrivirea cu o filă/componentă.
+    safety = answer(question)
+    if safety.intent == "safety":
+        return safety
     contextual=_context_lookup(q, context)
     if contextual:
         return NelutuAnswer("authorized_context", "No, aici pot să mă uit la ce-ți arată chiar portalul tău. 😄 " + contextual + " Eu îți explic ce-i înregistrat; nu schimb nimic.")
