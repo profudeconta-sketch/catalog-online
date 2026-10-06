@@ -44,9 +44,9 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
   <path d="M31 164 L34 128 Q40 113 55 109 L95 109 Q111 113 117 128 L120 164Z" fill="#49352b" stroke="#2f211c" stroke-width="3"/>
   <path d="M54 113 Q75 121 96 113 L101 164 L49 164Z" fill="#fffaf0" stroke="#5c4436" stroke-width="2"/>
   <path d="M55 124 L48 155 M95 124 L102 155" stroke="#b23a32" stroke-width="3"/>
-  <path class="nelutu-brau" d="M35 137 Q75 145 115 137 L117 160 Q75 168 33 160Z" fill="#8a2f2a" stroke="#3a241d" stroke-width="2"/>
-  <text class="nelutu-brau-title" x="75" y="148" text-anchor="middle" font-size="7.2" font-weight="900" fill="#fff8df">PRIMU’ AI</text>
-  <text class="nelutu-brau-subtitle" x="75" y="156.5" text-anchor="middle" font-size="5.8" font-weight="900" fill="#fff8df">DIN ARDEAL</text>
+  <path class="nelutu-brau" d="M25 133 Q75 143 125 133 L128 163 Q75 174 22 163Z" fill="#8a2f2a" stroke="#3a241d" stroke-width="2"/>
+  <text class="nelutu-brau-title" x="75" y="146" text-anchor="middle" font-size="8.4" font-weight="900" fill="#fff8df">PRIMU’ AI DIN ARDEAL</text>
+  <text class="nelutu-brau-subtitle" x="75" y="157" text-anchor="middle" font-size="7.0" font-weight="900" fill="#fff8df">NELUȚU-AL NOST 🤠</text>
   <title>PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST • PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST</title>
 
   <path d="M66 122 l5 5 -5 5 5 5 -5 5 M84 122 l-5 5 5 5 -5 5 5 5" fill="none" stroke="#b23a32" stroke-width="2"/>
