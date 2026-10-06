@@ -269,6 +269,35 @@ def _discipline_cell_crops(image, student_count, layout="left"):
             out.append((f"{PurePosixPath(image[0]).stem}-{layout}-e{student+1}-d{col+1}.jpg",buf.getvalue()))
     return out
 
+VERIFIED_LAYOUT_ONLINE={
+    "left":[
+        "Limba și literatura română","Limba engleză (L1)","Limba franceză (L2)",None,None,
+        "Matematică","Fizică","Chimie","Biologie","Istorie","Geografie",
+    ],
+    "right":[
+        "Logică, argumentare și comunicare","Religie",None,"Arte vizuale și educație plastică",
+        "Educație fizică","Informatică / TIC","Informatică / TIC",
+        "M1: Bazele contabilității","M2: Etică și comunicare","M3: Structuri de primire turistică",
+        "M4: Procese și calitate în HoReCa","M5: CDEOȘ (IP) - Instruire Practică",
+        "M6: Curriculum de aprofundare și inserție profesională",None,
+    ],
+}
+
+def _candidate_cell_crops(left,right,student_count,items):
+    """Selectează numai celulele candidate folosind șablonul fizic verificat.
+    Șablonul este explicit și separat de ordinea disciplinelor din Excel.
+    """
+    wanted={(p.student_index,p.subject) for p in items if p.subject}
+    out=[]
+    for image,layout in ((left,"left"),(right,"right")):
+        all_crops=_discipline_cell_crops(image,student_count,layout)
+        cols=len(VERIFIED_LAYOUT_ONLINE[layout])
+        for student in range(min(student_count,3)):
+            for col,target in enumerate(VERIFIED_LAYOUT_ONLINE[layout]):
+                if target and (student,target) in wanted:
+                    out.append(all_crops[student*cols+col])
+    return out
+
 def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects,return_usage=False):
     prompt=("Analizează două fotografii ale aceleiași deschideri de catalog școlar românesc. "
       f"Elevii de sus în jos sunt exact {json.dumps(student_names,ensure_ascii=False)}. "
