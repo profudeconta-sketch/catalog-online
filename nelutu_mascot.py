@@ -44,6 +44,10 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
   <path d="M31 164 L34 128 Q40 113 55 109 L95 109 Q111 113 117 128 L120 164Z" fill="#49352b" stroke="#2f211c" stroke-width="3"/>
   <path d="M54 113 Q75 121 96 113 L101 164 L49 164Z" fill="#fffaf0" stroke="#5c4436" stroke-width="2"/>
   <path d="M55 124 L48 155 M95 124 L102 155" stroke="#b23a32" stroke-width="3"/>
+  <path d="M43 143 Q75 149 107 143 L109 157 Q75 164 41 157Z" fill="#8a2f2a" stroke="#3a241d" stroke-width="2"/>
+  <path id="nelutu-brau-loop" d="M45 151 Q75 156 105 151" fill="none"/>
+  <text font-size="5.2" font-weight="800" fill="#fff8df" letter-spacing=".35"><textPath href="#nelutu-brau-loop" startOffset="0%">PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST • PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST</textPath></text>
+
   <path d="M66 122 l5 5 -5 5 5 5 -5 5 M84 122 l-5 5 5 5 -5 5 5 5" fill="none" stroke="#b23a32" stroke-width="2"/>
   <!-- urechi -->
   <ellipse cx="35" cy="74" rx="10" ry="15" fill="#efbd94" stroke="#664634" stroke-width="2.5"/>
