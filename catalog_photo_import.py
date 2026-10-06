@@ -295,7 +295,7 @@ def _parse_vision_records(body,student_names,start):
     except Exception as ex:
         raise PhotoImportError("Răspunsul AI nu este JSON valid; verificarea a fost oprită.") from ex
 
-def _vision_request(prompt,left,right,model=None,student_count=3):
+def _vision_request(prompt,left,right,model=None,student_count=3,return_usage=False):
     model=model or os.environ.get("OPENAI_VISION_MODEL","gpt-5.4-mini")
     payload={"model":model,"input":[{"role":"user","content":[
         {"type":"input_text","text":prompt},
@@ -305,9 +305,18 @@ def _vision_request(prompt,left,right,model=None,student_count=3):
     req=urllib.request.Request("https://api.openai.com/v1/responses",
         data=json.dumps(payload).encode(),
         headers={"Authorization":f"Bearer {_api_key()}","Content-Type":"application/json"},method="POST")
-    return _openai_json_request(req, "Verificarea vizuală")
+    body=_openai_json_request(req, "Verificarea vizuală")
+    if return_usage:
+        usage=body.get("usage",{}) if isinstance(body,dict) else {}
+        return body, {
+            "input_tokens": int(usage.get("input_tokens",0) or 0),
+            "output_tokens": int(usage.get("output_tokens",0) or 0),
+            "total_tokens": int(usage.get("total_tokens",0) or 0),
+            "model": model,
+        }
+    return body
 
-def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subjects,items):
+def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subjects,items,return_usage=False):
     """Până la trei citiri independente. Două citiri lizibile și semantic identice sunt
     necesare pentru promovarea automată; a treia citire rulează numai pentru cazurile
     fără consens după primele două.
@@ -332,7 +341,11 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
           "Pentru NOTE, forma fizică poate fi NOTĂ/ZI, cu luna indicată contextual în ACEEAȘI rubrică. Data este lizibilă numai dacă luna este demonstrabilă vizual acolo; "
           "nu deduce luna din perioada cerută și nu o împrumuta din altă rubrică. "
           "legible=true numai dacă TOATE câmpurile sunt citibile direct din fotografie, fără inferență. Nu ghici.")
-        rows=_parse_vision_records(_vision_request(prompt,left,right,student_count=len(student_names)),student_names,start)
+        body, pass_usage=_vision_request(prompt,left,right,student_count=len(student_names),return_usage=True)
+        usage_totals["input_tokens"] += pass_usage["input_tokens"]
+        usage_totals["output_tokens"] += pass_usage["output_tokens"]
+        usage_totals["total_tokens"] += pass_usage["total_tokens"]
+        rows=_parse_vision_records(body,student_names,start)
         out=[]
         for r in rows:
             try:
@@ -348,7 +361,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
                 continue
         return out
 
-    targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
+    usage_totals={"input_tokens":0,"output_tokens":0,"total_tokens":0,"model":os.environ.get("OPENAI_VISION_MODEL","gpt-5.4-mini")}\n    targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
               "kind":p.kind,"source_image":p.source_image} for p in items if not p.verifiable]
     second=read_pass(2,targets,complete=True)
     passes=[items,second]
@@ -386,9 +399,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
             recovered.append(ImportProposal(p.student_index,p.category,p.subject,p.kind,p.value,p.date,p.motivated,
                 p.confidence,p.source_image,False,
                 "Fără consens de minimum două citiri independente lizibile după epuizarea recuperării automate."))
-    return recovered
-
-def deduplicate_proposals(items):
+    return (recovered,usage_totals) if return_usage else recovered\n\ndef deduplicate_proposals(items):
     """O singură înregistrare per elev/disciplină/tip/dată; ambiguitățile se blochează.
     Dacă aceeași sursă fizică produce date contradictorii pentru aceeași rubrică,
     nu permitem ca interpretările să devină două înregistrări independente.
