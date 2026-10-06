@@ -45,8 +45,8 @@ from leave_pass_storage import (
 from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
     PhotoImportError, ImportProposal, safe_zip_images, pair_catalog_images,
-    compare_with_workbook, apply_confirmed_import, local_vision_available,
-    local_read_student_band, _student_band_crops,
+    compare_with_workbook, apply_confirmed_import, analyze_pair_with_vision,
+    recover_uncertain_proposals,
 
 )
 
@@ -1788,10 +1788,10 @@ elev_options = [f"{e[0]}. {e[1]} (Matr. {e[3]})" for e in ELEVI]
 
 # --- IMPORT FOTO CATALOG FIZIC (FĂRĂ AI EXTERN) ---
 with tab_photo:
-    st.subheader("📷 Import note și absențe din catalogul fizic — fără AI")
+    st.subheader("📷 Import note și absențe din catalogul fizic — analiză automată verificabilă")
     st.caption(
-        "Fotografiile sunt validate și afișate local. Datele sunt transcrise numai după verificare vizuală directă, "
-        "apoi sunt comparate automat cu Excelul. Nicio valoare nu este salvată înainte de confirmarea explicită."
+        "Fotografiile sunt validate înainte de analiză. Citirea automată produce numai propuneri; "
+        "compararea, anti-duplicarea și confirmarea explicită rămân obligatorii înainte de orice scriere."
     )
     c1, c2 = st.columns(2)
     with c1:
@@ -1820,7 +1820,7 @@ with tab_photo:
                     f"Structură incompletă sau excedentară: {len(pairs)} perechi pentru {len(ELEVI)} elevi; "
                     f"sunt necesare exact {expected_pairs}. Orice scriere este blocată."
                 )
-            st.success(f"Structură validată local: {len(images)} fotografii, {len(pairs)} perechi. Nu se apelează niciun serviciu AI.")
+            st.success(f"Structură validată: {len(images)} fotografii, {len(pairs)} perechi. Nicio analiză și nicio scriere nu pornesc automat.")
             import_flash = st.session_state.pop("photo_import_success_flash", None)
             if import_flash:
                 st.success(import_flash)
@@ -1843,38 +1843,6 @@ with tab_photo:
             with pc2:
                 st.caption(f"Dreapta — {right[0]}")
                 st.image(right[1], width=int(420 * zoom / 100))
-
-            st.markdown("#### Test automat local — fără API")
-            local_ok, local_reason = local_vision_available()
-            if not local_ok:
-                st.warning("Motorul vizual local nu este disponibil în acest deployment: " + local_reason)
-            else:
-                st.caption("Test izolat: citește automat numai perechea selectată. Rezultatul NU poate scrie în Excel.")
-                if st.button("🧪 Testează citirea locală pe perechea selectată", key="photo_local_test"):
-                    names = [ELEVI[i][1] for i in range(pair_no*3, min(pair_no*3+3, len(ELEVI)))]
-                    allowed = [name for name, _ in DISCIPLINE_CG] + [name for name, _ in MODULE_TH]
-                    left_crops = _student_band_crops(left, len(names))
-                    right_crops = _student_band_crops(right, len(names))
-                    local_rows = []
-                    for rel_idx, name in enumerate(names):
-                        student_rows = []
-                        diagnostics = []
-                        for crop in (left_crops[rel_idx], right_crops[rel_idx]):
-                            rows, diag = local_read_student_band(crop, name, import_start, import_end, allowed)
-                            student_rows.extend(rows); diagnostics.append(diag)
-                        local_rows.append((name, student_rows, diagnostics))
-                    st.session_state["photo_local_test_results"] = local_rows
-                for name, rows, diagnostics in st.session_state.get("photo_local_test_results", []):
-                    st.markdown(f"**{name}**")
-                    if rows:
-                        for p in rows:
-                            what = f"nota {p.value}" if p.kind == "grade" else ("absență motivată" if p.motivated else "absență")
-                            st.info(f"PROPUNERE LOCALĂ — {p.subject} — {what} — {p.date}")
-                    else:
-                        st.caption("Nicio înregistrare nu a obținut consensul celor două citiri locale.")
-                    st.caption(f"Diagnostic consens: {diagnostics}")
-                if st.session_state.get("photo_local_test_results"):
-                    st.warning("Rezultatele de mai sus sunt experimentale și sunt complet separate de lista care poate fi comparată/scrisă.")
 
             st.markdown("#### Transcriere verificată din fotografia afișată")
             start_idx = pair_no * 3
