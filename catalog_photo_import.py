@@ -277,11 +277,12 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
       "Dacă se vede numai ziua, dar luna nu poate fi demonstrată, păstrează recordul cu legible=false; NU presupune luna din intervalul cerut. "
       "Dacă există orice dubiu, păstrează recordul, pune legible=false și confidence corespunzător; nu inventa valoarea.")
     model=os.environ.get("OPENAI_VISION_MODEL","gpt-5.4-mini")
+    # Prima trecere folosește numai benzile elevilor; paginile complete redundante nu mai sunt trimise.
+    # Antetul rămâne lipit fiecărei benzi, deci contextul vizual necesar este păstrat.
+    selected=_student_band_crops(left,len(student_names))+_student_band_crops(right,len(student_names))
     payload={"model":model,"input":[{"role":"user","content":[
       {"type":"input_text","text":prompt},
-      {"type":"input_image","image_url":_data_url(left[0],left[1]),"detail":"high"},
-      {"type":"input_image","image_url":_data_url(right[0],right[1]),"detail":"high"},
-      *[{"type":"input_image","image_url":_data_url(n,d),"detail":"high"} for n,d in (_student_band_crops(left,len(student_names))+_student_band_crops(right,len(student_names)))]]}]}
+      *[{"type":"input_image","image_url":_data_url(n,d),"detail":"high"} for n,d in selected]]}]}
     req=urllib.request.Request("https://api.openai.com/v1/responses",data=json.dumps(payload).encode(),
       headers={"Authorization":f"Bearer {_api_key()}","Content-Type":"application/json"},method="POST")
     body=_openai_json_request(req, "Analiza imaginilor")
