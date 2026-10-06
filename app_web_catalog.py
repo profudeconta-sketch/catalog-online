@@ -44,7 +44,8 @@ from leave_pass_storage import (
     read_approved_leave_pass,
     refuse_leave_request,
 )
-from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_notification_read, reconcile_teacher_inbox
+from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_notification_read, reconcile_teacher_inbox, record_delivery
+from phone_delivery import PhoneDeliveryError, normalize_ro_phone, send_sms
 from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
     PhotoImportError, ImportProposal, safe_zip_images, pair_catalog_images,
@@ -247,6 +248,35 @@ def save_gestiune_data(data):
             pass
         st.error(f"Eroare la salvarea datelor elevilor: {ex}")
         return False
+
+def _parent_phones_for_rm(student_rm_pg):
+    target=str(student_rm_pg or "").strip().casefold()
+    phones=[]
+    for row in load_gestiune_data():
+        if str(row.get("matricol","")).strip().casefold()!=target:
+            continue
+        for field in ("telefon_mama","telefon_tata"):
+            value=str(row.get(field,"")).strip()
+            if value:
+                try: phones.append(normalize_ro_phone(value))
+                except ValueError: pass
+        break
+    return list(dict.fromkeys(phones))
+
+def _deliver_parent_sms(event, student_rm_pg):
+    phones=_parent_phones_for_rm(student_rm_pg)
+    if not phones:
+        return 0,["Nu există un număr parental valid."]
+    delivered=0; errors=[]
+    for phone in phones:
+        try:
+            result=send_sms(phone,event.get("message") or "Catalog Online: aveți o actualizare nouă în Portalul Părinților.")
+            key=hashlib.sha256(phone.encode("utf-8")).hexdigest()[:16]
+            record_delivery(event["id"],RECIPIENT_PARENT,key,result.get("status"),result.get("message_sid"))
+            delivered+=1
+        except (PhoneDeliveryError,DocumentStorageError,ValueError) as ex:
+            errors.append(str(ex))
+    return delivered,errors
 
 def get_current_elevi_and_pins():
     g_data = load_gestiune_data()
@@ -2684,8 +2714,7 @@ with tab4:
                     title="Situația școlară a fost actualizată",
                     message="Situația școlară din Catalog Online a fost verificată și actualizată. Accesați Portalul Părinților pentru detalii.",
                 )
-                if _created:
-                    st.success("✅ Informarea părintelui a fost înregistrată pentru transmitere.")
+                if _created:\n                    _sent,_errors=_deliver_parent_sms(_event,e_info[3])\n                    if _sent:\n                        st.success(f"✅ Informarea a fost înregistrată și transmisă pe { _sent } număr(e) parental(e).")\n                    else:\n                        st.warning("Informarea a fost înregistrată în portal, dar SMS-ul nu a fost confirmat.")
                 else:
                     st.info("ℹ️ Părintele a fost deja informat pentru această versiune a situației școlare.")
             wb.close()
@@ -3575,6 +3604,16 @@ with tab8:
                     recipient_role="PARINTE",
                 )
                 store_new_document(record, validated_content)
+                _event,_=ensure_notification(
+                    recipient=RECIPIENT_PARENT,event_type="DOCUMENT_SCOALA",source_type="DOCUMENT",
+                    source_id=record["id"],student_key=record["student_key"],
+                    title="Comunicare nouă din partea dirigintelui",
+                    message="Catalog Online: aveți o nouă comunicare din partea dirigintelui. Accesați Portalul Părinților pentru detalii.",
+                    created_at_utc=record.get("created_at_utc"),
+                )
+                _sent,_errors=_deliver_parent_sms(_event,doc_student[3])
+                if not _sent:
+                    st.warning("Documentul este transmis în portal, dar notificarea SMS nu a fost confirmată.")
                 st.success(
                     "Documentul a fost transmis și înregistrat în siguranță pentru "
                     "părintele/reprezentantul legal al elevului selectat."
