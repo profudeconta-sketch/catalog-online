@@ -47,6 +47,7 @@ from leave_pass_storage import (
 )
 from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_notification_read, reconcile_teacher_inbox
 from whatsapp_delivery import normalize_ro_phone, whatsapp_link
+from nelutu_mascot import render_nelutu_corner, render_nelutu_corner_nudge
 from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
     PhotoImportError, ImportProposal, safe_zip_images, pair_catalog_images,
@@ -1319,6 +1320,10 @@ if not st.session_state["authenticated"]:
     
     render_copyright_footer()
     st.stop()
+
+# Mascota globală: doar vizuală, fără acces la date sau acțiuni.
+st.markdown(render_nelutu_corner("idle"), unsafe_allow_html=True)
+st.markdown(render_nelutu_corner_nudge(), unsafe_allow_html=True)
 
 # Lista celor 32 de elevi (ID, Nume, RM/PG, Nr. Matr., PIN)
 

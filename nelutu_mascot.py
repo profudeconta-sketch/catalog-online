@@ -74,5 +74,27 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
 </svg>
 <div class="nelutu-bubble"><strong>Neluțu</strong>{msg}</div></div>"""
 
+
+def render_nelutu_corner_nudge() -> str:
+    """Îndemn vizual local după inactivitate; fără JS, rețea, date sau acțiuni."""
+    return """<style>
+.nelutu-corner .nelutu-wrap::after{content:"No? Dacă vrei, te ajut io... dacă nu, hai să merem de aici, că vin lupii și tăt ne rup. 🐺";position:absolute;right:86px;bottom:50px;width:245px;padding:10px 12px;border:1px solid #dfc28d;border-radius:16px;background:#fffaf0;color:#2e2925;font-size:.88rem;line-height:1.3;box-shadow:0 6px 20px rgba(55,38,20,.16);opacity:0;visibility:hidden;animation:nelutu-nudge 18s ease 1 forwards}
+@keyframes nelutu-nudge{0%,72%{opacity:0;visibility:hidden;transform:translateY(5px)}78%,96%{opacity:1;visibility:visible;transform:translateY(0)}100%{opacity:0;visibility:hidden}}
+@media(max-width:640px){.nelutu-corner .nelutu-wrap::after{right:64px;bottom:38px;width:205px;font-size:.78rem}}
+@media(prefers-reduced-motion:reduce){.nelutu-corner .nelutu-wrap::after{animation:none;display:none}}
+</style>"""
+
 def visual_contract()->dict:
     return {"writes_data":False,"uses_network":False,"uses_javascript":False,"external_assets":False,"reusable_system_component":True}
+
+
+def render_nelutu_corner(state:str="idle") -> str:
+    """Mascota mică, persistentă vizual în colț; fără date, JS sau acțiuni."""
+    mascot=render_nelutu_mascot(state,"")
+    return f"""<div class="nelutu-corner">{mascot}</div>
+<style>
+.nelutu-corner .nelutu-wrap{{position:fixed;right:18px;bottom:18px;z-index:9999;width:92px;height:104px;padding:7px;display:block;border-radius:22px;background:rgba(255,250,240,.96);box-shadow:0 8px 26px rgba(55,38,20,.22);overflow:visible;pointer-events:none}}
+.nelutu-corner .nelutu-avatar{{width:82px;height:92px;display:block;margin:auto}}
+.nelutu-corner .nelutu-bubble{{display:none}}
+@media(max-width:640px){{.nelutu-corner .nelutu-wrap{{right:9px;bottom:9px;width:70px;height:80px;padding:5px}}.nelutu-corner .nelutu-avatar{{width:62px;height:70px}}}}
+</style>"""
