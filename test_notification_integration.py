@@ -29,6 +29,17 @@ class NotificationIntegrationGuards(unittest.TestCase):
         mark=p.index("mark_parent_source_read(",receipt)
         self.assertLess(open_button,receipt)
         self.assertLess(receipt,mark)
+    def test_parent_unread_counter_uses_storage_semantics(self):
+        p=self.parent
+        section=p.index("reconcile_parent_inbox(_parent_student_key)")
+        tabs=p.index("parent_tab_school",section)
+        block=p[section:tabs]
+        self.assertIn("unread_only=True",block)
+        self.assertNotIn(
+            '_parent_unread=[n for n in _parent_notifications if not n.get("read_at_utc")]',
+            block,
+        )
+
     def test_teacher_inbox_unread_counter_uses_storage_semantics(self):
         p=self.teacher
         inbox=p.index("# Inbox global diriginte")
