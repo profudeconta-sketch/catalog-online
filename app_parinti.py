@@ -483,10 +483,18 @@ else:
             placeholder="Ex.: Cum motivez absențele copilului?",
             key="nelutu_question",
         )
+        _nelutu_current_prompt = _nelutu_question.strip() or (
+            _nelutu_topic if _nelutu_topic != "— alege o temă —" else ""
+        )
         _nelutu_ask = st.button("💬 No, zi!", use_container_width=True, key="nelutu_ask")
-        if _nelutu_ask or _nelutu_topic != "— alege o temă —":
-            _nelutu_prompt = _nelutu_question.strip() or _nelutu_topic
-            _nelutu_reply = nelutu_answer(_nelutu_prompt)
+        if _nelutu_ask and _nelutu_current_prompt:
+            st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
+            st.session_state["nelutu_answered_reply"] = nelutu_answer(_nelutu_current_prompt)
+        if st.session_state.get("nelutu_answered_prompt") != _nelutu_current_prompt:
+            st.session_state.pop("nelutu_answered_prompt", None)
+            st.session_state.pop("nelutu_answered_reply", None)
+        _nelutu_reply = st.session_state.get("nelutu_answered_reply")
+        if _nelutu_reply is not None:
             st.markdown(_nelutu_reply.text)
             if _nelutu_reply.source_label and _nelutu_reply.source_url:
                 st.caption("📚 Bază oficială:")
