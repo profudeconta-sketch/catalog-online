@@ -47,7 +47,7 @@ def ensure_notification(*,recipient,event_type,source_type,source_id,student_key
             "source_type":str(source_type),"source_id":str(source_id),"source_revision":str(source_revision or ""),
             "student_key":str(student_key),"title":str(title),"message":str(message),
             "created_at_utc":created_at_utc or dt.datetime.now(dt.timezone.utc).isoformat(),
-            "read_at_utc":None,"delivery_status":"PENDING","delivered_at_utc":None,
+            "read_at_utc":None,
         }
         registry["events"].append(event)
         try:
@@ -170,46 +170,3 @@ def mark_parent_source_read(student_key, source_id):
     if not matches:
         return None,False
     return mark_notification_read(matches[0]["id"],RECIPIENT_PARENT)
-
-
-def delivery_needs_retry(event_id,recipient,delivery_key):
-    """True numai dacă această destinație nu are deja o livrare acceptată/trimisă."""
-    registry,_=load_notification_registry()
-    matches=[
-        x for x in registry["events"]
-        if x.get("id")==str(event_id) and x.get("recipient")==recipient
-    ]
-    if len(matches)!=1:
-        raise DocumentStorageError("Notificarea nu există pentru verificarea livrării.")
-    delivery=(matches[0].get("deliveries") or {}).get(str(delivery_key)) or {}
-    return str(delivery.get("status") or "").strip().lower() not in {
-        "accepted","queued","sent","delivered"
-    }
-
-
-def record_delivery(event_id,recipient,delivery_key,status,provider_id=None):
-    """Păstrează starea livrării fără numărul de telefon în registru."""
-    for _ in range(3):
-        registry,sha=load_notification_registry()
-        matches=[x for x in registry["events"] if x.get("id")==str(event_id) and x.get("recipient")==recipient]
-        if len(matches)!=1: raise DocumentStorageError("Notificarea nu există pentru livrare.")
-        event=matches[0]
-        deliveries=event.setdefault("deliveries",{})
-        now=dt.datetime.now(dt.timezone.utc).isoformat()
-        normalized_status=str(status or "").strip().lower()
-        deliveries[str(delivery_key)]={
-            "status":normalized_status,"provider_id":str(provider_id or ""),
-            "updated_at_utc":now,
-        }
-        successful_statuses={"accepted","queued","sent","delivered"}
-        has_success=any(
-            str(d.get("status") or "").strip().lower() in successful_statuses
-            for d in deliveries.values()
-        )
-        event["delivery_status"]="DELIVERED" if has_success else "PENDING"
-        if has_success and not event.get("delivered_at_utc"):
-            event["delivered_at_utc"]=now
-        try:
-            save_notification_registry(registry,sha); return dict(event)
-        except DocumentConflictError: continue
-    raise DocumentConflictError("Starea livrării nu a putut fi salvată.")

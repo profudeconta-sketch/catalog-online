@@ -4,6 +4,12 @@ on:
     paths:
       - "app_web_catalog.py"
       - ".github/workflows/manual-entry-safety.yml"
+  push:
+    branches:
+      - feature/free-whatsapp-notifications
+    paths:
+      - "app_web_catalog.py"
+      - ".github/workflows/manual-entry-safety.yml"
 jobs:
   test:
     runs-on: ubuntu-latest
