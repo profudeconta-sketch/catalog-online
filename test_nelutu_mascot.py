@@ -93,7 +93,7 @@ class NelutuMascotTests(unittest.TestCase):
         self.assertIn("right:18px",html)
         self.assertIn("bottom:82px",html)
         self.assertIn("pointer-events:none",html)
-        self.assertIn("width:82px",html)
+        self.assertIn("width:102px;height:116px",html)
         self.assertIn("nelutu-bubble{display:none}",html)
 
     def test_idle_nudge_is_one_time_css_only(self):
@@ -127,7 +127,7 @@ class NelutuMascotTests(unittest.TestCase):
     def test_parent_portal_uses_small_click_assistant_not_giant_mascot(self):
         with open("app_parinti.py","r",encoding="utf-8") as handle:
             source=handle.read()
-        self.assertIn('st.popover("🤠 Neluțu"',source)
+        self.assertIn('st.popover("🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST"',source)
         self.assertIn("întreabă-mă orișâce vrei tu... da’ nu pre mult, că mă ieftinesc",source)
         self.assertIn('st.toast("🤠 Servus!',source)
         self.assertNotIn('with st.expander("🤠 Neluțu — ajutorul simpatic din Portal"',source)
