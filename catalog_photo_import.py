@@ -232,7 +232,8 @@ def _student_band_crops(image, count):
 
 def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects,return_usage=False):
     prompt=("Analizează două fotografii ale aceleiași deschideri de catalog școlar românesc. "
-      f"Elevii de sus în jos sunt exact {json.dumps(student_names,ensure_ascii=False)}. "\n      "După cele două pagini complete urmează decupaje în ordinea: pagina stângă elev 1..N, apoi pagina dreaptă elev 1..N. Fiecare decupaj conține antetul disciplinelor lipit de caseta UNUI SINGUR elev; nu atribui niciodată scris din alt decupaj acelui elev. "
+      f"Elevii de sus în jos sunt exact {json.dumps(student_names,ensure_ascii=False)}. "
+      "După cele două pagini complete urmează decupaje în ordinea: pagina stângă elev 1..N, apoi pagina dreaptă elev 1..N. Fiecare decupaj conține antetul disciplinelor lipit de caseta UNUI SINGUR elev; nu atribui niciodată scris din alt decupaj acelui elev. "
       f"Folosește pentru subject NUMAI una dintre denumirile exacte: {json.dumps(allowed_subjects,ensure_ascii=False)}. "
       f"Extrage NUMAI note și absențe cu data lizibilă în intervalul {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
       "Nu ghici și nu completa valori incerte. Răspunde STRICT JSON cu cheia records; fiecare record are "
