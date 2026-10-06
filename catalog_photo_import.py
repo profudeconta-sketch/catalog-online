@@ -203,7 +203,10 @@ def _data_url(name,data):
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
 
 def _student_band_crops(image, count):
-    """Decupaje deterministe pentru lizibilitate. Nu modifică semantic imaginea și nu inventează conținut."""
+    """Decupaje deterministe: antetul disciplinelor + exclusiv caseta elevului.
+    Geometria urmează cele trei casete tipărite ale formularului fotografiat;
+    nu împărțim toată pagina în treimi, deoarece zona de medii de jos ar deplasa benzile.
+    """
     try:
         from PIL import Image
     except Exception:
@@ -212,20 +215,24 @@ def _student_band_crops(image, count):
         return []
     im=Image.open(io.BytesIO(image[1])).convert("RGB")
     w,h=im.size
-    # Antetul ocupă aproximativ partea superioară; benzile elevilor sunt egale în formular.
-    top=int(h*0.055); bottom=int(h*0.94)
-    band=(bottom-top)/3
+    # Limite normalizate observabile din formular: antet, apoi cele 3 casete de elev.
+    # Păstrăm toată lățimea pentru ca antetul și coloanele să rămână demonstrabile.
+    header=(0, max(0,int(h*0.010)), w, min(h,int(h*0.080)))
+    rows=((0.080,0.255),(0.265,0.470),(0.480,0.715))
     out=[]
-    for idx in range(count):
-        y0=max(0,int(top+idx*band)-25); y1=min(h,int(top+(idx+1)*band)+25)
-        crop=im.crop((0,y0,w,y1))
-        buf=io.BytesIO(); crop.save(buf,format="JPEG",quality=97)
-        out.append((f"{PurePosixPath(image[0]).stem}-elev-{idx+1}.jpg",buf.getvalue()))
+    head=im.crop(header)
+    for idx in range(min(count,3)):
+        y0=max(0,int(h*rows[idx][0])); y1=min(h,int(h*rows[idx][1]))
+        row=im.crop((0,y0,w,y1))
+        stitched=Image.new("RGB",(w,head.height+row.height),"white")
+        stitched.paste(head,(0,0)); stitched.paste(row,(0,head.height))
+        buf=io.BytesIO(); stitched.save(buf,format="JPEG",quality=97)
+        out.append((f"{PurePosixPath(image[0]).stem}-antet-elev-{idx+1}.jpg",buf.getvalue()))
     return out
 
 def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects,return_usage=False):
     prompt=("Analizează două fotografii ale aceleiași deschideri de catalog școlar românesc. "
-      f"Elevii de sus în jos sunt exact {json.dumps(student_names,ensure_ascii=False)}. "
+      f"Elevii de sus în jos sunt exact {json.dumps(student_names,ensure_ascii=False)}. "\n      "După cele două pagini complete urmează decupaje în ordinea: pagina stângă elev 1..N, apoi pagina dreaptă elev 1..N. Fiecare decupaj conține antetul disciplinelor lipit de caseta UNUI SINGUR elev; nu atribui niciodată scris din alt decupaj acelui elev. "
       f"Folosește pentru subject NUMAI una dintre denumirile exacte: {json.dumps(allowed_subjects,ensure_ascii=False)}. "
       f"Extrage NUMAI note și absențe cu data lizibilă în intervalul {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
       "Nu ghici și nu completa valori incerte. Răspunde STRICT JSON cu cheia records; fiecare record are "
