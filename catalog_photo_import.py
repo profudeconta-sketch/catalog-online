@@ -10,7 +10,7 @@ class PhotoImportError(RuntimeError): pass
 class ImportProposal:
     student_index:int; category:str; subject:str; kind:str; value:str; date:str
     motivated:bool=False; confidence:float=0.0; source_image:str=""
-    verifiable:bool=True; verification_reason:str=""
+    verifiable:bool=True; verification_reason:str=""\n    physical_label:str=""
 
 _ROMAN_MONTHS={"I":1,"II":2,"III":3,"IV":4,"V":5,"VI":6,"VII":7,"VIII":8,"IX":9,"X":10,"XI":11,"XII":12}
 
