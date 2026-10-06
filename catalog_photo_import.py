@@ -462,6 +462,17 @@ def deduplicate_proposals(items):
 def _lookup(cg,th):
     return {(cat.casefold(),name.casefold()):(cat,name,col) for cat,items in (("Cultură Generală",cg),("Module Tehnologice",th)) for name,col in items}
 
+def validate_proposal_batch(items):
+    """Blochează contradicțiile interne înainte de accesarea workbook-ului."""
+    seen={}
+    for p in items:
+        key=(p.student_index,p.category.casefold(),p.subject.casefold(),p.kind,p.date)
+        state=(p.value if p.kind=="grade" else "",p.motivated if p.kind=="absence" else False)
+        if key in seen and seen[key]!=state:
+            raise PhotoImportError("Lot contradictoriu: aceeași înregistrare fizică are valori/stări incompatibile.")
+        seen[key]=state
+    return True
+
 def compare_with_workbook(path,elevi,cg,th,resolve,items):
     wb=openpyxl.load_workbook(path,data_only=False); lookup=_lookup(cg,th); out=[]
     try:
