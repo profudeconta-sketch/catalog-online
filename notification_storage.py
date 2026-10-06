@@ -7,7 +7,8 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
-from document_storage import DOCUMENT_ROOT, DocumentConflictError, DocumentStorageError, load_registry, private_read, private_write\nfrom leave_pass_storage import load_leave_pass_registry
+from document_storage import DOCUMENT_ROOT, DocumentConflictError, DocumentStorageError, load_registry, private_read, private_write
+from leave_pass_storage import load_leave_pass_registry
 
 NOTIFICATION_REGISTRY_PATH=f"{DOCUMENT_ROOT}/registru_notificari.json"
 RECIPIENT_TEACHER="DIRIGINTE"
