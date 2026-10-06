@@ -47,6 +47,18 @@ class NelutuMascotTests(unittest.TestCase):
         self.assertNotIn("<script",html.lower())
 
 
+    def test_corner_keeps_brau_above_streamlit_bottom_bar(self):
+        html=render_nelutu_corner("idle")
+        self.assertIn("bottom:82px",html)
+        self.assertIn("width:112px;height:132px",html)
+        self.assertIn("width:102px;height:116px",html)
+        self.assertIn("bottom:70px",html)
+
+    def test_parent_portal_shows_ardelean_identity_in_assistant_control(self):
+        src=Path("app_parinti.py").read_text(encoding="utf-8")
+        identity="🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST"
+        self.assertGreaterEqual(src.count(identity),2)
+
     def test_parent_portal_invalidates_stale_nelutu_answer(self):
         with open("app_parinti.py", "r", encoding="utf-8") as handle:
             source = handle.read()
