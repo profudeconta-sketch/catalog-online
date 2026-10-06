@@ -407,7 +407,8 @@ def _canonical_category(subject, reported=""):
     return str(reported or "").strip()
 
 def _semantic_key(p):
-    return (p.student_index,p.category.casefold(),p.subject.casefold(),p.kind,p.date,
+    category=_canonical_category(p.subject,p.category)
+    return (p.student_index,category.casefold(),p.subject.casefold(),p.kind,p.date,
             p.value if p.kind=="grade" else "",p.motivated)
 
 def _parse_vision_records(body,student_names,start):
