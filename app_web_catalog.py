@@ -2714,7 +2714,13 @@ with tab4:
                     title="Situația școlară a fost actualizată",
                     message="Situația școlară din Catalog Online a fost verificată și actualizată. Accesați Portalul Părinților pentru detalii.",
                 )
-                if _created:\n                    _sent,_errors=_deliver_parent_sms(_event,e_info[3])\n                    if _sent:\n                        st.success(f"✅ Informarea a fost înregistrată și transmisă pe { _sent } număr(e) parental(e).")\n                    else:\n                        st.warning("Informarea a fost înregistrată în portal, dar SMS-ul nu a fost confirmat.")
+                if _created:
+                    _sent,_errors=_deliver_parent_sms(_event,e_info[3])
+                    if _sent:
+                        st.success(f"✅ Informarea a fost înregistrată și transmisă pe {_sent} număr(e) parental(e).")
+                    else:
+                        st.warning("Informarea a fost înregistrată în portal, dar SMS-ul nu a fost confirmat.")
+                else:\n                        st.warning("Informarea a fost înregistrată în portal, dar SMS-ul nu a fost confirmat.")
                 else:
                     st.info("ℹ️ Părintele a fost deja informat pentru această versiune a situației școlare.")
             wb.close()
