@@ -76,3 +76,15 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
 
 def visual_contract()->dict:
     return {"writes_data":False,"uses_network":False,"uses_javascript":False,"external_assets":False,"reusable_system_component":True}
+
+
+def render_nelutu_corner(state:str="idle") -> str:
+    """Mascota mică, persistentă vizual în colț; fără date, JS sau acțiuni."""
+    mascot=render_nelutu_mascot(state,"")
+    return f"""<div class="nelutu-corner">{mascot}</div>
+<style>
+.nelutu-corner .nelutu-wrap{{position:fixed;right:18px;bottom:18px;z-index:9999;width:92px;height:104px;padding:7px;display:block;border-radius:22px;background:rgba(255,250,240,.96);box-shadow:0 8px 26px rgba(55,38,20,.22);overflow:visible;pointer-events:none}}
+.nelutu-corner .nelutu-avatar{{width:82px;height:92px;display:block;margin:auto}}
+.nelutu-corner .nelutu-bubble{{display:none}}
+@media(max-width:640px){{.nelutu-corner .nelutu-wrap{{right:9px;bottom:9px;width:70px;height:80px;padding:5px}}.nelutu-corner .nelutu-avatar{{width:62px;height:70px}}}}
+</style>"""
