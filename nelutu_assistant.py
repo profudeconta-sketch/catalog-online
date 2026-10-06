@@ -30,6 +30,49 @@ def _has_any(q:str, words:Iterable[str])->bool:
 def _src(k:str):
     return LEGAL_SOURCES[k]
 
+PORTAL_KNOWLEDGE = {
+    "scoala": "Fila Școală conține comunicările și documentele trimise de școală. Un document nou rămâne neaccesat până la deschiderea lui din contul autentificat; WhatsApp este doar alertă și nu ține locul confirmării interne.",
+    "invoire": "Fila Învoire arată solicitarea zilei curente, starea ei și, dacă este aprobată, biletul de voie. Cererea în așteptare nu este aprobare; biletul de voie nu motivează automat absențele.",
+    "documente": "Fila Documente permite trimiterea și consultarea documentelor părinte→școală: dosar personal, scutiri medicale, dosar bursă și motivare absențe părinte.",
+    "dosar personal": "Dosarul personal permite selectarea tipului de document, încărcarea PDF/JPG/JPEG/PNG și transmiterea către diriginte.",
+    "scutiri medicale": "Zona Scutiri medicale este pentru documentele medicale transmise dirigintelui; documentul încărcat și transmiterea sunt operații distincte de simpla selectare a fișierului.",
+    "dosar bursa": "Dosarul de bursă este împărțit în Merit, Socială–venit, Socială–orfan, Socială–medicală, Mame minore și CES. Neluțu explică interfața, nu decide eligibilitatea.",
+    "motivare absente parinte": "Zona de motivare arată orele disponibile din plafon, persoana care transmite, elevul, adresa, numărul matricol, data absenței și numărul de ore. Previzualizarea PDF nu transmite cererea și nu consumă ore; transmiterea finală o înregistrează.",
+    "documente deja transmise": "Lista documentelor deja transmise permite consultarea și descărcarea documentului înregistrat și, dacă este configurat, deschiderea manuală a WhatsApp către diriginte.",
+    "note": "Situația școlară afișează note pe discipline/module și mediile calculate din datele disponibile. Neluțu poate explica valorile din contextul autorizat, dar nu le poate modifica.",
+    "absente": "Pentru fiecare disciplină/modul portalul afișează totalul absențelor și separă nemotivatele de motivate. O absență este afișată conform stării existente în catalog; Neluțu nu inventează motivul unei stări dacă acesta nu este disponibil în context.",
+    "medii": "Portalul calculează și afișează media culturii generale, media modulelor tehnologice și media generală din datele disponibile, plus poziția școlară calculată.",
+    "purtare": "Portalul afișează nota la purtare disponibilă/calculată conform logicii aplicației. Neluțu o explică, dar nu o modifică și nu substituie decizia școlii unde este necesară.",
+    "actualizeaza datele": "Butonul Actualizează Datele reîncarcă datele disponibile portalului; Neluțu nu îl apasă în locul părintelui.",
+    "whatsapp": "Butoanele WhatsApp deschid un mesaj pregătit pentru trimitere manuală. WhatsApp nu înlocuiește notificarea sau confirmarea internă din portal.",
+    "deschide documentul": "Butonul de deschidere a documentului școlii înregistrează accesarea conform fluxului portalului și permite apoi descărcarea documentului.",
+    "previzualizare pdf": "Previzualizarea PDF permite verificarea cererii înainte de transmitere; nu este depunere și nu consumă plafonul.",
+}
+
+def portal_topics()->tuple[str,...]:
+    return tuple(PORTAL_KNOWLEDGE)
+
+def _context_lookup(q:str, context:dict|None):
+    if not context:
+        return None
+    # Contextul este construit exclusiv din date deja autorizate pentru elevul autentificat.
+    nq=_norm(q)
+    for item in context.get("facts", ()):
+        keys=tuple(item.get("keywords", ()))
+        if keys and _has_any(nq, keys):
+            return str(item.get("answer") or "").strip() or None
+    return None
+
+def answer_with_context(question:str, context:dict|None=None)->NelutuAnswer:
+    q=_norm(question)
+    contextual=_context_lookup(q, context)
+    if contextual:
+        return NelutuAnswer("authorized_context", "No, aici pot să mă uit la ce-ți arată chiar portalul tău. 😄 " + contextual + " Eu îți explic ce-i înregistrat; nu schimb nimic.")
+    for topic, explanation in PORTAL_KNOWLEDGE.items():
+        if _has_any(q, (topic,)):
+            return NelutuAnswer("portal_component", "No binie mă. 😄 " + explanation + " Dacă-mi spui ce anume vezi acolo, îl desfacem fir cu fir; io am vreme, rotițele n-au autobuz de prins. 😂")
+    return answer(question)
+
 def answer(question:str)->NelutuAnswer:
     q=_norm(question)
     if not q:
