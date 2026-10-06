@@ -280,19 +280,20 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertIn("-d6-grade.jpg",math[1]["name"])
         self.assertLess(math[0]["data"].__len__(),10000)
 
-    def test_fixed_cell_reader_ignores_identity_fields_from_model(self):
+    def test_fixed_cell_reader_uses_only_local_cell_id_for_identity(self):
         import catalog_photo_import as cpi
         from PIL import Image
         import io, json
         im=Image.new("RGB",(1500,2000),"white"); buf=io.BytesIO(); im.save(buf,format="JPEG")
         one={"student_index":0,"subject":"Matematică","kind":"absence","source_image":"left","name":"cell.jpg","data":buf.getvalue()}
-        body={"output_text":json.dumps({"records":[{"student_index":2,"subject":"Chimie","kind":"grade","value":"","date":"30.09","motivated":False,"legible":True,"confidence":.9}]})}
+        body={"output_text":json.dumps({"records":[{"cell_id":"C001","student_index":2,"subject":"Chimie","kind":"grade","value":"","date":"30.09","motivated":False,"legible":True,"confidence":.9}]})}
         usage={"input_tokens":1,"output_tokens":1,"total_tokens":2,"model":"gpt-5.4-mini"}
         with patch.object(cpi,"_fixed_cell_crops",side_effect=[[one],[]]), patch.object(cpi,"_vision_request",return_value=(body,usage)):
             rows,_=analyze_pair_fixed_cells(("8.jpeg",buf.getvalue()),("9.jpeg",buf.getvalue()),["Elev"],dt.date(2026,9,30),dt.date(2026,10,2),return_usage=True)
         self.assertEqual(len(rows),1)
         self.assertEqual((rows[0].student_index,rows[0].subject,rows[0].kind),(0,"Matematică","absence"))
         self.assertFalse(rows[0].verifiable)
+
 
     def test_candidate_cells_follow_verified_physical_template(self):
         import catalog_photo_import as cpi
