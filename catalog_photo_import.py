@@ -281,6 +281,16 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
     return out
 
 
+def map_physical_label_to_online(label, category, allowed_subjects):
+    """Mapare conservatoare: eticheta fizică trebuie să coincidă textual cu o denumire online.
+    Nu folosim poziția/ordinea coloanei pentru a inventa o corespondență.
+    """
+    raw=re.sub(r"\s+"," ",str(label or "").strip()).casefold()
+    if not raw:
+        return None
+    matches=[name for name in allowed_subjects if re.sub(r"\s+"," ",str(name).strip()).casefold()==raw]
+    return matches[0] if len(matches)==1 else None
+
 def _semantic_key(p):
     return (p.student_index,p.category.casefold(),p.subject.casefold(),p.kind,p.date,
             p.value if p.kind=="grade" else "",p.motivated)
