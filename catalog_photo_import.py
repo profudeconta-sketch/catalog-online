@@ -323,7 +323,12 @@ def _student_band_crops(image, count):
     for idx in range(count):
         y0=max(0,int(top+idx*band)-25); y1=min(h,int(top+(idx+1)*band)+25)
         crop=im.crop((0,y0,w,y1))
-        buf=io.BytesIO(); crop.save(buf,format="JPEG",quality=95)
+        # Modelul local mic beneficiază de caractere mai mari; mărirea este pur geometrică,
+        # fără sharpening/generare și fără modificarea conținutului fotografiei.
+        if crop.width < 2600:
+            scale=2600/crop.width
+            crop=crop.resize((2600,max(1,int(crop.height*scale))),Image.Resampling.LANCZOS)
+        buf=io.BytesIO(); crop.save(buf,format="JPEG",quality=97)
         out.append((f"{PurePosixPath(image[0]).stem}-elev-{idx+1}.jpg",buf.getvalue()))
     return out
 
