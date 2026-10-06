@@ -231,9 +231,9 @@ def _student_band_crops(image, count):
         out.append((f"{PurePosixPath(image[0]).stem}-antet-elev-{idx+1}.jpg",buf.getvalue()))
     return out
 
-def _discipline_cell_crops(image, student_count, columns=7):
-    """Segmentează fiecare jumătate de catalog în coloane fizice fără a atribui discipline online.
-    Fiecare decupaj conține antetul aceleiași coloane și caseta unui singur elev.
+def _discipline_cell_crops(image, student_count, disciplines=10):
+    """Decupează o disciplină fizică întreagă: numele disciplinei + Absențe/Note + un singur elev.
+    Poziția este doar identitate geometrică; nu este mapată implicit la disciplina online.
     """
     try:
         from PIL import Image
@@ -241,21 +241,22 @@ def _discipline_cell_crops(image, student_count, columns=7):
         return []
     im=Image.open(io.BytesIO(image[1])).convert("RGB")
     w,h=im.size
-    rows=((0.080,0.255),(0.265,0.470),(0.480,0.715))
+    # Geometrie măsurată pe formularul fotografiat: zona disciplinelor începe după blocul ELEVII.
+    # Antetul include numele disciplinei și rândul Absențe/Note.
+    x0=int(w*0.385); x1=int(w*0.955)
+    header_y0=int(h*0.025); header_y1=int(h*0.105)
+    rows=((0.105,0.315),(0.365,0.555),(0.610,0.805))
     out=[]
-    # Nu atribuim semantică poziției. Marginile exterioare sunt eliminate, apoi coloanele
-    # sunt doar identificatori geometrici pentru consens și diagnostic.
-    x0=int(w*0.035); x1=int(w*0.985)
     for student in range(min(student_count,3)):
         y0=int(h*rows[student][0]); y1=int(h*rows[student][1])
-        for col in range(columns):
-            cx0=x0+(x1-x0)*col//columns; cx1=x0+(x1-x0)*(col+1)//columns
-            head=im.crop((cx0,int(h*0.010),cx1,int(h*0.080)))
+        for col in range(disciplines):
+            cx0=x0+(x1-x0)*col//disciplines; cx1=x0+(x1-x0)*(col+1)//disciplines
+            head=im.crop((cx0,header_y0,cx1,header_y1))
             cell=im.crop((cx0,y0,cx1,y1))
             stitched=Image.new("RGB",(cx1-cx0,head.height+cell.height),"white")
             stitched.paste(head,(0,0)); stitched.paste(cell,(0,head.height))
             buf=io.BytesIO(); stitched.save(buf,format="JPEG",quality=95)
-            out.append((f"{PurePosixPath(image[0]).stem}-e{student+1}-c{col+1}.jpg",buf.getvalue()))
+            out.append((f"{PurePosixPath(image[0]).stem}-e{student+1}-d{col+1}.jpg",buf.getvalue()))
     return out
 
 def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects,return_usage=False):
