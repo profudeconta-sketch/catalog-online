@@ -397,6 +397,7 @@ class PhotoImportSafetyTests(unittest.TestCase):
                        source.index("# --- GENERATOARE PDF ---")]
         self.assertIn("analyze_pair_with_vision(", block)
         self.assertIn("return_usage=True", block)
+        self.assertIn("recover_uncertain_proposals(", block)
         self.assertNotIn("OPENAI_API_KEY", block)
         self.assertIn("Transcriere verificată din fotografia afișată", block)
         self.assertIn("compare_with_workbook(", block)
