@@ -144,7 +144,7 @@ def reconcile_parent_inbox(student_key):
     for item in docs.get("documents",[]):
         if item.get("direction")!="SCOALA_PARINTE" or item.get("student_key")!=str(student_key):
             continue
-        _,was_created=ensure_notification(
+        event,was_created=ensure_notification(
             recipient=RECIPIENT_PARENT,event_type="DOCUMENT_SCOALA",source_type="DOCUMENT",
             source_id=item.get("id"),student_key=item.get("student_key"),
             title="Comunicare nouă din partea dirigintelui",
@@ -152,6 +152,8 @@ def reconcile_parent_inbox(student_key):
             created_at_utc=item.get("created_at_utc"),
         )
         created+=int(was_created)
+        if item.get("first_accessed_at_utc") and not event.get("read_at_utc"):
+            mark_notification_read(event["id"],RECIPIENT_PARENT)
     return created
 
 
