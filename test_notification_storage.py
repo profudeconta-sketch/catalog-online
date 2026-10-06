@@ -62,4 +62,14 @@ class NotificationStorageTests(unittest.TestCase):
             _,changed2=ns.mark_parent_source_read("S1","s1")
             self.assertFalse(changed2)
 
+    def test_academic_update_notifies_once_per_verified_version(self):
+        with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write):
+            args=dict(recipient=ns.RECIPIENT_PARENT,event_type="SITUATIE_SCOLARA_ACTUALIZATA",
+                      source_type="CATALOG",source_id="S1",student_key="S1")
+            _,first=ns.ensure_notification(**args,source_revision="hash-a")
+            _,duplicate=ns.ensure_notification(**args,source_revision="hash-a")
+            _,changed=ns.ensure_notification(**args,source_revision="hash-b")
+            self.assertTrue(first); self.assertFalse(duplicate); self.assertTrue(changed)
+            self.assertEqual(len(self.state["events"]),2)
+
 if __name__=="__main__": unittest.main()
