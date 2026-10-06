@@ -21,8 +21,11 @@ class PhoneDeliveryTests(unittest.TestCase):
             req=call.call_args.args[0]
             self.assertTrue(req.full_url.startswith("https://api.twilio.com/"))
             self.assertIn(b"To=%2B40742123456",req.data)
-    def test_missing_config_fails_closed(self):
-        with patch.object(pd,"_secret",return_value=""):
-            with self.assertRaises(pd.PhoneDeliveryError): pd.send_sms("0742123456","Mesaj")
+    def test_missing_config_fails_closed_without_network_or_cost(self):
+        with patch.object(pd,"_secret",return_value=""), \
+             patch.object(pd.urllib.request,"urlopen") as network:
+            with self.assertRaises(pd.PhoneDeliveryError):
+                pd.send_sms("0742123456","Mesaj")
+            network.assert_not_called()
 
 if __name__=="__main__": unittest.main()
