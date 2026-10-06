@@ -366,8 +366,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
                     continue
                 if kind=="grade" and (not val.isdigit() or not 1<=int(val)<=10): continue
                 legible=bool(r.get("legible",False))
-                out.append(ImportProposal(idx,str(r["category"]).strip(),str(r["subject"]).strip(),kind,val,date,
-                    bool(r.get("motivated",False)),conf,str(r.get("source_image","")),legible and conf>=0.90,""))
+                physical=str(r.get("physical_label") or r.get("subject") or "").strip()\n                mapped=map_physical_label_to_online(physical,str(r.get("category","")).strip(),allowed_subjects)\n                reason="" if mapped else "Rubrica fizică nu are mapare textuală unică spre catalogul electronic."\n                out.append(ImportProposal(idx,str(r.get("category","")).strip(),mapped or "",kind,val,date,\n                    bool(r.get("motivated",False)),conf,str(r.get("source_image","")),legible and bool(mapped),reason,physical))
             except Exception:
                 continue
         return out
