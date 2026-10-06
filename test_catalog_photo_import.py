@@ -33,6 +33,14 @@ class PhotoImportSafetyTests(unittest.TestCase):
         import catalog_photo_import as cpi
         self.assertAlmostEqual(cpi.vision_usage_cost_usd({"input_tokens":1_000_000,"output_tokens":1_000_000}),5.25)
 
+    def test_explicit_physical_aliases_map_without_column_order(self):
+        allowed=["Limba engleză (L1)","Educație fizică","Informatică / TIC","M1: Bazele contabilității"]
+        self.assertEqual(map_physical_label_to_online("Limba 1) Engleză","Cultură Generală",allowed),"Limba engleză (L1)")
+        self.assertEqual(map_physical_label_to_online("Educație fizică și sport","Cultură Generală",allowed),"Educație fizică")
+        self.assertEqual(map_physical_label_to_online("Informatică","Cultură Generală",allowed),"Informatică / TIC")
+        self.assertEqual(map_physical_label_to_online("M1: Bazele contabilității","Module Tehnologice",allowed),"M1: Bazele contabilității")
+        self.assertIsNone(map_physical_label_to_online("Absențe","Cultură Generală",allowed))
+
     def test_physical_header_mapping_ignores_only_quote_noise(self):
         allowed=["Limba Engleză","Matematică"]
         self.assertEqual(map_physical_label_to_online('Limba „ Engleză',"Cultură Generală",allowed),"Limba Engleză")
