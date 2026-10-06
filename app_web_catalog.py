@@ -2657,7 +2657,8 @@ with tab4:
             e_info = ELEVI[elev_idx_v]
             st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[3]}) | Cod PIN Părinți: `{e_info[4] if len(e_info)>4 else '1234'}`")
             
-            _academic_payload=[]\n            for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
+            _academic_payload=[]
+            for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
                 st.markdown(f"#### {cat_title}")
                 ws = wb[sheet_n]
                 s_row = resolve_student_row(wb, ELEVI[elev_idx_v])
@@ -2695,7 +2696,8 @@ with tab4:
                         "Absențe Detaliate (Total / Nem / Mot)": abs_str_formatted,
                         "Medie": media_str
                     })
-                st.dataframe(rows_data, use_container_width=True, hide_index=True)\n                _academic_payload.extend(rows_data)
+                st.dataframe(rows_data, use_container_width=True, hide_index=True)
+                _academic_payload.extend(rows_data)
             _academic_fingerprint=hashlib.sha256(
                 json.dumps(_academic_payload,ensure_ascii=False,sort_keys=True).encode("utf-8")
             ).hexdigest()
