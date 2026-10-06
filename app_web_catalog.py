@@ -1844,6 +1844,28 @@ with tab_photo:
                 st.caption(f"Dreapta — {right[0]}")
                 st.image(right[1], width=int(420 * zoom / 100))
 
+            st.markdown("#### Test controlat GPT — o singură pereche, fără scriere")
+            st.caption("Acest test face un singur apel de analiză pentru perechea selectată. Rezultatele nu sunt adăugate automat în lista de import și nu pot modifica Excelul.")
+            if st.button("🧪 Analizează numai perechea selectată cu GPT", key="photo_api_single_pair_test"):
+                names = [ELEVI[i][1] for i in range(pair_no*3, min(pair_no*3+3, len(ELEVI)))]
+                allowed = [name for name, _ in DISCIPLINE_CG] + [name for name, _ in MODULE_TH]
+                with st.spinner("Analizez perechea selectată..."):
+                    api_rows, api_usage = analyze_pair_with_vision(left, right, names, import_start, import_end, allowed, return_usage=True)
+                st.session_state["photo_api_test_results"] = (pair_no, api_rows, api_usage)
+            api_test = st.session_state.get("photo_api_test_results")
+            if api_test and api_test[0] == pair_no:
+                _, api_rows, api_usage = api_test
+                st.info(f"Consum raportat de API: {api_usage.get('input_tokens',0)} tokeni input + {api_usage.get('output_tokens',0)} tokeni output = {api_usage.get('total_tokens',0)} total. Model: {api_usage.get('model','—')}.")
+                if api_rows:
+                    for p in api_rows:
+                        who = names[p.student_index] if 0 <= p.student_index < len(names) else f"elev {p.student_index+1}"
+                        what = f"nota {p.value}" if p.kind == "grade" else ("absență motivată" if p.motivated else "absență")
+                        gate = "VERIFICABILĂ" if p.verifiable else "NECESITĂ VERIFICARE"
+                        st.write(f"{gate} — {who} — {p.subject} — {what} — {p.date} — încredere {p.confidence:.0%}")
+                else:
+                    st.warning("Modelul nu a produs nicio propunere validă pentru intervalul selectat.")
+                st.caption("Rezultatul acestui test este izolat: nu intră în lista de verificare și nu poate ajunge la butonul de scriere.")
+
             st.markdown("#### Transcriere verificată din fotografia afișată")
             start_idx = pair_no * 3
             student_indices = list(range(start_idx, min(start_idx + 3, len(ELEVI))))
