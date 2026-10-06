@@ -1,5 +1,5 @@
 import unittest
-from nelutu_mascot import render_nelutu_corner, render_nelutu_corner_nudge, render_nelutu_mascot, visual_contract
+from nelutu_mascot import render_nelutu_corner, render_nelutu_corner_nudge, render_nelutu_greeting, render_nelutu_mascot, visual_contract
 
 class NelutuMascotTests(unittest.TestCase):
     def test_visual_contract_is_safe(self):
@@ -57,6 +57,13 @@ class NelutuMascotTests(unittest.TestCase):
         self.assertNotIn("<script",html.lower())
         self.assertNotIn("http://",html.lower())
         self.assertNotIn("https://",html.lower())
+
+    def test_small_greeting_is_local_and_temporary(self):
+        html=render_nelutu_greeting()
+        self.assertIn("No, servus! Io-s Neluțu",html)
+        self.assertIn("te-ajut unde trăbă",html)
+        self.assertIn("animation:nelutu-greeting 7s",html)
+        self.assertNotIn("<script",html.lower())
 
     def test_no_external_or_script_dependencies(self):
         html=render_nelutu_mascot()
