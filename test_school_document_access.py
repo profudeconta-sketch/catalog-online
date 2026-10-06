@@ -116,6 +116,26 @@ class SchoolDocumentAccessTests(unittest.TestCase):
         self.assertEqual(len(self.files),1)
         self.assertEqual(confirmations[0]["source_document_id"],self.source_id)
 
+    def test_access_is_rejected_for_parent_to_school_document(self):
+        self.registry["documents"][0]["direction"]="PARINTE_SCOALA"
+        with self.assertRaises(ds.DocumentStorageError):
+            self._run_access()
+        self.assertEqual(len(self.registry["documents"]),1)
+        self.assertIsNone(self.registry["documents"][0]["first_accessed_at_utc"])
+        self.assertEqual(self.files,{})
+
+    def test_accessed_source_without_confirmation_fails_closed(self):
+        self.registry["documents"][0]["status"]="CITIT"
+        self.registry["documents"][0]["first_accessed_at_utc"]="2026-10-06T10:05:00+00:00"
+        with self.assertRaises(ds.DocumentConflictError):
+            self._run_access()
+        self.assertEqual(len(self.registry["documents"]),1)
+        self.assertEqual(
+            self.registry["documents"][0]["first_accessed_at_utc"],
+            "2026-10-06T10:05:00+00:00",
+        )
+        self.assertEqual(self.files,{})
+
     def test_access_is_rejected_for_another_authenticated_student(self):
         with self.assertRaises(ds.DocumentStorageError):
             self._run_access("RM-OTHER")
