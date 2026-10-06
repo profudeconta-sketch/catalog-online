@@ -7,8 +7,9 @@ import urllib.parse
 import json
 import base64
 
-from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentStorageError, build_document_record, store_new_document, parent_excuse_usage, validate_parent_excuse_hours, register_transmitted_parent_excuse, find_parent_excuse_document, list_student_documents, read_registered_document, register_first_school_document_access
+from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentStorageError, build_document_record, store_new_document, parent_excuse_usage, validate_parent_excuse_hours, register_transmitted_parent_excuse, find_parent_excuse_document, list_student_documents, normalize_student_key, read_registered_document, register_first_school_document_access
 from parent_excuse_pdf import generate_parent_excuse_pdf
+from notification_storage import RECIPIENT_PARENT, list_notifications, mark_parent_source_read, reconcile_parent_inbox
 from leave_pass_storage import (
     REASONS as LEAVE_PASS_REASONS,
     STATUS_APPROVED as LEAVE_STATUS_APPROVED,
@@ -433,6 +434,18 @@ else:
 
     st.divider()
 
+    try:
+        _parent_student_key=normalize_student_key(student_found[3])
+        reconcile_parent_inbox(_parent_student_key)
+        _parent_notifications=list_notifications(
+            recipient=RECIPIENT_PARENT,student_key=_parent_student_key
+        )
+        _parent_unread=[n for n in _parent_notifications if not n.get("read_at_utc")]
+        if _parent_unread:
+            st.info(f"🔔 Aveți {len(_parent_unread)} comunicare/comunicări noi de la școală.")
+    except DocumentStorageError as _notification_error:
+        st.warning(f"Notificările nu au putut fi sincronizate: {_notification_error}")
+
     parent_tab_school, parent_tab_leave, parent_tab_documents = st.tabs(
         ["🔔 Școală", "🚪 Învoire", "📁 Documente"]
     )
@@ -530,6 +543,7 @@ else:
                                 document_id=selected_school_document_id,
                             )
                             access_was_new = bool(access_result.get("created"))
+                            mark_parent_source_read(_parent_student_key, selected_school_document_id)
                         verified_meta, verified_content = read_registered_document(
                             student_found[3],
                             selected_school_document_id,
