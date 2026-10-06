@@ -75,6 +75,15 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
 <div class="nelutu-bubble"><strong>Neluțu</strong>{msg}</div></div>"""
 
 
+def render_nelutu_greeting() -> str:
+    """Salut vizual discret la intrare; apare o singură dată per randare și dispare."""
+    return """<style>
+.nelutu-corner .nelutu-wrap::before{content:"No, servus! Io-s Neluțu. Dacă ai nevoie, îs p-aici și te-ajut unde trăbă. 🤠";position:absolute;right:86px;bottom:50px;width:230px;padding:10px 12px;border:1px solid #dfc28d;border-radius:16px;background:#fffaf0;color:#2e2925;font-size:.88rem;line-height:1.3;box-shadow:0 6px 20px rgba(55,38,20,.16);opacity:0;visibility:hidden;animation:nelutu-greeting 7s ease 1 forwards}
+@keyframes nelutu-greeting{0%{opacity:0;visibility:hidden;transform:translateY(5px)}10%,78%{opacity:1;visibility:visible;transform:translateY(0)}100%{opacity:0;visibility:hidden}}
+@media(max-width:640px){.nelutu-corner .nelutu-wrap::before{right:64px;bottom:38px;width:205px;font-size:.78rem}}
+@media(prefers-reduced-motion:reduce){.nelutu-corner .nelutu-wrap::before{animation:none;display:none}}
+</style>"""
+
 def render_nelutu_corner_nudge() -> str:
     """Îndemn vizual local după inactivitate; fără JS, rețea, date sau acțiuni."""
     return """<style>
