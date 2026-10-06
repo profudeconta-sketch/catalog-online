@@ -370,7 +370,14 @@ def _vision_request(prompt,left,right,model=None,student_count=3,return_usage=Fa
         }
     return body
 
-def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subjects,items,return_usage=False):
+GPT54_MINI_INPUT_USD_PER_M=0.75
+GPT54_MINI_OUTPUT_USD_PER_M=4.50
+
+def vision_usage_cost_usd(usage):
+    return (int(usage.get("input_tokens",0) or 0)*GPT54_MINI_INPUT_USD_PER_M +
+            int(usage.get("output_tokens",0) or 0)*GPT54_MINI_OUTPUT_USD_PER_M)/1_000_000
+
+def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subjects,items,return_usage=False,max_cost_usd=None,prior_usage=None):
     """Până la trei citiri independente. Două citiri lizibile și semantic identice sunt
     necesare pentru promovarea automată; a treia citire rulează numai pentru cazurile
     fără consens după primele două.
@@ -421,9 +428,15 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
         return out
 
     usage_totals={"input_tokens":0,"output_tokens":0,"total_tokens":0,"model":os.environ.get("OPENAI_VISION_MODEL","gpt-5.4-mini")}
+    prior_usage=prior_usage or {}
+    def budget_exhausted():
+        if max_cost_usd is None: return False
+        combined={"input_tokens":int(prior_usage.get("input_tokens",0))+usage_totals["input_tokens"],
+                  "output_tokens":int(prior_usage.get("output_tokens",0))+usage_totals["output_tokens"]}
+        return vision_usage_cost_usd(combined) >= float(max_cost_usd)
     targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
               "kind":p.kind,"source_image":p.source_image} for p in items if not p.verifiable]
-    second=read_pass(2,targets,complete=True)
+    second=[] if budget_exhausted() else read_pass(2,targets,complete=True)
     passes=[items,second]
 
     def consensus(pass_lists):
