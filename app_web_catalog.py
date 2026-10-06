@@ -1845,7 +1845,7 @@ with tab_photo:
                 st.image(right[1], width=int(420 * zoom / 100))
 
             st.markdown("#### Test controlat GPT — o singură pereche, fără scriere")
-            st.caption("Versiune benchmark: photo-ai-measured-v7")
+            st.caption("Versiune benchmark: photo-ai-verified-v8")
             st.caption("Acest benchmark pornește de la o citire AI și folosește citiri independente pentru consens. Rezultatele rămân izolate: nu sunt adăugate automat în lista de import și nu pot modifica Excelul.")
             if st.button("🧪 Analizează numai perechea selectată cu GPT", key="photo_api_single_pair_test"):
                 names = [ELEVI[i][1] for i in range(pair_no*3, min(pair_no*3+3, len(ELEVI)))]
