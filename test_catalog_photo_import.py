@@ -230,10 +230,10 @@ class PhotoImportSafetyTests(unittest.TestCase):
         from PIL import Image
         import io
         im=Image.new("RGB",(1500,2000),"white"); buf=io.BytesIO(); im.save(buf,format="JPEG")
-        crops=_discipline_cell_crops(("8.jpeg",buf.getvalue()),3,7)
-        self.assertEqual(len(crops),21)
-        self.assertEqual(crops[0][0],"8-e1-c1.jpg")
-        self.assertEqual(crops[-1][0],"8-e3-c7.jpg")
+        crops=_discipline_cell_crops(("8.jpeg",buf.getvalue()),3,10)
+        self.assertEqual(len(crops),30)
+        self.assertEqual(crops[0][0],"8-e1-d1.jpg")
+        self.assertEqual(crops[-1][0],"8-e3-d10.jpg")
         sample=Image.open(io.BytesIO(crops[0][1]))
         self.assertLess(sample.width,300)
         self.assertLess(sample.height,600)
