@@ -1852,12 +1852,13 @@ with tab_photo:
                 allowed = [name for name, _ in DISCIPLINE_CG] + [name for name, _ in MODULE_TH]
                 with st.spinner("Analizez perechea selectată și verific independent rezultatele..."):
                     first_rows, api_usage = analyze_pair_with_vision(left, right, names, import_start, import_end, allowed, return_usage=True)
-                    api_rows = recover_uncertain_proposals(left, right, names, import_start, import_end, allowed, first_rows)
+                    api_rows, verify_usage = recover_uncertain_proposals(left, right, names, import_start, import_end, allowed, first_rows, return_usage=True)
+                    api_usage = {"input_tokens": api_usage.get("input_tokens",0) + verify_usage.get("input_tokens",0), "output_tokens": api_usage.get("output_tokens",0) + verify_usage.get("output_tokens",0), "total_tokens": api_usage.get("total_tokens",0) + verify_usage.get("total_tokens",0), "model": api_usage.get("model","gpt-5.4-mini")}
                 st.session_state["photo_api_test_results"] = (pair_no, api_rows, api_usage)
             api_test = st.session_state.get("photo_api_test_results")
             if api_test and api_test[0] == pair_no:
                 _, api_rows, api_usage = api_test
-                st.info(f"Consum raportat pentru prima citire: {api_usage.get('input_tokens',0)} tokeni input + {api_usage.get('output_tokens',0)} tokeni output = {api_usage.get('total_tokens',0)} total. Citirile independente suplimentare nu sunt încă incluse în acest contor. Model: {api_usage.get('model','—')}.")
+                st.info(f"Consum total raportat de API pentru toate citirile acestei perechi: {api_usage.get('input_tokens',0)} tokeni input + {api_usage.get('output_tokens',0)} tokeni output = {api_usage.get('total_tokens',0)} total. Model: {api_usage.get('model','—')}.")
                 if api_rows:
                     for p in api_rows:
                         who = names[p.student_index] if 0 <= p.student_index < len(names) else f"elev {p.student_index+1}"
