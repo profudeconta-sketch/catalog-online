@@ -1,3 +1,4 @@
+from pathlib import Path
 import unittest
 from nelutu_mascot import render_nelutu_corner, render_nelutu_corner_nudge, render_nelutu_mascot, visual_contract
 
@@ -90,7 +91,7 @@ class NelutuMascotTests(unittest.TestCase):
         html=render_nelutu_corner("idle")
         self.assertIn("position:fixed",html)
         self.assertIn("right:18px",html)
-        self.assertIn("bottom:18px",html)
+        self.assertIn("bottom:82px",html)
         self.assertIn("pointer-events:none",html)
         self.assertIn("width:82px",html)
         self.assertIn("nelutu-bubble{display:none}",html)
