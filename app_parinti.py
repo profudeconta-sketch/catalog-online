@@ -10,7 +10,7 @@ import base64
 
 from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentStorageError, build_document_record, store_new_document, parent_excuse_usage, validate_parent_excuse_hours, register_transmitted_parent_excuse, find_parent_excuse_document, list_student_documents, normalize_student_key, read_registered_document, register_first_school_document_access
 from parent_excuse_pdf import generate_parent_excuse_pdf
-from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_parent_source_read, reconcile_parent_inbox, record_delivery
+from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_parent_source_read, reconcile_parent_inbox, delivery_needs_retry, record_delivery
 from phone_delivery import PhoneDeliveryError, send_sms, teacher_phone
 from leave_pass_storage import (
     REASONS as LEAVE_PASS_REASONS,
@@ -29,8 +29,10 @@ def _notify_teacher_phone(event):
     if not phone:
         return False,"Serviciul SMS pentru diriginte nu este configurat."
     try:
-        result=send_sms(phone,event.get("message") or "Catalog Online: aveți o solicitare nouă de la un părinte.")
         key=hashlib.sha256(phone.encode("utf-8")).hexdigest()[:16]
+        if not delivery_needs_retry(event["id"],RECIPIENT_TEACHER,key):
+            return True,None
+        result=send_sms(phone,event.get("message") or "Catalog Online: aveți o solicitare nouă de la un părinte.")
         record_delivery(event["id"],RECIPIENT_TEACHER,key,result.get("status"),result.get("message_sid"))
         return True,None
     except (PhoneDeliveryError,DocumentStorageError,ValueError) as ex:
