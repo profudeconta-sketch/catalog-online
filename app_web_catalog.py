@@ -46,7 +46,7 @@ from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
     PhotoImportError, ImportProposal, safe_zip_images, pair_catalog_images,
     compare_with_workbook, apply_confirmed_import, analyze_pair_with_vision,
-    recover_uncertain_proposals, vision_usage_cost_usd,
+    recover_uncertain_proposals, vision_usage_cost_usd, analyze_pair_fixed_cells,
 
 )
 
@@ -1845,16 +1845,14 @@ with tab_photo:
                 st.image(right[1], width=int(420 * zoom / 100))
 
             st.markdown("#### Test controlat GPT — o singură pereche, fără scriere")
-            st.caption("Versiune benchmark: photo-ai-consensus-v9")
-            st.caption("Acest benchmark pornește de la o citire AI și folosește citiri independente pentru consens. Rezultatele rămân izolate: nu sunt adăugate automat în lista de import și nu pot modifica Excelul.")
+            st.caption("Versiune benchmark: photo-ai-fixed-cells-v10")
+            st.caption("Ultimul benchmark: elevul, disciplina și subrubrica sunt fixate determinist de geometrie; GPT citește numai conținutul celulei. Rezultatele sunt izolate și nu pot modifica Excelul.")
             if st.button("🧪 Analizează numai perechea selectată cu GPT", key="photo_api_single_pair_test"):
                 names = [ELEVI[i][1] for i in range(pair_no*3, min(pair_no*3+3, len(ELEVI)))]
                 allowed = [name for name, _ in DISCIPLINE_CG] + [name for name, _ in MODULE_TH]
                 with st.spinner("Analizez perechea selectată și verific independent rezultatele..."):
-                    first_rows, api_usage = analyze_pair_with_vision(left, right, names, import_start, import_end, allowed, return_usage=True)
                     pair_budget = float(os.environ.get("OPENAI_PHOTO_PAIR_MAX_USD","0.10"))
-                    api_rows, verify_usage = recover_uncertain_proposals(left, right, names, import_start, import_end, allowed, first_rows, return_usage=True, max_cost_usd=pair_budget, prior_usage=api_usage)
-                    api_usage = {"input_tokens": api_usage.get("input_tokens",0) + verify_usage.get("input_tokens",0), "output_tokens": api_usage.get("output_tokens",0) + verify_usage.get("output_tokens",0), "total_tokens": api_usage.get("total_tokens",0) + verify_usage.get("total_tokens",0), "model": api_usage.get("model","gpt-5.4-mini")}
+                    api_rows, api_usage = analyze_pair_fixed_cells(left, right, names, import_start, import_end, return_usage=True, max_cost_usd=pair_budget)
                 st.session_state["photo_api_test_results"] = (pair_no, api_rows, api_usage)
             api_test = st.session_state.get("photo_api_test_results")
             if api_test and api_test[0] == pair_no:
@@ -1864,7 +1862,7 @@ with tab_photo:
                     for p in api_rows:
                         who = names[p.student_index] if 0 <= p.student_index < len(names) else f"elev {p.student_index+1}"
                         what = f"nota {p.value}" if p.kind == "grade" else ("absență motivată" if p.motivated else "absență")
-                        gate = "VERIFICABILĂ" if p.verifiable else "NECESITĂ VERIFICARE"
+                        gate = "CANDIDAT CELULĂ FIXĂ — IZOLAT"
                         rubric = p.physical_label or "—"
                         mapped = p.subject or "NEMAPATĂ — blocată la scriere"
                         st.write(f"{gate} — {who} — rubrică fizică: {rubric} — mapare online: {mapped} — {what} — {p.date} — {"motivată" if p.motivated else "nemotivată"} — încredere declarată {p.confidence:.0%}")
