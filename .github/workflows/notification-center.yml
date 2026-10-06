@@ -16,4 +16,4 @@ jobs:
       - name: Compile notification and apps
         run: python -m py_compile notification_storage.py phone_delivery.py app_web_catalog.py app_parinti.py
       - name: Notification unit tests
-        run: python -m unittest -v test_notification_storage.py test_phone_delivery.py test_notification_integration.py
+        run: python -m unittest -v test_notification_storage.py test_phone_delivery.py test_notification_integration.py test_school_document_access.py
