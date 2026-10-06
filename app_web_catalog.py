@@ -2722,7 +2722,6 @@ with tab4:
                         st.success(f"✅ Informarea a fost înregistrată și transmisă pe {_sent} număr(e) parental(e).")
                     else:
                         st.warning("Informarea a fost înregistrată în portal, dar SMS-ul nu a fost confirmat.")
-                else:\n                        st.warning("Informarea a fost înregistrată în portal, dar SMS-ul nu a fost confirmat.")
                 else:
                     st.info("ℹ️ Părintele a fost deja informat pentru această versiune a situației școlare.")
             wb.close()
