@@ -124,3 +124,18 @@ def reconcile_parent_inbox(student_key):
         )
         created+=int(was_created)
     return created
+
+
+def mark_parent_source_read(student_key, source_id):
+    registry,_=load_notification_registry()
+    matches=[
+        x for x in registry["events"]
+        if x.get("recipient")==RECIPIENT_PARENT
+        and x.get("student_key")==str(student_key)
+        and x.get("source_id")==str(source_id)
+    ]
+    if len(matches)>1:
+        raise DocumentConflictError("Există mai multe notificări pentru același document.")
+    if not matches:
+        return None,False
+    return mark_notification_read(matches[0]["id"],RECIPIENT_PARENT)
