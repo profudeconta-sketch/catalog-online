@@ -2231,6 +2231,7 @@ with tab1:
             st.error(f"Fișierul {selected_file} nu există!")
         else:
             backup = None
+            wb = None
             try:
                 data_nota = _normalize_manual_ddmm(data_nota)
                 backup = selected_file + ".manual.bak"
@@ -2274,6 +2275,9 @@ with tab1:
                     st.error("❌ Toate cele 10 sloturi de note sunt pline pentru această disciplină!")
                 wb.close()
             except Exception as ex:
+                if wb is not None:
+                    try: wb.close()
+                    except Exception: pass
                 _restore_manual_backup(selected_file, backup)
                 st.error(f"Eroare la salvare: {ex}")
 
@@ -2295,6 +2299,7 @@ with tab2:
             st.error(f"Fișierul {selected_file} nu există!")
         else:
             backup = None
+            wb = None
             try:
                 data_abs = _normalize_manual_ddmm(data_abs)
                 backup = selected_file + ".manual.bak"
