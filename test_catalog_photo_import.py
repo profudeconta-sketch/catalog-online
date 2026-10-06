@@ -218,6 +218,14 @@ class PhotoImportSafetyTests(unittest.TestCase):
             self.assertEqual(result[0][1],"NECESITĂ_VERIFICARE_UMANĂ")
         finally: os.remove(path)
 
+    def test_focused_vision_request_does_not_require_full_pages(self):
+        import catalog_photo_import as cpi
+        from unittest.mock import patch
+        fake={"output_text":"{\\\"records\\\":[]}","usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}
+        with patch.object(cpi,"_api_key",return_value="test"), patch.object(cpi,"_openai_json_request",return_value=fake):
+            body,usage=cpi._vision_request("x",("left.jpg",b"bad"),("right.jpg",b"bad"),images=[("cell.jpg",b"abc")],return_usage=True)
+        self.assertEqual(usage["total_tokens"],2)
+
     def test_physical_cell_crops_keep_student_and_column_identity(self):
         from PIL import Image
         import io
