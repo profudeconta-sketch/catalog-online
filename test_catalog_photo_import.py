@@ -391,12 +391,12 @@ class PhotoImportSafetyTests(unittest.TestCase):
         self.assertIn('st.session_state["photo_manual_proposals"] = []', source)
         self.assertIn('st.session_state.get("photo_manual_run_key") != run_key', source)
 
-    def test_streamlit_photo_workflow_is_ai_free_and_keeps_write_gates(self):
+    def test_streamlit_single_pair_ai_benchmark_keeps_write_gates(self):
         source = Path("app_web_catalog.py").read_text(encoding="utf-8")
         block = source[source.index("# --- IMPORT FOTO CATALOG FIZIC (FĂRĂ AI EXTERN) ---"):
                        source.index("# --- GENERATOARE PDF ---")]
-        self.assertNotIn("analyze_pair_with_vision(", block)
-        self.assertNotIn("recover_uncertain_proposals(", block)
+        self.assertIn("analyze_pair_with_vision(", block)
+        self.assertIn("return_usage=True", block)
         self.assertNotIn("OPENAI_API_KEY", block)
         self.assertIn("Transcriere verificată din fotografia afișată", block)
         self.assertIn("compare_with_workbook(", block)
