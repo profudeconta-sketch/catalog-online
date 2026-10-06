@@ -74,14 +74,14 @@ class NelutuMascotTests(unittest.TestCase):
 
     def test_idle_nudge_is_one_time_css_only(self):
         html=render_nelutu_corner_nudge()
-        self.assertIn("ce-ai găsit pe-acolo?",html)
-        self.assertIn("numa’ de curiozitate",html)
+        for phrase in ("ce-ai găsit pe-acolo?","numa’ de curiozitate","zâ drept te ajută Neluțu",
+                       "vin lupii șâ tăt ne rup","mai stăm aci mult sau merem",
+                       "mă pui să mă culc","huțură-mă-ncet"):
+            self.assertIn(phrase,html)
         self.assertIn("font-weight:800",html)
-        self.assertIn("nelutu-curious-first 20s",html)
-        self.assertIn("nelutu-curious-second 27s",html)
-        self.assertIn("No, te ajut? ori merem acasă",html)
-        self.assertIn("vin lupii și tăt ne rup",html)
-        self.assertIn(" 1 forwards",html)
+        self.assertIn("nelutu-curious-first 15s",html)
+        self.assertIn("nelutu-curious-loop 67s",html)
+        self.assertIn("prefers-reduced-motion:reduce",html)
         self.assertNotIn("<script",html.lower())
         self.assertNotIn("http://",html.lower())
         self.assertNotIn("https://",html.lower())
