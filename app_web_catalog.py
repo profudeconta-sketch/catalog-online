@@ -1845,7 +1845,7 @@ with tab_photo:
                 st.image(right[1], width=int(420 * zoom / 100))
 
             st.markdown("#### Test controlat GPT — o singură pereche, fără scriere")
-            st.caption("Versiune benchmark: photo-ai-geometry-v2")
+            st.caption("Versiune benchmark: photo-ai-rubric-v3")
             st.caption("Acest benchmark pornește de la o citire AI și folosește citiri independente pentru consens. Rezultatele rămân izolate: nu sunt adăugate automat în lista de import și nu pot modifica Excelul.")
             if st.button("🧪 Analizează numai perechea selectată cu GPT", key="photo_api_single_pair_test"):
                 names = [ELEVI[i][1] for i in range(pair_no*3, min(pair_no*3+3, len(ELEVI)))]
@@ -1864,7 +1864,7 @@ with tab_photo:
                         who = names[p.student_index] if 0 <= p.student_index < len(names) else f"elev {p.student_index+1}"
                         what = f"nota {p.value}" if p.kind == "grade" else ("absență motivată" if p.motivated else "absență")
                         gate = "VERIFICABILĂ" if p.verifiable else "NECESITĂ VERIFICARE"
-                        st.write(f"{gate} — {who} — {p.subject} — {what} — {p.date} — încredere {p.confidence:.0%}")
+                        rubric = p.physical_label or "—"\n                        mapped = p.subject or "NEMAPATĂ — blocată la scriere"\n                        st.write(f"{gate} — {who} — rubrică fizică: {rubric} — mapare online: {mapped} — {what} — {p.date} — încredere declarată {p.confidence:.0%}")\n                        if p.verification_reason:\n                            st.caption(p.verification_reason)
                 else:
                     st.warning("Modelul nu a produs nicio propunere validă pentru intervalul selectat.")
                 st.caption("Rezultatul acestui test este izolat: nu intră în lista de verificare și nu poate ajunge la butonul de scriere.")
