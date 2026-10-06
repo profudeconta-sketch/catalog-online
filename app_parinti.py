@@ -620,6 +620,19 @@ else:
             current_leave_request = get_leave_request_for_day(student_found[3])
             leave_status = current_leave_request.get("status") if current_leave_request else None
 
+            if current_leave_request:
+                _persistent_leave_event = {
+                    "message": "Catalog Online: a fost transmisă o cerere de învoire care poate fi verificată în Inbox-ul dirigintelui."
+                }
+                _persistent_leave_wa = _teacher_whatsapp_link(_persistent_leave_event)
+                if _persistent_leave_wa:
+                    st.link_button(
+                        "📲 Deschide WhatsApp către diriginte",
+                        _persistent_leave_wa,
+                        use_container_width=True,
+                        key=f"leave_existing_wa_{current_leave_request.get('id')}_{current_leave_request.get('revision', 1)}",
+                    )
+
             if leave_status == LEAVE_STATUS_APPROVED:
                 st.success("✅ ÎNVOIRE APROBATĂ")
                 st.markdown(
@@ -840,6 +853,62 @@ else:
                     st.error(f"❌ Documentul nu a fost transmis: {ex}")
                 except Exception:
                     st.error("❌ Eroare neașteptată. Documentul nu este considerat transmis.")
+
+        try:
+            _sent_parent_documents = list_student_documents(
+                student_found[3],
+                direction="PARINTE_SCOALA",
+            )
+            st.markdown("#### 📬 Documente deja transmise dirigintelui")
+            if not _sent_parent_documents:
+                st.info("Nu există încă documente transmise dirigintelui pentru elevul autentificat.")
+            else:
+                _sent_parent_id = st.selectbox(
+                    "Document transmis:",
+                    [item["id"] for item in _sent_parent_documents],
+                    format_func=lambda doc_id: next(
+                        (
+                            f"{type_labels.get(item.get('document_type'), item.get('document_type'))} — "
+                            f"{item.get('original_filename')} — {item.get('created_at_utc', '')[:10]}"
+                        )
+                        for item in _sent_parent_documents
+                        if item["id"] == doc_id
+                    ),
+                    key="parent_sent_document_select",
+                )
+                _sent_parent_record = next(
+                    item for item in _sent_parent_documents if item["id"] == _sent_parent_id
+                )
+                st.caption(
+                    f"Document transmis și înregistrat | An școlar: {_sent_parent_record.get('school_year')} | "
+                    f"Dimensiune: {_sent_parent_record.get('size_bytes', 0)} bytes"
+                )
+                try:
+                    _sent_meta, _sent_content = read_registered_document(
+                        student_found[3], _sent_parent_id
+                    )
+                    st.download_button(
+                        "📥 Descarcă documentul transmis",
+                        data=_sent_content,
+                        file_name=_sent_meta.get("original_filename", "document"),
+                        mime=_sent_meta.get("mime_type", "application/octet-stream"),
+                        use_container_width=True,
+                        key="parent_download_sent_document",
+                    )
+                except DocumentStorageError as ex:
+                    st.error(f"Documentul transmis nu poate fi deschis în siguranță: {ex}")
+                _persistent_doc_wa = _teacher_whatsapp_link(
+                    {"message": "Catalog Online: aveți un document transmis de un părinte/reprezentant legal. Accesați Inbox-ul dirigintelui."}
+                )
+                if _persistent_doc_wa:
+                    st.link_button(
+                        "📲 Deschide WhatsApp către diriginte",
+                        _persistent_doc_wa,
+                        use_container_width=True,
+                        key=f"parent_sent_document_wa_{_sent_parent_id}",
+                    )
+        except DocumentStorageError as ex:
+            st.error(f"Documentele deja transmise nu pot fi încărcate în siguranță: {ex}")
 
         tab_personal, tab_medical, tab_scholarship, tab_excuse = st.tabs(
             [
