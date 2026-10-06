@@ -273,7 +273,10 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
             legible=bool(r.get("legible",False))
             verifiable=False
             reason="Prima citire AI este doar candidat; procentul de încredere al modelului nu constituie dovadă. Este necesar consens independent sau verificare umană."
-            physical=str(r.get("physical_label") or r.get("subject") or "").strip()\n            mapped=map_physical_label_to_online(physical,str(r.get("category","")).strip(),allowed_subjects)\n            if not mapped: reason="Rubrica fizică a fost citită, dar nu are o mapare textuală unică spre catalogul electronic; necesită mapare explicită."\n            out.append(ImportProposal(idx,str(r.get("category","")).strip(),mapped or "",kind,val,date,bool(r.get("motivated",False)),conf,str(r.get("source_image","")),verifiable,reason,physical))
+            physical=str(r.get("physical_label") or r.get("subject") or "").strip()
+            mapped=map_physical_label_to_online(physical,str(r.get("category","")).strip(),allowed_subjects)
+            if not mapped: reason="Rubrica fizică a fost citită, dar nu are o mapare textuală unică spre catalogul electronic; necesită mapare explicită."
+            out.append(ImportProposal(idx,str(r.get("category","")).strip(),mapped or "",kind,val,date,bool(r.get("motivated",False)),conf,str(r.get("source_image","")),verifiable,reason,physical))
         except Exception: continue
     if return_usage:
         usage = body.get("usage", {}) if isinstance(body, dict) else {}
@@ -366,7 +369,11 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
                     continue
                 if kind=="grade" and (not val.isdigit() or not 1<=int(val)<=10): continue
                 legible=bool(r.get("legible",False))
-                physical=str(r.get("physical_label") or r.get("subject") or "").strip()\n                mapped=map_physical_label_to_online(physical,str(r.get("category","")).strip(),allowed_subjects)\n                reason="" if mapped else "Rubrica fizică nu are mapare textuală unică spre catalogul electronic."\n                out.append(ImportProposal(idx,str(r.get("category","")).strip(),mapped or "",kind,val,date,\n                    bool(r.get("motivated",False)),conf,str(r.get("source_image","")),legible and bool(mapped),reason,physical))
+                physical=str(r.get("physical_label") or r.get("subject") or "").strip()
+                mapped=map_physical_label_to_online(physical,str(r.get("category","")).strip(),allowed_subjects)
+                reason="" if mapped else "Rubrica fizică nu are mapare textuală unică spre catalogul electronic."
+                out.append(ImportProposal(idx,str(r.get("category","")).strip(),mapped or "",kind,val,date,
+                    bool(r.get("motivated",False)),conf,str(r.get("source_image","")),legible and bool(mapped),reason,physical))
             except Exception:
                 continue
         return out
