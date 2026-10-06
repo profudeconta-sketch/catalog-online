@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 import re
 from zoneinfo import ZoneInfo
 import os
@@ -43,7 +44,7 @@ from leave_pass_storage import (
     read_approved_leave_pass,
     refuse_leave_request,
 )
-from notification_storage import RECIPIENT_TEACHER, list_notifications, mark_notification_read, reconcile_teacher_inbox
+from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_notification_read, reconcile_teacher_inbox
 from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
     PhotoImportError, ImportProposal, safe_zip_images, pair_catalog_images,
@@ -2626,7 +2627,7 @@ with tab4:
             e_info = ELEVI[elev_idx_v]
             st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[3]}) | Cod PIN Părinți: `{e_info[4] if len(e_info)>4 else '1234'}`")
             
-            for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
+            _academic_payload=[]\n            for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
                 st.markdown(f"#### {cat_title}")
                 ws = wb[sheet_n]
                 s_row = resolve_student_row(wb, ELEVI[elev_idx_v])
@@ -2664,7 +2665,29 @@ with tab4:
                         "Absențe Detaliate (Total / Nem / Mot)": abs_str_formatted,
                         "Medie": media_str
                     })
-                st.dataframe(rows_data, use_container_width=True, hide_index=True)
+                st.dataframe(rows_data, use_container_width=True, hide_index=True)\n                _academic_payload.extend(rows_data)
+            _academic_fingerprint=hashlib.sha256(
+                json.dumps(_academic_payload,ensure_ascii=False,sort_keys=True).encode("utf-8")
+            ).hexdigest()
+            if st.button(
+                "📱 Informează părintele despre actualizarea situației școlare",
+                type="primary",use_container_width=True,
+                key=f"notify_parent_school_state_{e_info[0]}",
+            ):
+                _event,_created=ensure_notification(
+                    recipient=RECIPIENT_PARENT,
+                    event_type="SITUATIE_SCOLARA_ACTUALIZATA",
+                    source_type="CATALOG",
+                    source_id=normalize_student_key(e_info[3]),
+                    source_revision=_academic_fingerprint,
+                    student_key=normalize_student_key(e_info[3]),
+                    title="Situația școlară a fost actualizată",
+                    message="Situația școlară din Catalog Online a fost verificată și actualizată. Accesați Portalul Părinților pentru detalii.",
+                )
+                if _created:
+                    st.success("✅ Informarea părintelui a fost înregistrată pentru transmitere.")
+                else:
+                    st.info("ℹ️ Părintele a fost deja informat pentru această versiune a situației școlare.")
             wb.close()
         except Exception as ex:
             st.error(f"Eroare la citire fișă: {ex}")
