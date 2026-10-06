@@ -383,7 +383,9 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
           "Pentru NOTE, forma fizică poate fi NOTĂ/ZI, cu luna indicată contextual în ACEEAȘI rubrică. Data este lizibilă numai dacă luna este demonstrabilă vizual acolo; "
           "nu deduce luna din perioada cerută și nu o împrumuta din altă rubrică. "
           "legible=true numai dacă TOATE câmpurile sunt citibile direct din fotografie, fără inferență. Nu ghici.")
-        body, pass_usage=_vision_request(prompt,left,right,student_count=len(student_names),return_usage=True)
+        # Reverificarea primește celule fizice înguste: antetul coloanei + un singur elev.
+        focused=_discipline_cell_crops(left,len(student_names))+_discipline_cell_crops(right,len(student_names))
+        body, pass_usage=_vision_request(prompt,left,right,student_count=len(student_names),return_usage=True,images=focused)
         usage_totals["input_tokens"] += pass_usage["input_tokens"]
         usage_totals["output_tokens"] += pass_usage["output_tokens"]
         usage_totals["total_tokens"] += pass_usage["total_tokens"]
