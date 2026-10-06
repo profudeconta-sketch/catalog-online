@@ -60,7 +60,7 @@ def list_notifications(*,recipient,unread_only=False,student_key=None):
     out=[]
     for x in registry["events"]:
         if x.get("recipient")!=recipient: continue
-        if unread_only and x.get("read_at_utc"): continue
+        if unread_only and (x.get("read_at_utc") or x.get("superseded_at_utc")): continue
         if student_key is not None and x.get("student_key")!=str(student_key): continue
         out.append(dict(x))
     return sorted(out,key=lambda x:x.get("created_at_utc",""),reverse=True)
@@ -77,6 +77,34 @@ def mark_notification_read(event_id,recipient):
             save_notification_registry(registry,sha); return dict(event),True
         except DocumentConflictError: continue
     raise DocumentConflictError("Citirea notificării nu a putut fi confirmată.")
+
+
+def supersede_teacher_leave_notifications(source_id,current_revision):
+    """Marchează numai în registrul secundar reviziile vechi; sursa primară rămâne neatinsă."""
+    current_revision=int(current_revision or 1)
+    for _ in range(3):
+        registry,sha=load_notification_registry()
+        changed=False
+        now=dt.datetime.now(dt.timezone.utc).isoformat()
+        for event in registry["events"]:
+            if (
+                event.get("recipient")==RECIPIENT_TEACHER
+                and event.get("source_type")=="INVOIRE"
+                and event.get("source_id")==str(source_id)
+                and int(event.get("source_revision") or 1)<current_revision
+                and not event.get("superseded_at_utc")
+            ):
+                event["superseded_at_utc"]=now
+                event["superseded_by_revision"]=str(current_revision)
+                changed=True
+        if not changed:
+            return 0
+        try:
+            save_notification_registry(registry,sha)
+            return 1
+        except DocumentConflictError:
+            continue
+    raise DocumentConflictError("Reviziile vechi ale notificării nu au putut fi actualizate în siguranță.")
 
 
 def reconcile_teacher_inbox():
@@ -105,6 +133,7 @@ def reconcile_teacher_inbox():
             created_at_utc=item.get("transmitted_at_utc"),
         )
         created+=int(was_created)
+        supersede_teacher_leave_notifications(item.get("id"),item.get("revision",1))
     return created
 
 
