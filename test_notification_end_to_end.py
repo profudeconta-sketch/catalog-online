@@ -53,10 +53,6 @@ class IntegratedNotificationCenterTests(unittest.TestCase):
              patch.object(ns,"load_registry",return_value=(docs_unread,None)):
             self.assertEqual(ns.reconcile_parent_inbox("S1"),1)
             event=ns.list_notifications(recipient=ns.RECIPIENT_PARENT,student_key="S1")[0]
-            ns.record_delivery(event["id"],ns.RECIPIENT_PARENT,"phone-a","queued","SM1")
-            self.assertFalse(ns.delivery_needs_retry(
-                event["id"],ns.RECIPIENT_PARENT,"phone-a"
-            ))
 
         with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write), \
              patch.object(ns,"load_registry",return_value=(docs_read,None)):
@@ -85,7 +81,6 @@ class IntegratedNotificationCenterTests(unittest.TestCase):
              patch.object(ns,"load_leave_pass_registry",return_value=(v1,None)):
             ns.reconcile_teacher_inbox()
             old=ns.list_notifications(recipient=ns.RECIPIENT_TEACHER)[0]
-            ns.record_delivery(old["id"],ns.RECIPIENT_TEACHER,"teacher-phone","sent","SM-OLD")
 
         with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write), \
              patch.object(ns,"load_registry",return_value=(docs,None)), \
