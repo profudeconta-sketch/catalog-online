@@ -83,5 +83,23 @@ def answer(question:str)->NelutuAnswer:
 
     return NelutuAnswer("fallback","No, amu m-ai băgat oleacă-n ceață. 😄 Nu vreau să scot un răspuns din clop doar ca să par deștept. Spune-mi altfel sau alege o temă: portal, note, absențe, învoire, documente, burse, înștiințări ori drepturi. Dacă-i un caz pe care nu-l pot lămuri sigur, te trimit la omul competent — mai bine Neluțu prudent decât Neluțu morișcă. 😂")
 
+# Contract invariabil: doctor în portal, dar cu caracterul lui Neluțu și cu mâinile în buzunar.
+EXPERT_CONTRACT = {
+    "scope": "portal_parent_authenticated_context_only",
+    "read_only": True,
+    "never_invent": True,
+    "never_judge": True,
+    "infinite_patience": True,
+    "self_ironic_humor": True,
+    "regional_voice": "Valea Ariesului, grai de mocan; iute la minte, molcom la vorba",
+    "serious_topics_suppress_playful_humor": True,
+    "no_cross_student_access": True,
+    "no_secret_access": True,
+    "no_paid_or_external_ai": True,
+}
+
+def expert_contract()->dict:
+    return dict(EXPERT_CONTRACT)
+
 def read_only_contract()->dict:
     return {"writes_primary_data":False,"writes_files":False,"calls_paid_ai":False,"calls_external_ai":False,"can_change_grades":False,"can_send_documents":False,"can_approve_requests":False,"reads_secrets":False,"reads_student_records":False}
