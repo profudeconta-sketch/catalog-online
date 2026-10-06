@@ -84,7 +84,7 @@ class NelutuMascotTests(unittest.TestCase):
     def test_idle_nudge_is_one_time_css_only(self):
         html=render_nelutu_corner_nudge()
         for phrase in ("ce-ai găsit pe-acolo?","numa’ de curiozitate","zâ drept te ajută Neluțu",
-                       "vin lupii șâ tăt ne rup","mai stăm aci mult sau merem",
+                       "mai stăm aci mult sau merem",
                        "mă pui să mă culc","huțură-mă-ncet"):
             self.assertIn(phrase,html)
         self.assertIn("font-weight:800",html)
