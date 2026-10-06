@@ -180,7 +180,8 @@ def _extract_first_json_object(text):
     raw=str(text or "").strip()
     start=raw.find("{"); end=raw.rfind("}")
     if start<0 or end<=start:
-        raise PhotoImportError("Modelul local nu a returnat JSON demonstrabil.")
+        preview=re.sub(r"\\s+"," ",raw)[:500]
+        raise PhotoImportError(f"Modelul local nu a returnat JSON demonstrabil. Răspuns brut: {preview!r}")
     try:
         return json.loads(raw[start:end+1])
     except Exception as ex:
