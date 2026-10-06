@@ -2200,6 +2200,19 @@ def generate_pdf_pins(file_path):
     buffer.seek(0)
     return buffer
 
+def _normalize_manual_ddmm(value):
+    value = str(value or "").strip()
+    m = re.fullmatch(r"(\d{1,2})[./-](\d{1,2})", value)
+    if not m:
+        raise ValueError("Data trebuie introdusă în format DD.MM, de exemplu 02.10.")
+    day, month = map(int, m.groups())
+    datetime.date(2026, month, day)
+    return f"{day:02d}.{month:02d}"
+
+def _restore_manual_backup(path, backup):
+    if backup and os.path.exists(backup):
+        shutil.copy2(backup, path)
+
 # --- TAB 1: NOTĂ ---
 with tab1:
     st.subheader("Adăugare Notă Nouă (Sloturi N1 - N10)")
@@ -2213,12 +2226,12 @@ with tab1:
         nota_val = st.number_input("Notă (1 - 10):", min_value=1, max_value=10, value=10, step=1)
         data_nota = st.text_input("Data Notei (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_n")
         
-    if st.button("💾 Salvează Nota în Catalog", type="primary", use_container_width=True):
+    if st.button("💾 Salvează Nota în Catalog", type="primary", use_container_width=True):\n        data_nota = _normalize_manual_ddmm(data_nota)
         if not os.path.exists(selected_file):
             st.error(f"Fișierul {selected_file} nu există!")
         else:
             try:
-                wb = openpyxl.load_workbook(selected_file)
+                backup = selected_file + ".manual.bak"\n                shutil.copy2(selected_file, backup)\n                wb = openpyxl.load_workbook(selected_file)
                 sheet_name = "Cultură Generală" if cat_n == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
                 student_row = resolve_student_row(wb, ELEVI[elev_idx_n])
