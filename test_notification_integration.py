@@ -109,8 +109,10 @@ class NotificationIntegrationGuards(unittest.TestCase):
         self.assertIn("Deschide WhatsApp pentru părinte",block)
 
     def test_parent_sent_documents_keep_persistent_whatsapp_action(self):
-        section=self.parent.index("Documente deja transmise dirigintelui")
-        block=self.parent[section:section+6000]
+        title=self.parent.index("Documente deja transmise dirigintelui")
+        section=self.parent.rfind("list_student_documents(",0,title)
+        self.assertNotEqual(section,-1)
+        block=self.parent[section:title+6000]
         self.assertIn('direction="PARINTE_SCOALA"',block)
         self.assertIn("_teacher_whatsapp_link(",block)
         self.assertIn("parent_sent_document_wa_",block)
