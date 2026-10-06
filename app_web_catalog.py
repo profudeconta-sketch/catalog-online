@@ -2246,6 +2246,11 @@ with tab1:
                     d_col = n_col + 1
                     cell_n = ws.cell(row=student_row, column=n_col)
                     cell_d = ws.cell(row=student_row, column=d_col)
+                    existing_date = str(cell_d.value or "").strip()
+                    if existing_date == data_nota:
+                        if str(cell_n.value).strip() == str(int(nota_val)):
+                            raise ValueError(f"Nota {nota_val} din {data_nota} există deja; nu a fost duplicată.")
+                        raise ValueError(f"Există deja nota {cell_n.value} în data {data_nota}; salvarea este blocată.")
                     if cell_n.value is None or str(cell_n.value).strip() == "":
                         cell_n.value = int(nota_val)
                         cell_d.value = str(data_nota)
@@ -2303,6 +2308,12 @@ with tab2:
                 for k in range(30):
                     a_col = start_col + 21 + k
                     cell_a = ws.cell(row=student_row, column=a_col)
+                    existing_abs = str(cell_a.value or "").strip()
+                    if existing_abs.lower().rstrip("m") == data_abs:
+                        requested = f"{data_abs}m" if is_mot else data_abs
+                        if existing_abs.lower() == requested.lower():
+                            raise ValueError(f"Absența din {data_abs} există deja; nu a fost duplicată.")
+                        raise ValueError(f"Absența din {data_abs} există deja cu altă stare de motivare; salvarea este blocată.")
                     if cell_a.value is None or str(cell_a.value).strip() == "":
                         cell_a.value = abs_val
                         cell_a.number_format = '@'
