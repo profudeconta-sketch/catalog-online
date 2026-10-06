@@ -315,14 +315,20 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
     return out
 
 
+def _normalized_header_label(value):
+    raw=str(value or "").casefold()
+    raw=re.sub(r'[„”"“”«»]'," ",raw)
+    raw=re.sub(r"\s+"," ",raw).strip()
+    return raw
+
 def map_physical_label_to_online(label, category, allowed_subjects):
-    """Mapare conservatoare: eticheta fizică trebuie să coincidă textual cu o denumire online.
-    Nu folosim poziția/ordinea coloanei pentru a inventa o corespondență.
+    """Mapare conservatoare: ignorăm doar ghilimele și spații parazite.
+    Cuvintele trebuie să coincidă integral; poziția coloanei nu atribuie disciplina.
     """
-    raw=re.sub(r"\s+"," ",str(label or "").strip()).casefold()
+    raw=_normalized_header_label(label)
     if not raw:
         return None
-    matches=[name for name in allowed_subjects if re.sub(r"\s+"," ",str(name).strip()).casefold()==raw]
+    matches=[name for name in allowed_subjects if _normalized_header_label(name)==raw]
     return matches[0] if len(matches)==1 else None
 
 def _semantic_key(p):
