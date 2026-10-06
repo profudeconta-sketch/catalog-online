@@ -39,7 +39,9 @@ class NelutuMascotTests(unittest.TestCase):
         html=render_nelutu_mascot()
         self.assertGreaterEqual(html.count("PRIMU’ AI DIN ARDEAL"),2)
         self.assertGreaterEqual(html.count("NELUȚU-AL NOST"),2)
-        self.assertIn("nelutu-brau-loop",html)
+        self.assertIn("nelutu-brau-title",html)
+        self.assertIn("nelutu-brau-subtitle",html)
+        self.assertIn('font-size="7.2"',html)
         self.assertNotIn("http://",html.lower())
         self.assertNotIn("https://",html.lower())
         self.assertNotIn("<script",html.lower())
@@ -84,16 +86,30 @@ class NelutuMascotTests(unittest.TestCase):
     def test_idle_nudge_is_one_time_css_only(self):
         html=render_nelutu_corner_nudge()
         for phrase in ("ce-ai găsit pe-acolo?","numa’ de curiozitate","zâ drept te ajută Neluțu",
-                       "vin lupii șâ tăt ne rup","mai stăm aci mult sau merem",
+                       "mai stăm aci mult sau merem",
                        "mă pui să mă culc","huțură-mă-ncet"):
             self.assertIn(phrase,html)
         self.assertIn("font-weight:800",html)
-        self.assertIn("nelutu-curious-first 15s",html)
-        self.assertIn("nelutu-curious-loop 67s",html)
+        self.assertIn("nelutu-curious-first 42s",html)
+        self.assertIn("nelutu-curious-later 390s step-end 42s",html)
         self.assertIn("prefers-reduced-motion:reduce",html)
         self.assertNotIn("<script",html.lower())
         self.assertNotIn("http://",html.lower())
         self.assertNotIn("https://",html.lower())
+
+    def test_idle_nudge_has_safe_contextual_repertoire(self):
+        school=render_nelutu_corner_nudge("school")
+        leave=render_nelutu_corner_nudge("leave")
+        docs=render_nelutu_corner_nudge("documents")
+        unknown=render_nelutu_corner_nudge("not-a-real-context")
+        self.assertIn("cele de la școală",school)
+        self.assertIn("învoiri",leave)
+        self.assertIn("hârtiile-s multe",docs)
+        self.assertIn("ce-ai găsit pe-acolo?",unknown)
+        for html in (school,leave,docs,unknown):
+            self.assertNotIn("<script",html.lower())
+            self.assertNotIn("http://",html.lower())
+            self.assertNotIn("https://",html.lower())
 
     def test_parent_portal_uses_small_click_assistant_not_giant_mascot(self):
         with open("app_parinti.py","r",encoding="utf-8") as handle:

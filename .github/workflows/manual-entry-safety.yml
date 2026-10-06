@@ -21,6 +21,7 @@ on:
       - feature/nelutu-fresh-answer-state
       - feature/nelutu-portal-expert
       - feature/nelutu-ardelean-ai-brau
+      - fix/nelutu-visible-brau-idle-timing
     paths:
       - "app_web_catalog.py"
       - "nelutu_mascot.py"
