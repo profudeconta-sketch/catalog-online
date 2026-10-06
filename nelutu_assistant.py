@@ -101,7 +101,7 @@ def answer(question:str)->NelutuAnswer:
         return NelutuAnswer("empty","No, amu m-ai prins cu traista goală. 😄 Scrie-mi ce vrei să afli și-mi pun rotițele la lucru. N-or fi ele de moară, da' se-nvârt. 😂")
 
     # Pericol/situații sensibile: Neluțu rămâne empatic, iar poanta se dă singură mai încet.
-    if _has_any(q,("violenta","lovit","batut","bullying","hartuit","abuz","amenintat","sinucidere","autovatam","drog","agresiune","pericol")):
+    if _has_any(q,("violenta","lovit","batut","bataie","bullying","hartuit","abuz","amenintat","amenintare","sinucidere","autovatam","drog","agresiune","pericol")):
         return NelutuAnswer("safety","Îmi pare rău că e vorba despre o situație serioasă. Aici Neluțu pune glumele în cui. Dacă există pericol imediat, cere ajutor serviciilor de urgență. Pentru o situație școlară, anunță cât mai repede dirigintele și conducerea școlii. Eu pot explica portalul și regulile generale, dar nu pot investiga cazul și nu pot înlocui un specialist.",serious=True)
 
     if _has_any(q,("cum functioneaza nelutu","ce poti face","ce stii sa faci","esti ai","inteligenta artificiala")):
