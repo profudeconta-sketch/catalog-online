@@ -91,5 +91,14 @@ class NelutuTests(unittest.TestCase):
         self.assertEqual(a.intent,"fallback")
         self.assertIn("Nu vreau să scot un răspuns din clop",a.text)
 
+    def test_student_context_builder_is_pure_and_specific(self):
+        ctx=n.build_student_context(media_generala="9.50",purtare=10,total_absente=7,
+            absente_nemotivate=3,absente_motivate=4,
+            discipline=[{"name":"Matematică","notes":"9 (01.10)","absences":"1 nem.","average":"9.00"}])
+        self.assertIn("9.50",n.answer_with_context("care este media mea?",ctx).text)
+        self.assertIn("7 absențe",n.answer_with_context("cate absente am?",ctx).text)
+        self.assertIn("Matematică",n.answer_with_context("ce am la matematica?",ctx).text)
+        self.assertNotIn("9.50",n.answer_with_context("ce am la matematica?",ctx).text)
+
 if __name__=="__main__":
     unittest.main()
