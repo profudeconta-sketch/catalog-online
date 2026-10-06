@@ -82,22 +82,24 @@ class NotificationIntegrationGuards(unittest.TestCase):
         button=p.index("Informează părintele despre actualizarea situației școlare")
         event=p.index('event_type="SITUATIE_SCOLARA_ACTUALIZATA"',button)
         self.assertLess(button,event)
-    def test_phone_delivery_is_guarded_against_duplicates_in_both_apps(self):
-        self.assertIn("delivery_needs_retry(event[\"id\"],RECIPIENT_PARENT,key)",self.teacher)
-        self.assertIn("delivery_needs_retry(event[\"id\"],RECIPIENT_TEACHER,key)",self.parent)
+    def test_whatsapp_is_manual_free_link_only(self):
+        module=Path("whatsapp_delivery.py").read_text(encoding="utf-8").lower()
+        self.assertIn("https://wa.me/",module)
+        self.assertNotIn("twilio",module)
+        self.assertNotIn("urlopen",module)
+        self.assertNotIn("graph.facebook",module)
 
-    def test_existing_parent_event_can_retry_failed_phone_delivery(self):
-        p=self.teacher
-        start=p.index("def _register_parent_alert")
-        end=p.index("def get_current_elevi_and_pins",start)
-        block=p[start:end]
-        self.assertNotIn("if not created:",block)
-        self.assertIn("_deliver_parent_sms(event,student_rm_pg)",block)
+    def test_apps_do_not_import_or_send_sms(self):
+        combined=(self.teacher+"\n"+self.parent).lower()
+        self.assertNotIn("phone_delivery",combined)
+        self.assertNotIn("send_sms",combined)
+        self.assertNotIn("twilio",combined)
 
-    def test_phone_numbers_are_not_hardcoded_in_delivery_module(self):
-        p=Path("phone_delivery.py").read_text(encoding="utf-8")
-        self.assertNotIn("0742",p)
-        self.assertIn('TEACHER_PHONE',p)
-        self.assertIn('TWILIO_ACCOUNT_SID',p)
+    def test_whatsapp_does_not_replace_internal_notification(self):
+        self.assertIn("ensure_notification(recipient=RECIPIENT_PARENT",self.teacher)
+        self.assertIn("ensure_notification(recipient=RECIPIENT_TEACHER",self.parent)
+        self.assertIn("_parent_whatsapp_links",self.teacher)
+        self.assertIn("_teacher_whatsapp_link",self.parent)
+
 
 if __name__=="__main__": unittest.main()
