@@ -237,7 +237,7 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
       "Citește physical_label EXACT cum apare în antetul rubricii fizice. Nu presupune că ordinea sau denumirea rubricilor fizice coincide cu structura catalogului electronic. "
       f"Extrage NUMAI note și absențe cu data lizibilă în intervalul {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
       "Nu ghici și nu completa valori incerte. Răspunde STRICT JSON cu cheia records; fiecare record are "
-      "student_index (0..2), category exact 'Cultură Generală' sau 'Module Tehnologice', subject, "
+      "student_index (0..2), category dacă este demonstrabilă, physical_label exact din antet, subject gol, "
       "kind 'grade' sau 'absence', value (1..10 pentru grade), date DD.MM, motivated boolean, "
       "confidence 0..1, source_image 'left' sau 'right', legible boolean. "
       "legible=true NUMAI dacă studentul, disciplina, tipul, valoarea și data pot fi citite direct din fotografie, fără presupuneri. "
