@@ -10,6 +10,7 @@ on:
     branches:
       - feature/free-whatsapp-notifications
       - feature/persistent-whatsapp-actions
+      - feature/nelutu-parent-assistant
     paths:
       - "app_web_catalog.py"
       - ".github/workflows/manual-entry-safety.yml"

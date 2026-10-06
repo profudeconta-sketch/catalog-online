@@ -12,6 +12,7 @@ from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentSto
 from parent_excuse_pdf import generate_parent_excuse_pdf
 from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_parent_source_read, reconcile_parent_inbox
 from whatsapp_delivery import teacher_phone, whatsapp_link
+from nelutu_assistant import QUICK_TOPICS as NELUTU_QUICK_TOPICS, answer as nelutu_answer
 from leave_pass_storage import (
     REASONS as LEAVE_PASS_REASONS,
     STATUS_APPROVED as LEAVE_STATUS_APPROVED,
@@ -453,6 +454,57 @@ else:
         st.rerun()
 
     st.divider()
+
+
+    # --- NELUȚU: asistent local, gratuit, exclusiv read-only ---
+    with st.expander("🤠 Neluțu — ajutorul simpatic din Portal", expanded=False):
+        st.markdown(
+            """
+            <div style="padding:1rem 1.15rem;border-radius:18px;
+                        background:linear-gradient(135deg,#fff8e8,#f4efe4);
+                        border:1px solid rgba(120,90,40,.22);margin-bottom:.8rem">
+              <div style="font-size:2.6rem;float:left;margin-right:.8rem">🤠</div>
+              <div style="font-size:1.15rem;font-weight:750">Servus! Eu-s Neluțu.</div>
+              <div style="opacity:.85">Mocan digital de pe Valea Arieșului. Îți explic portalul,
+              regulile și butoanele. Nu modific nimic în catalog — că n-am primit cheile de la seif. 😄</div>
+              <div style="clear:both"></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        _nelutu_topic = st.selectbox(
+            "Poți porni de aici:",
+            ["— alege o temă —", *NELUTU_QUICK_TOPICS],
+            key="nelutu_quick_topic",
+        )
+        _nelutu_question = st.text_input(
+            "Sau întreabă-l pe Neluțu:",
+            placeholder="Ex.: Cum motivez absențele copilului?",
+            key="nelutu_question",
+        )
+        _nelutu_ask = st.button(
+            "💬 Întreabă-l pe Neluțu",
+            use_container_width=True,
+            key="nelutu_ask",
+        )
+        if _nelutu_ask or _nelutu_topic != "— alege o temă —":
+            _nelutu_prompt = _nelutu_question.strip() or _nelutu_topic
+            _nelutu_reply = nelutu_answer(_nelutu_prompt)
+            if _nelutu_reply.serious:
+                st.warning(_nelutu_reply.text)
+            else:
+                st.markdown(f"**Neluțu:** {_nelutu_reply.text}")
+            if _nelutu_reply.source_label and _nelutu_reply.source_url:
+                st.caption("📚 Bază oficială:")
+                st.link_button(
+                    _nelutu_reply.source_label,
+                    _nelutu_reply.source_url,
+                    use_container_width=True,
+                    key=f"nelutu_source_{_nelutu_reply.intent}",
+                )
+        st.caption(
+            "🔒 Neluțu este doar informativ: nu schimbă note, absențe, documente, cereri, conturi sau alte date."
+        )
 
     try:
         _parent_student_key=normalize_student_key(student_found[3])
