@@ -232,9 +232,9 @@ def _student_band_crops(image, count):
         out.append((f"{PurePosixPath(image[0]).stem}-antet-elev-{idx+1}.jpg",buf.getvalue()))
     return out
 
-def _discipline_cell_crops(image, student_count, disciplines=10):
-    """Decupează o disciplină fizică întreagă: numele disciplinei + Absențe/Note + un singur elev.
-    Poziția este doar identitate geometrică; nu este mapată implicit la disciplina online.
+def _discipline_cell_crops(image, student_count, disciplines=11):
+    """Decupează o disciplină fizică: antetul tipărit + Absențe/Note + zona de înscriere a unui elev.
+    Geometria este măsurată pe formularul real; indexul coloanei NU atribuie semantic disciplina.
     """
     try:
         from PIL import Image
@@ -242,19 +242,23 @@ def _discipline_cell_crops(image, student_count, disciplines=10):
         return []
     im=Image.open(io.BytesIO(image[1])).convert("RGB")
     w,h=im.size
-    # Geometrie măsurată pe formularul fotografiat: zona disciplinelor începe după blocul ELEVII.
-    # Antetul include numele disciplinei și rândul Absențe/Note.
-    x0=int(w*0.385); x1=int(w*0.955)
-    header_y0=int(h*0.025); header_y1=int(h*0.105)
-    rows=((0.105,0.315),(0.365,0.555),(0.610,0.805))
+    # Pe fotografia reală 1500x2000: disciplinele sunt aproximativ x=573..1500,
+    # antetul se termină înainte de y=150; înscrierile elevului 1 încep imediat după.
+    x0=int(w*0.382); x1=w
+    header_y0=int(h*0.020); header_y1=int(h*0.073)
+    row_tops=(0.075,0.360,0.670)
+    row_height=0.095
     out=[]
     for student in range(min(student_count,3)):
-        y0=int(h*rows[student][0]); y1=int(h*rows[student][1])
+        y0=int(h*row_tops[student]); y1=min(h,int(h*(row_tops[student]+row_height)))
         for col in range(disciplines):
             cx0=x0+(x1-x0)*col//disciplines; cx1=x0+(x1-x0)*(col+1)//disciplines
-            head=im.crop((cx0,header_y0,cx1,header_y1))
-            cell=im.crop((cx0,y0,cx1,y1))
-            stitched=Image.new("RGB",(cx1-cx0,head.height+cell.height),"white")
+            # Mică margine laterală păstrează liniile delimitatoare și textul înclinat de perspectivă.
+            pad=max(2,int(w*0.003))
+            px0=max(0,cx0-pad); px1=min(w,cx1+pad)
+            head=im.crop((px0,header_y0,px1,header_y1))
+            cell=im.crop((px0,y0,px1,y1))
+            stitched=Image.new("RGB",(px1-px0,head.height+cell.height),"white")
             stitched.paste(head,(0,0)); stitched.paste(cell,(0,head.height))
             buf=io.BytesIO(); stitched.save(buf,format="JPEG",quality=95)
             out.append((f"{PurePosixPath(image[0]).stem}-e{student+1}-d{col+1}.jpg",buf.getvalue()))
@@ -264,7 +268,7 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
     prompt=("Analizează două fotografii ale aceleiași deschideri de catalog școlar românesc. "
       f"Elevii de sus în jos sunt exact {json.dumps(student_names,ensure_ascii=False)}. "
       "După cele două pagini complete urmează decupaje în ordinea: pagina stângă elev 1..N, apoi pagina dreaptă elev 1..N. Fiecare decupaj conține antetul disciplinelor lipit de caseta UNUI SINGUR elev; nu atribui niciodată scris din alt decupaj acelui elev. "
-      "Citește physical_label EXACT cum apare în antetul rubricii fizice. Nu presupune că ordinea sau denumirea rubricilor fizice coincide cu structura catalogului electronic. "
+      "Citește physical_label EXCLUSIV ca numele disciplinei/modulului din rândul superior al antetului fizic. Absențe/Absente, Note și înscrisurile de dată NU sunt physical_label. Nu presupune că ordinea sau denumirea rubricilor fizice coincide cu structura catalogului electronic. "
       f"Extrage NUMAI note și absențe cu data lizibilă în intervalul {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
       "Nu ghici și nu completa valori incerte. Răspunde STRICT JSON cu cheia records; fiecare record are "
       "student_index (0..2), category dacă este demonstrabilă, physical_label exact din antet, subject gol, "
@@ -381,7 +385,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
         prompt=(f"Efectuează a {pass_no}-a citire independentă: {scope}. "
           f"{target_hint}"
           f"Elevii de sus în jos sunt {json.dumps(student_names,ensure_ascii=False)}. "
-          "Citește physical_label EXACT din antetul rubricii fizice; nu presupune că rubricile fizice coincid ca ordine sau denumire cu catalogul electronic. "
+          "Citește physical_label EXCLUSIV ca numele disciplinei/modulului din rândul superior al antetului fizic; cuvintele Absențe/Absente, Note și înscrisurile de dată NU sunt physical_label; nu presupune că rubricile fizice coincid ca ordine sau denumire cu catalogul electronic. "
           f"Perioada permisă: {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
           "Răspunde STRICT JSON {\"records\":[...]}; fiecare record conține student_index, category, "
           "physical_label, subject gol, kind, value, date DD.MM, motivated, confidence, source_image, legible. "
