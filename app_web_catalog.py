@@ -2227,11 +2227,11 @@ with tab1:
         data_nota = st.text_input("Data Notei (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_n")
         
     if st.button("💾 Salvează Nota în Catalog", type="primary", use_container_width=True):
-        data_nota = _normalize_manual_ddmm(data_nota)
         if not os.path.exists(selected_file):
             st.error(f"Fișierul {selected_file} nu există!")
         else:
             try:
+                data_nota = _normalize_manual_ddmm(data_nota)
                 backup = selected_file + ".manual.bak"
                 shutil.copy2(selected_file, backup)
                 wb = openpyxl.load_workbook(selected_file)
@@ -2286,6 +2286,9 @@ with tab2:
             st.error(f"Fișierul {selected_file} nu există!")
         else:
             try:
+                data_abs = _normalize_manual_ddmm(data_abs)
+                backup = selected_file + ".manual.bak"
+                shutil.copy2(selected_file, backup)
                 wb = openpyxl.load_workbook(selected_file)
                 sheet_name = "Cultură Generală" if cat_a == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
