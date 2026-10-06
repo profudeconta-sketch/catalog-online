@@ -48,3 +48,8 @@ def send_sms(to_phone, body):
     msg_sid=str(payload.get("sid") or "").strip()
     if not msg_sid: raise PhoneDeliveryError("Furnizorul SMS nu a returnat confirmarea mesajului.")
     return {"provider":"twilio","message_sid":msg_sid,"status":str(payload.get("status") or "accepted")}
+
+
+def teacher_phone():
+    value=_secret("TEACHER_PHONE")
+    return normalize_ro_phone(value) if value else None
