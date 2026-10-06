@@ -412,11 +412,11 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
         if count>=2:
             recovered.append(ImportProposal(p.student_index,p.category,p.subject,p.kind,p.value,p.date,p.motivated,
                 p.confidence,p.source_image,True,
-                f"Demonstrat prin consensul a {count} citiri independente lizibile ale fotografiei originale."))
+                f"Demonstrat prin consensul a {count} citiri independente lizibile ale fotografiei originale.",p.physical_label))
         else:
             recovered.append(ImportProposal(p.student_index,p.category,p.subject,p.kind,p.value,p.date,p.motivated,
                 p.confidence,p.source_image,False,
-                "Fără consens de minimum două citiri independente lizibile după epuizarea recuperării automate."))
+                "Fără consens de minimum două citiri independente lizibile după epuizarea recuperării automate.",p.physical_label))
     return (recovered,usage_totals) if return_usage else recovered
 
 def deduplicate_proposals(items):
