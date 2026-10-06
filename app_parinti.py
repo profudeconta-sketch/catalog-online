@@ -457,44 +457,37 @@ else:
     st.divider()
 
 
-    # Neluțu rămâne vizibil discret în colț pe tot parcursul sesiunii autentificate.
+    # Neluțu: mic, discret și la un clic distanță. Asistentul se deschide doar la cerere.
     st.markdown(render_nelutu_corner("idle"), unsafe_allow_html=True)
     st.markdown(render_nelutu_corner_nudge(), unsafe_allow_html=True)
+    if "nelutu_greeted" not in st.session_state:
+        st.session_state["nelutu_greeted"] = True
+        st.toast("🤠 Servus! Eu-s Neluțu. Te-ajut io pe unde-i baiu.")
 
-    # --- NELUȚU: asistent local, gratuit, exclusiv read-only ---
-    with st.expander("🤠 Neluțu — ajutorul simpatic din Portal", expanded=False):
-        st.markdown(
-            render_nelutu_mascot(
-                "idle",
-                "Servus! Eu-s Neluțu, mascota sistemului. Mocan digital de pe Valea Arieșului. "
-                "Îți explic portalul, regulile și butoanele. Nu modific nimic în catalog — "
-                "că n-am primit cheile de la seif. 😄",
-            ),
-            unsafe_allow_html=True,
-        )
+    st.markdown("""
+    <style>
+    div[data-testid="stPopover"] {position:fixed;right:22px;bottom:24px;z-index:10001}
+    div[data-testid="stPopover"] > button {min-width:92px;min-height:104px;opacity:.01;border-radius:22px}
+    @media(max-width:640px){div[data-testid="stPopover"]{right:10px;bottom:10px}div[data-testid="stPopover"] > button{min-width:70px;min-height:80px}}
+    </style>
+    """, unsafe_allow_html=True)
+    with st.popover("🤠 Neluțu", use_container_width=False):
+        st.markdown("**No, zi... te-ajut. Tatuiază-mă și zâc tăt. 😄**")
         _nelutu_topic = st.selectbox(
             "Poți porni de aici:",
             ["— alege o temă —", *NELUTU_QUICK_TOPICS],
             key="nelutu_quick_topic",
         )
         _nelutu_question = st.text_input(
-            "Sau întreabă-l pe Neluțu:",
+            "Întreabă-l pe Neluțu:",
             placeholder="Ex.: Cum motivez absențele copilului?",
             key="nelutu_question",
         )
-        _nelutu_ask = st.button(
-            "💬 Întreabă-l pe Neluțu",
-            use_container_width=True,
-            key="nelutu_ask",
-        )
+        _nelutu_ask = st.button("💬 No, zi!", use_container_width=True, key="nelutu_ask")
         if _nelutu_ask or _nelutu_topic != "— alege o temă —":
             _nelutu_prompt = _nelutu_question.strip() or _nelutu_topic
             _nelutu_reply = nelutu_answer(_nelutu_prompt)
-            _nelutu_state = "serious" if _nelutu_reply.serious else "answering"
-            st.markdown(
-                render_nelutu_mascot(_nelutu_state, _nelutu_reply.text),
-                unsafe_allow_html=True,
-            )
+            st.markdown(_nelutu_reply.text)
             if _nelutu_reply.source_label and _nelutu_reply.source_url:
                 st.caption("📚 Bază oficială:")
                 st.link_button(
@@ -503,9 +496,7 @@ else:
                     use_container_width=True,
                     key=f"nelutu_source_{_nelutu_reply.intent}",
                 )
-        st.caption(
-            "🔒 Neluțu este doar informativ: nu schimbă note, absențe, documente, cereri, conturi sau alte date."
-        )
+        st.caption("🔒 Neluțu este informativ și nu modifică datele catalogului.")
 
     try:
         _parent_student_key=normalize_student_key(student_found[3])
