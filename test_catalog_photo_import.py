@@ -1,0 +1,542 @@
+from pathlib import Path
+import datetime as dt
+import os
+import tempfile
+import unittest
+import urllib.error
+from unittest.mock import patch
+from openpyxl import Workbook, load_workbook
+from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, pair_catalog_images, deduplicate_proposals, compare_with_workbook, apply_confirmed_import, _student_band_crops, absence_day_segmentations, resolve_concatenated_absence_days, _openai_json_request, map_physical_label_to_online, validate_proposal_batch, _discipline_cell_crops, _fixed_cell_crops, analyze_pair_fixed_cells
+
+CG=[("Matematică",8)]
+TH=[]
+ELEVI=[(1,"TEST","","1","")]
+
+def resolve(_wb,_elev):
+    return 13
+
+def workbook():
+    fd,path=tempfile.mkstemp(suffix=".xlsx"); os.close(fd)
+    wb=Workbook(); ws=wb.active; ws.title="Cultură Generală"; wb.create_sheet("Module Tehnologice")
+    wb.save(path); wb.close(); return path
+
+class PhotoImportSafetyTests(unittest.TestCase):
+    def test_batch_prevalidation_blocks_conflicting_grade_and_absence_state(self):
+        a=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",verifiable=True)
+        b=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",verifiable=True)
+        with self.assertRaises(PhotoImportError): validate_proposal_batch([a,b])
+        c=ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",False,verifiable=True)
+        d=ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",True,verifiable=True)
+        with self.assertRaises(PhotoImportError): validate_proposal_batch([c,d])
+
+    def test_vision_usage_cost_uses_configured_gpt54_mini_rates(self):
+        import catalog_photo_import as cpi
+        self.assertAlmostEqual(cpi.vision_usage_cost_usd({"input_tokens":1_000_000,"output_tokens":1_000_000}),5.25)
+
+    def test_explicit_physical_aliases_map_without_column_order(self):
+        allowed=["Limba engleză (L1)","Educație fizică","Informatică / TIC","M1: Bazele contabilității"]
+        self.assertEqual(map_physical_label_to_online("Limba 1) Engleză","Cultură Generală",allowed),"Limba engleză (L1)")
+        self.assertEqual(map_physical_label_to_online("Educație fizică și sport","Cultură Generală",allowed),"Educație fizică")
+        self.assertEqual(map_physical_label_to_online("Informatică","Cultură Generală",allowed),"Informatică / TIC")
+        self.assertEqual(map_physical_label_to_online("M1: Bazele contabilității","Module Tehnologice",allowed),"M1: Bazele contabilității")
+        self.assertIsNone(map_physical_label_to_online("Absențe","Cultură Generală",allowed))
+
+    def test_physical_header_mapping_ignores_only_quote_noise(self):
+        allowed=["Limba Engleză","Matematică"]
+        self.assertEqual(map_physical_label_to_online('Limba „ Engleză',"Cultură Generală",allowed),"Limba Engleză")
+        self.assertIsNone(map_physical_label_to_online("Engleză","Cultură Generală",allowed))
+
+    def test_legible_evidence_is_distinct_from_final_verification(self):
+        p=ImportProposal(0,"Cultură Generală","Matematică","absence","","30.09",False,0.7,"left",False,"candidat","Matematică",True)
+        self.assertFalse(p.verifiable)
+        self.assertTrue(p.legible_evidence)
+
+    def test_semantic_identity_uses_physical_label_when_online_mapping_missing(self):
+        from catalog_photo_import import _semantic_key
+        a=ImportProposal(0,"Cultură Generală","","absence","","01.10",False,0.7,"x",False,"","Matematică fizică")
+        b=ImportProposal(0,"Cultură Generală","","absence","","01.10",False,0.99,"y",False,"","Matematică fizică")
+        self.assertEqual(_semantic_key(a),_semantic_key(b))
+
+    def test_physical_rubric_mapping_is_fail_closed(self):
+        allowed=["Limba și literatura română","Matematică"]
+        self.assertEqual(map_physical_label_to_online(" Matematică ","",allowed),"Matematică")
+        self.assertIsNone(map_physical_label_to_online("MAT.","",allowed))
+        self.assertIsNone(map_physical_label_to_online("Rubrică diferită","",allowed))
+
+    def test_dates(self):
+        self.assertEqual(normalize_ddmm("2/10"),"02.10")
+        self.assertEqual(normalize_ddmm("30-9"),"30.09")
+        self.assertEqual(normalize_ddmm("30/IX"),"30.09")
+        self.assertEqual(normalize_ddmm("1.X"),"01.10")
+        self.assertEqual(normalize_ddmm("02-X-2026"),"02.10")
+        self.assertEqual(normalize_ddmm(" 2 / x "), "02.10")
+
+    def test_roman_month_validation(self):
+        for bad in ("2/XIII","2/IIII","31/IX","0/X","2/ABC"):
+            with self.assertRaises(PhotoImportError, msg=bad):
+                normalize_ddmm(bad)
+
+    def test_roman_month_period_filter(self):
+        from catalog_photo_import import date_in_period
+        start=dt.date(2026,9,30); end=dt.date(2026,10,2)
+        self.assertTrue(date_in_period("30/IX",start,end))
+        self.assertTrue(date_in_period("1/X",start,end))
+        self.assertTrue(date_in_period("02/X",start,end))
+        self.assertFalse(date_in_period("29/IX",start,end))
+        self.assertFalse(date_in_period("3/X",start,end))
+
+    def test_absence_roman_month_group(self):
+        self.assertEqual(parse_absence_month_group("X: 1, 2, 5"),["01.10","02.10","05.10"])
+        self.assertEqual(parse_absence_month_group("X: 1 2 5"),["01.10","02.10","05.10"])
+        self.assertEqual(parse_absence_month_group("X: 1;2;5"),["01.10","02.10","05.10"])
+        self.assertEqual(parse_absence_month_group("X: 1.2.5"),["01.10","02.10","05.10"])
+        self.assertEqual(parse_absence_month_group(" IX : 30 "),["30.09"])
+        self.assertEqual(parse_absence_month_group("XI: 3,7 12"),["03.11","07.11","12.11"])
+
+    def test_absence_group_never_concatenates_space_separated_days(self):
+        self.assertEqual(parse_absence_month_group("X: 1 2"),["01.10","02.10"])
+        self.assertNotEqual(parse_absence_month_group("X: 1 2"),["12.10"])
+
+    def test_absence_group_rejects_invalid_or_ambiguous_content(self):
+        for bad in ("XIII: 1","IIII: 2","X: 32","IX: 31","X:","X: 1/2","X: 2 2","X: 193"):
+            with self.assertRaises(PhotoImportError, msg=bad):
+                parse_absence_month_group(bad)
+
+    def test_absence_group_interval_and_duplicate_flow(self):
+        from catalog_photo_import import date_in_period
+        start=dt.date(2026,9,30); end=dt.date(2026,10,2)
+        dates=parse_absence_month_group("X: 1 2 5")
+        self.assertEqual([d for d in dates if date_in_period(d,start,end)],["01.10","02.10"])
+        path=workbook()
+        try:
+            # 01.10 există deja; 02.10 trebuie propusă o singură dată.
+            wb=load_workbook(path); ws=wb["Cultură Generală"]; ws.cell(13,8+21).value="01.10"; wb.save(path); wb.close()
+            items=[ImportProposal(0,"Cultură Generală","Matematică","absence","",d,confidence=.99,verifiable=True)
+                   for d in dates if date_in_period(d,start,end)]
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,items)
+            self.assertEqual([x[1] for x in result],["DEJA_EXISTENT","NOU"])
+            changed,backup=apply_confirmed_import(path,ELEVI,CG,TH,resolve,[x for x in result if x[1]=="NOU"])
+            self.assertEqual(changed,1)
+            after=compare_with_workbook(path,ELEVI,CG,TH,resolve,items)
+            self.assertEqual([x[1] for x in after],["DEJA_EXISTENT","DEJA_EXISTENT"])
+            if backup and os.path.exists(backup): os.remove(backup)
+        finally: os.remove(path)
+
+    def test_same_absence_day_in_different_month_is_not_duplicate(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            ws.cell(13,8+21).value="01.09"; wb.save(path); wb.close()
+            p=ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",confidence=.99,verifiable=True)
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
+            self.assertEqual(result[0][1],"NOU")
+        finally: os.remove(path)
+
+    def test_second_grade_same_date_is_conflict_even_if_value_differs(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            ws.cell(13,8).value=8; ws.cell(13,9).value="02.10"; wb.save(path); wb.close()
+            p=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",confidence=.99,verifiable=True)
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
+            self.assertEqual(result[0][1],"CONFLICT")
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,result)
+        finally: os.remove(path)
+
+    def test_unmotivated_reading_conflicts_with_existing_motivated_absence(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            ws.cell(13,8+21).value="02.10m"; wb.save(path); wb.close()
+            p=ImportProposal(0,"Cultură Generală","Matematică","absence","","02.10",motivated=False,confidence=.99,verifiable=True)
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
+            self.assertEqual(result[0][1],"CONFLICT")
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,[(p,"NOU","stare veche")])
+        finally:
+            backup=path+".photo-import.bak"
+            if os.path.exists(backup): os.remove(backup)
+            os.remove(path)
+
+    def test_motivated_absence_conflicts_with_existing_unmotivated(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]; ws.cell(13,8+21).value="02.10"; wb.save(path); wb.close()
+            p=ImportProposal(0,"Cultură Generală","Matematică","absence","","02.10",motivated=True,confidence=.99,verifiable=True)
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
+            self.assertEqual(result[0][1],"CONFLICT")
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,result)
+        finally: os.remove(path)
+
+    def test_cover_handling_is_explicit(self):
+        imgs=[(f"{i}.jpeg",b"x") for i in range(1,24)]
+        pairs=pair_catalog_images(imgs,skip_cover=True)
+        self.assertEqual(len(pairs),11)
+        self.assertEqual(pairs[0][0][0],"2.jpeg")
+        self.assertEqual(pairs[-1][1][0],"23.jpeg")
+        with self.assertRaises(PhotoImportError):
+            pair_catalog_images(imgs,skip_cover=False)
+
+    def test_even_archive_does_not_silently_keep_cover(self):
+        imgs=[(f"{i}.jpeg",b"x") for i in range(1,5)]
+        # Dacă utilizatorul declară prima imagine drept copertă, 3 imagini rămase sunt invalide.
+        with self.assertRaises(PhotoImportError):
+            pair_catalog_images(imgs,skip_cover=True)
+        self.assertEqual(len(pair_catalog_images(imgs,skip_cover=False)),2)
+
+    def test_contradiction_stays_visible_and_blocked(self):
+        a=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.98,verifiable=True)
+        b=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",confidence=.99,verifiable=True)
+        out=deduplicate_proposals([a,b])
+        self.assertEqual(len(out),1)
+        self.assertFalse(out[0].verifiable)
+
+
+    def test_canonical_category_is_derived_from_mapped_online_subject(self):
+        import catalog_photo_import as cpi
+        self.assertEqual(cpi._canonical_category("Matematică","greșit"),"Cultură Generală")
+        self.assertEqual(cpi._canonical_category("M1: Bazele contabilității","greșit"),"Module Tehnologice")
+
+    def test_recovery_promotes_two_independent_legible_reads(self):
+        import catalog_photo_import as cpi
+        from unittest.mock import patch
+        from PIL import Image
+        import io, json
+        im=Image.new("RGB",(1500,2000),"white"); buf=io.BytesIO(); im.save(buf,format="JPEG")
+        first=ImportProposal(0,"","Matematică","absence","","30.09",False,.7,"left",False,"candidat","Matematică",True)
+        body={"output_text":json.dumps({"records":[{"student_index":0,"category":"categorie AI inconsistentă","physical_label":"Matematică","subject":"","kind":"absence","value":"","date":"30.09","motivated":False,"confidence":0.8,"source_image":"left","legible":True}]})}
+        usage={"input_tokens":10,"output_tokens":5,"total_tokens":15,"model":"gpt-5.4-mini"}
+        with patch.object(cpi,"_vision_request",return_value=(body,usage)) as call:
+            out,_=cpi.recover_uncertain_proposals(("8.jpeg",buf.getvalue()),("9.jpeg",buf.getvalue()),["Elev"],dt.date(2026,9,30),dt.date(2026,10,2),["Matematică"],[first],return_usage=True)
+        self.assertEqual(call.call_count,1)
+        self.assertEqual(len(out),1)
+        self.assertTrue(out[0].verifiable)
+        self.assertIn("2 citiri",out[0].verification_reason)
+
+    def test_verified_consensus_survives_single_unverified_disagreement(self):
+        agreed=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.96,verifiable=True)
+        isolated=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",confidence=.99,verifiable=False)
+        out=deduplicate_proposals([agreed,isolated])
+        self.assertEqual(len(out),1)
+        self.assertTrue(out[0].verifiable)
+        self.assertEqual(out[0].value,"8")
+
+    def test_absence_period_and_duplicate_flow(self):
+        from catalog_photo_import import date_in_period
+        start=dt.date(2026,9,30); end=dt.date(2026,10,2)
+        physical=parse_absence_month_group("IX: 29 30")+parse_absence_month_group("X: 1, 2 3")
+        selected=[d for d in physical if date_in_period(d,start,end)]
+        self.assertEqual(selected,["30.09","01.10","02.10"])
+        path=workbook()
+        try:
+            ws=load_workbook(path)
+            sheet=ws["Cultură Generală"]
+            sheet.cell(13,8+21).value="30.09"
+            ws.save(path); ws.close()
+            proposals=[ImportProposal(0,"Cultură Generală","Matematică","absence","",d,confidence=.99,verifiable=True) for d in selected]
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,proposals)
+            self.assertEqual([x[1] for x in result],["DEJA_EXISTENT","NOU","NOU"])
+        finally:
+            os.remove(path)
+
+    def test_motivated_absence_conflict_is_blocked(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); wb["Cultură Generală"].cell(13,8+21).value="01.10"; wb.save(path); wb.close()
+            p=ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",motivated=True,confidence=.99,verifiable=True)
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
+            self.assertEqual(result[0][1],"CONFLICT")
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,result)
+        finally:
+            os.remove(path)
+
+    def test_unverifiable_is_not_new(self):
+        path=workbook()
+        try:
+            p=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.99,verifiable=False)
+            result=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p])
+            self.assertEqual(result[0][1],"NECESITĂ_VERIFICARE_UMANĂ")
+        finally: os.remove(path)
+
+    def test_focused_vision_request_does_not_require_full_pages(self):
+        import catalog_photo_import as cpi
+        from unittest.mock import patch
+        fake={"output_text":"{\\\"records\\\":[]}","usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}
+        with patch.object(cpi,"_api_key",return_value="test"), patch.object(cpi,"_openai_json_request",return_value=fake):
+            body,usage=cpi._vision_request("x",("left.jpg",b"bad"),("right.jpg",b"bad"),images=[("cell.jpg",b"abc")],return_usage=True)
+        self.assertEqual(usage["total_tokens"],2)
+
+    def test_fixed_cells_lock_student_subject_and_kind_by_geometry(self):
+        from PIL import Image
+        import io
+        im=Image.new("RGB",(1500,2000),"white"); buf=io.BytesIO(); im.save(buf,format="JPEG")
+        cells=_fixed_cell_crops(("8.jpeg",buf.getvalue()),1,"left")
+        math=[c for c in cells if c["subject"]=="Matematică"]
+        self.assertEqual([(c["student_index"],c["kind"]) for c in math],[(0,"absence"),(0,"grade")])
+        self.assertIn("-d6-absence.jpg",math[0]["name"])
+        self.assertIn("-d6-grade.jpg",math[1]["name"])
+        self.assertLess(math[0]["data"].__len__(),10000)
+
+    def test_fixed_cell_reader_uses_only_local_cell_id_for_identity(self):
+        import catalog_photo_import as cpi
+        from PIL import Image
+        import io, json
+        im=Image.new("RGB",(1500,2000),"white"); buf=io.BytesIO(); im.save(buf,format="JPEG")
+        one={"student_index":0,"subject":"Matematică","kind":"absence","source_image":"left","name":"cell.jpg","data":buf.getvalue()}
+        body={"output_text":json.dumps({"records":[{"cell_id":"C001","student_index":2,"subject":"Chimie","kind":"grade","value":"","date":"30.09","motivated":False,"legible":True,"confidence":.9}]})}
+        usage={"input_tokens":1,"output_tokens":1,"total_tokens":2,"model":"gpt-5.4-mini"}
+        with patch.object(cpi,"_fixed_cell_crops",side_effect=[[one],[]]), patch.object(cpi,"_vision_request",return_value=(body,usage)):
+            rows,_=analyze_pair_fixed_cells(("8.jpeg",buf.getvalue()),("9.jpeg",buf.getvalue()),["Elev"],dt.date(2026,9,30),dt.date(2026,10,2),return_usage=True)
+        self.assertEqual(len(rows),1)
+        self.assertEqual((rows[0].student_index,rows[0].subject,rows[0].kind),(0,"Matematică","absence"))
+        self.assertFalse(rows[0].verifiable)
+
+
+    def test_candidate_cells_follow_verified_physical_template(self):
+        import catalog_photo_import as cpi
+        from PIL import Image
+        import io
+        im=Image.new('RGB',(1500,2000),'white'); buf=io.BytesIO(); im.save(buf,format='JPEG')
+        p=ImportProposal(0,'Cultură Generală','Matematică','absence','','30.09',False)
+        crops=cpi._candidate_cell_crops(('8.jpeg',buf.getvalue()),('9.jpeg',buf.getvalue()),3,[p])
+        self.assertEqual(len(crops),1)
+        self.assertIn('8-left-e1-d6',crops[0][0])
+
+    def test_physical_cell_crops_use_distinct_page_templates(self):
+        from PIL import Image
+        import io
+        im=Image.new("RGB",(1500,2000),"white"); buf=io.BytesIO(); im.save(buf,format="JPEG")
+        left=_discipline_cell_crops(("8.jpeg",buf.getvalue()),3,"left")
+        right=_discipline_cell_crops(("9.jpeg",buf.getvalue()),3,"right")
+        self.assertEqual(len(left),33)
+        self.assertEqual(len(right),42)
+        self.assertEqual(left[0][0],"8-left-e1-d1.jpg")
+        self.assertEqual(left[-1][0],"8-left-e3-d11.jpg")
+        self.assertEqual(right[0][0],"9-right-e1-d1.jpg")
+        self.assertEqual(right[-1][0],"9-right-e3-d14.jpg")
+        for _name,data in left+right:
+            sample=Image.open(io.BytesIO(data))
+            self.assertLess(sample.width,180)
+            self.assertLess(sample.height,400)
+
+    def test_student_band_crops_preserve_count(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow indisponibil")
+        import io
+        im=Image.new("RGB",(1500,2000),"white"); buf=io.BytesIO(); im.save(buf,format="JPEG")
+        crops=_student_band_crops(("2.jpeg",buf.getvalue()),3)
+        self.assertEqual(len(crops),3)
+        self.assertTrue(all(len(data)>0 for _,data in crops))
+        last_crops=_student_band_crops(("22.jpeg",buf.getvalue()),2)
+        self.assertEqual(len(last_crops),2)
+        # Formularul păstrează 3 poziții fizice; două persoane nu trebuie să împartă pagina în jumătăți.
+        second=Image.open(io.BytesIO(last_crops[1][1]))
+        self.assertLess(second.height,800)
+
+    def test_concatenated_absence_days_are_not_guessed(self):
+        variants=absence_day_segmentations("193",10)
+        self.assertIn((1,9,3),variants)
+        self.assertIn((19,3),variants)
+        with self.assertRaises(PhotoImportError):
+            resolve_concatenated_absence_days("193",10)
+
+    def test_concatenated_absence_days_use_demonstrable_neighbor_context(self):
+        # O zi precedentă 10 elimină interpretarea care ar începe cu 1;
+        # dacă rămâne ambiguitate, funcția continuă să refuze presupunerea.
+        variants=absence_day_segmentations("193",10,previous_day=10)
+        self.assertNotIn((1,9,3),variants)
+        self.assertIn((19,3),variants)
+
+    def test_same_physical_evidence_with_conflicting_dates_is_blocked(self):
+        rows=[
+            ImportProposal(0,"Cultură Generală","Matematică","grade","8","01.10",False,0.99,"left",True,""),
+            ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",False,0.98,"left",True,""),
+        ]
+        out=deduplicate_proposals(rows)
+        self.assertEqual(len(out),1)
+        self.assertFalse(out[0].verifiable)
+        self.assertIn("date contradictorii",out[0].verification_reason)
+
+    def test_different_physical_sources_may_contain_distinct_dates(self):
+        rows=[
+            ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",False,0.99,"left-mark-1",True,""),
+            ImportProposal(0,"Cultură Generală","Matematică","absence","","02.10",False,0.99,"left-mark-2",True,""),
+        ]
+        out=deduplicate_proposals(rows)
+        self.assertEqual(len(out),2)
+        self.assertTrue(all(p.verifiable for p in out))
+
+    def test_write_gate_rejects_unverifiable(self):
+        path=workbook()
+        try:
+            p=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.99,verifiable=False)
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,[(p,"NOU","")])
+            wb=load_workbook(path); self.assertIsNone(wb["Cultură Generală"].cell(13,8).value); wb.close()
+        finally: os.remove(path)
+
+    def test_write_gate_rechecks_duplicate_grade_even_with_stale_new_status(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            ws.cell(13,8).value=8; ws.cell(13,9).value="02.10"; wb.save(path); wb.close()
+            stale=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.99,verifiable=True)
+            changed,backup=apply_confirmed_import(path,ELEVI,CG,TH,resolve,[(stale,"NOU","stare veche")])
+            self.assertEqual(changed,0)
+            if backup and os.path.exists(backup): os.remove(backup)
+        finally: os.remove(path)
+
+    def test_write_gate_rechecks_grade_date_conflict_with_stale_new_status(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            ws.cell(13,8).value=8; ws.cell(13,9).value="02.10"; wb.save(path); wb.close()
+            stale=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",confidence=.99,verifiable=True)
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,[(stale,"NOU","stare veche")])
+        finally: os.remove(path)
+
+    def test_batch_write_rolls_back_all_changes_on_late_conflict(self):
+        path=workbook()
+        try:
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            ws.cell(13,8).value=7; ws.cell(13,9).value="02.10"; wb.save(path); wb.close()
+            first=ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",confidence=.99,verifiable=True)
+            conflict=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",confidence=.99,verifiable=True)
+            with self.assertRaises(PhotoImportError):
+                apply_confirmed_import(path,ELEVI,CG,TH,resolve,[
+                    (first,"NOU",""),
+                    (conflict,"NOU","stare intenționat învechită pentru test"),
+                ])
+            wb=load_workbook(path); ws=wb["Cultură Generală"]
+            absences=[str(ws.cell(13,8+21+k).value or "").strip() for k in range(30)]
+            self.assertNotIn("01.10",absences)
+            self.assertEqual(ws.cell(13,8).value,7)
+            self.assertEqual(str(ws.cell(13,9).value),"02.10")
+            wb.close()
+        finally:
+            backup=path+".photo-import.bak"
+            if os.path.exists(backup): os.remove(backup)
+            os.remove(path)
+
+    def test_write_then_duplicate_detection(self):
+        path=workbook()
+        try:
+            p=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",confidence=.99,verifiable=True)
+            before=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p]); self.assertEqual(before[0][1],"NOU")
+            changed,backup=apply_confirmed_import(path,ELEVI,CG,TH,resolve,before); self.assertEqual(changed,1)
+            after=compare_with_workbook(path,ELEVI,CG,TH,resolve,[p]); self.assertEqual(after[0][1],"DEJA_EXISTENT")
+            if backup and os.path.exists(backup): os.remove(backup)
+        finally: os.remove(path)
+
+
+    def test_streamlit_success_feedback_survives_rerun(self):
+        with open("app_web_catalog.py", "r", encoding="utf-8") as fh:
+            source = fh.read()
+        flash_set = 'st.session_state["photo_import_success_flash"] = ('
+        flash_pop = 'st.session_state.pop("photo_import_success_flash", None)'
+        self.assertIn(flash_set, source)
+        self.assertIn(flash_pop, source)
+        set_pos = source.index(flash_set)
+        rerun_pos = source.index("st.rerun()", set_pos)
+        self.assertLess(set_pos, rerun_pos)
+        self.assertIn("verificarea post-import a confirmat înregistrările ca DEJA_EXISTENT", source)
+        self.assertIn("copia privată a fost sincronizată", source)
+
+
+    def test_openai_429_retries_then_succeeds(self):
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{"ok": true}'
+        err = urllib.error.HTTPError("https://api.openai.com/v1/responses", 429, "Too Many Requests", {}, None)
+        err.read = lambda: b'{"error":{"type":"rate_limit_error","message":"Rate limit reached"}}'
+        with patch("catalog_photo_import.urllib.request.urlopen", side_effect=[err, Response()]) as call, \
+             patch("catalog_photo_import.time.sleep") as sleep, \
+             patch("catalog_photo_import.random.uniform", return_value=0):
+            result = _openai_json_request(object(), "Test", max_attempts=3)
+        self.assertTrue(result["ok"])
+        self.assertEqual(call.call_count, 2)
+        sleep.assert_called_once()
+
+    def test_retry_after_is_bounded_for_responsive_ui(self):
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{"ok": true}'
+        err = urllib.error.HTTPError(
+            "https://api.openai.com/v1/responses", 429, "Too Many Requests",
+            {"Retry-After": "120"}, None
+        )
+        err.read = lambda: b'{"error":{"code":"rate_limit_exceeded","message":"Rate limit reached."}}'
+        with patch("catalog_photo_import.urllib.request.urlopen", side_effect=[err, Response()]), \
+             patch("catalog_photo_import.time.sleep") as sleep, \
+             patch("catalog_photo_import.random.uniform", return_value=0):
+            result = _openai_json_request(object(), "Test")
+        self.assertTrue(result["ok"])
+        sleep.assert_called_once_with(15.0)
+
+    def test_rate_limit_exceeded_is_retryable_even_if_message_mentions_billing(self):
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{"ok": true}'
+        err = urllib.error.HTTPError("https://api.openai.com/v1/responses", 429, "Too Many Requests", {}, None)
+        err.read = lambda: b'{"error":{"code":"rate_limit_exceeded","message":"Rate limit reached; check plan and billing limits."}}'
+        with patch("catalog_photo_import.urllib.request.urlopen", side_effect=[err, Response()]) as call, \
+             patch("catalog_photo_import.time.sleep") as sleep, \
+             patch("catalog_photo_import.random.uniform", return_value=0):
+            result = _openai_json_request(object(), "Test", max_attempts=3)
+        self.assertTrue(result["ok"])
+        self.assertEqual(call.call_count, 2)
+        sleep.assert_called_once()
+
+    def test_openai_quota_429_does_not_retry(self):
+        err = urllib.error.HTTPError("https://api.openai.com/v1/responses", 429, "Too Many Requests", {}, None)
+        err.read = lambda: b'{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}'
+        with patch("catalog_photo_import.urllib.request.urlopen", side_effect=err) as call, \
+             patch("catalog_photo_import.time.sleep") as sleep:
+            with self.assertRaises(PhotoImportError) as ctx:
+                _openai_json_request(object(), "Test", max_attempts=3)
+        self.assertIn("insufficient_quota", str(ctx.exception))
+        self.assertEqual(call.call_count, 1)
+        sleep.assert_not_called()
+
+    def test_streamlit_resume_cache_is_scoped_to_archive_period_and_cover(self):
+        with open("app_web_catalog.py", "r", encoding="utf-8") as fh:
+            source = fh.read()
+        self.assertIn('archive_id = __import__("hashlib").sha256(photo_zip.getvalue()).hexdigest()', source)
+        self.assertIn('run_key = (archive_id, str(import_start), str(import_end), bool(has_cover), "manual-v1")', source)
+        self.assertIn('st.session_state["photo_manual_proposals"] = []', source)
+        self.assertIn('st.session_state.get("photo_manual_run_key") != run_key', source)
+
+    def test_streamlit_single_pair_ai_benchmark_keeps_write_gates(self):
+        source = Path("app_web_catalog.py").read_text(encoding="utf-8")
+        block = source[source.index("# --- IMPORT FOTO CATALOG FIZIC (FĂRĂ AI EXTERN) ---"):
+                       source.index("# --- GENERATOARE PDF ---")]
+        self.assertIn("analyze_pair_fixed_cells(", block)
+        self.assertIn("return_usage=True", block)
+        self.assertIn("CANDIDAT CELULĂ FIXĂ", block)
+        self.assertNotIn("OPENAI_API_KEY", block)
+        self.assertIn("Transcriere verificată din fotografia afișată", block)
+        self.assertIn("compare_with_workbook(", block)
+        self.assertIn("apply_confirmed_import(", block)
+        self.assertIn("update_excel_computed_values(", block)
+        self.assertIn("DEJA_EXISTENT", block)
+        self.assertIn("push_to_github(", block)
+
+    def test_manual_photo_list_is_scoped_to_archive_period_and_cover(self):
+        source = Path("app_web_catalog.py").read_text(encoding="utf-8")
+        self.assertIn('run_key = (archive_id, str(import_start), str(import_end), bool(has_cover), "manual-v1")', source)
+        self.assertIn('st.session_state["photo_manual_proposals"] = []', source)
+        self.assertIn('direct_check = st.checkbox(', source)
+        self.assertIn('disabled=not direct_check', source)
+
+
+if __name__=="__main__":
+    unittest.main()
