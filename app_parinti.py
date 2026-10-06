@@ -472,7 +472,7 @@ else:
     </style>
     """, unsafe_allow_html=True)
     with st.popover("🤠 Neluțu", use_container_width=False):
-        st.markdown("**No, zi... te-ajut. Tatuiază-mă și zâc tăt. 😄**")
+        st.markdown("**No, întreabă-mă orișâce vrei tu... da' nu pre mult, că mă ieftinesc. 😄**")
         _nelutu_topic = st.selectbox(
             "Poți porni de aici:",
             ["— alege o temă —", *NELUTU_QUICK_TOPICS],
