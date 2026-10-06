@@ -59,5 +59,37 @@ class NelutuTests(unittest.TestCase):
         for _,url in n.LEGAL_SOURCES.values():
             self.assertTrue(any(domain in url for domain in allowed),url)
 
+    def test_expert_contract_preserves_golden_rule_and_character(self):
+        c=n.expert_contract()
+        self.assertTrue(c["read_only"]); self.assertTrue(c["never_invent"])
+        self.assertTrue(c["never_judge"]); self.assertTrue(c["infinite_patience"])
+        self.assertTrue(c["self_ironic_humor"]); self.assertTrue(c["no_cross_student_access"])
+        self.assertTrue(c["no_secret_access"]); self.assertTrue(c["no_paid_or_external_ai"])
+
+    def test_portal_knowledge_covers_every_major_and_minor_area(self):
+        required=("scoala","invoire","documente","dosar personal","scutiri medicale","dosar bursa",
+                  "motivare absente parinte","documente deja transmise","note","absente","medii",
+                  "purtare","actualizeaza datele","whatsapp","deschide documentul","previzualizare pdf")
+        for topic in required:
+            self.assertIn(topic,n.portal_topics())
+            self.assertTrue(n.answer_with_context(topic).text)
+
+    def test_authorized_context_answers_specific_values_without_writes(self):
+        ctx={"facts":[{"keywords":("cate absente","total absente"),"answer":"Portalul afișează 7 absențe: 3 nemotivate și 4 motivate."}]}
+        a=n.answer_with_context("cate absente am?",ctx)
+        self.assertEqual(a.intent,"authorized_context")
+        self.assertIn("7 absențe",a.text)
+        self.assertIn("nu schimb nimic",a.text)
+
+    def test_context_does_not_leak_unmatched_fact(self):
+        ctx={"facts":[{"keywords":("media generala",),"answer":"SECRET-9.50"}]}
+        a=n.answer_with_context("ce documente pot trimite?",ctx)
+        self.assertNotIn("SECRET-9.50",a.text)
+
+    def test_unknown_free_question_still_refuses_to_invent(self):
+        a=n.answer_with_context("de ce exact a lipsit copilul martea trecuta?",{"facts":[]})
+        self.assertEqual(a.intent,"fallback")
+        self.assertIn("Nu vreau să scot un răspuns din clop",a.text)
+
 if __name__=="__main__":
     unittest.main()
