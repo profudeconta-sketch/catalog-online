@@ -22,7 +22,7 @@ import io
 import shutil
 import time
 import copy
-from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, parent_excuse_usage, read_registered_document, store_new_document
+from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, normalize_student_key, parent_excuse_usage, read_registered_document, store_new_document
 from conduct_storage import ConductStorageError, conduct_grades_for_student, load_conduct_registry, save_conduct_grade
 from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, IX_TH_2026_2027_CLASS_CDEOS_HOURS, build_annual_closure_snapshot, build_student_subject_inputs, preview_annual_closure
 from annual_closure_storage import AnnualClosureStorageError, load_private_annual_closure_snapshots, persist_private_annual_closure_batch_once
@@ -43,6 +43,7 @@ from leave_pass_storage import (
     read_approved_leave_pass,
     refuse_leave_request,
 )
+from notification_storage import RECIPIENT_TEACHER, list_notifications, mark_notification_read, reconcile_teacher_inbox
 from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
     PhotoImportError, ImportProposal, safe_zip_images, pair_catalog_images,
@@ -1768,6 +1769,27 @@ with st.sidebar:
 
 if not os.path.exists(selected_file):
     st.warning(f"⚠️ Fișierul catalog '{selected_file}' nu a fost găsit în directorul curent.")
+
+# Inbox global diriginte: derivat din registrele primare, independent de elevul selectat.
+try:
+    reconcile_teacher_inbox()
+    _student_name_by_key={normalize_student_key(e[3]): e[1] for e in ELEVI}
+    _teacher_notifications=list_notifications(recipient=RECIPIENT_TEACHER)
+    _teacher_unread=[n for n in _teacher_notifications if not n.get("read_at_utc")]
+    with st.expander(f"🔔 Inbox diriginte — {len(_teacher_unread)} necitite", expanded=bool(_teacher_unread)):
+        if not _teacher_notifications:
+            st.info("Nu există documente sau solicitări noi de la părinți.")
+        for _n in _teacher_notifications[:100]:
+            _name=_student_name_by_key.get(_n.get("student_key"),"Elev")
+            _status="🆕 NECITIT" if not _n.get("read_at_utc") else "✓ văzut"
+            st.markdown(f"**{_status} — {_n.get('title','Notificare')}**  \nElev: **{_name}**  \n{_n.get('message','')}")
+            if not _n.get("read_at_utc"):
+                if st.button("Marchează ca văzut",key=f"inbox_read_{_n['id']}"):
+                    mark_notification_read(_n["id"],RECIPIENT_TEACHER)
+                    st.rerun()
+            st.divider()
+except DocumentStorageError as _inbox_error:
+    st.warning(f"Inbox-ul nu a putut fi sincronizat în siguranță: {_inbox_error}")
 
 tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7, tab8, tab9, tab_photo = st.tabs([
     "➕ Adăugare Notă", 
