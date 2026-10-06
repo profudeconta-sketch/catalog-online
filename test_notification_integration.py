@@ -82,6 +82,18 @@ class NotificationIntegrationGuards(unittest.TestCase):
         button=p.index("Informează părintele despre actualizarea situației școlare")
         event=p.index('event_type="SITUATIE_SCOLARA_ACTUALIZATA"',button)
         self.assertLess(button,event)
+    def test_phone_delivery_is_guarded_against_duplicates_in_both_apps(self):
+        self.assertIn("delivery_needs_retry(event[\"id\"],RECIPIENT_PARENT,key)",self.teacher)
+        self.assertIn("delivery_needs_retry(event[\"id\"],RECIPIENT_TEACHER,key)",self.parent)
+
+    def test_existing_parent_event_can_retry_failed_phone_delivery(self):
+        p=self.teacher
+        start=p.index("def _register_parent_alert")
+        end=p.index("def get_current_elevi_and_pins",start)
+        block=p[start:end]
+        self.assertNotIn("if not created:",block)
+        self.assertIn("_deliver_parent_sms(event,student_rm_pg)",block)
+
     def test_phone_numbers_are_not_hardcoded_in_delivery_module(self):
         p=Path("phone_delivery.py").read_text(encoding="utf-8")
         self.assertNotIn("0742",p)
