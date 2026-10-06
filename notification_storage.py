@@ -180,14 +180,20 @@ def record_delivery(event_id,recipient,delivery_key,status,provider_id=None):
         if len(matches)!=1: raise DocumentStorageError("Notificarea nu există pentru livrare.")
         event=matches[0]
         deliveries=event.setdefault("deliveries",{})
+        now=dt.datetime.now(dt.timezone.utc).isoformat()
+        normalized_status=str(status or "").strip().lower()
         deliveries[str(delivery_key)]={
-            "status":str(status),"provider_id":str(provider_id or ""),
-            "updated_at_utc":dt.datetime.now(dt.timezone.utc).isoformat(),
+            "status":normalized_status,"provider_id":str(provider_id or ""),
+            "updated_at_utc":now,
         }
-        event["delivery_status"]="DELIVERED" if any(
-            d.get("status") in {"accepted","queued","sent","delivered","DELIVERED"}
+        successful_statuses={"accepted","queued","sent","delivered"}
+        has_success=any(
+            str(d.get("status") or "").strip().lower() in successful_statuses
             for d in deliveries.values()
-        ) else "PENDING"
+        )
+        event["delivery_status"]="DELIVERED" if has_success else "PENDING"
+        if has_success and not event.get("delivered_at_utc"):
+            event["delivered_at_utc"]=now
         try:
             save_notification_registry(registry,sha); return dict(event)
         except DocumentConflictError: continue
