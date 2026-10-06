@@ -44,4 +44,22 @@ class NotificationStorageTests(unittest.TestCase):
             self.assertEqual(len(events),2)
             self.assertEqual({e["event_type"] for e in events},{"DOCUMENT_PARINTE","CERERE_INVOIRE"})
 
+    def test_parent_notification_is_derived_only_from_school_documents(self):
+        docs={"schema_version":1,"documents":[
+            {"id":"s1","direction":"SCOALA_PARINTE","student_key":"S1","created_at_utc":"2026-10-06T11:00:00+00:00"},
+            {"id":"p1","direction":"PARINTE_SCOALA","student_key":"S1","created_at_utc":"2026-10-06T11:01:00+00:00"},
+            {"id":"s2","direction":"SCOALA_PARINTE","student_key":"S2","created_at_utc":"2026-10-06T11:02:00+00:00"},
+        ]}
+        with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write), \
+             patch.object(ns,"load_registry",return_value=(docs,None)):
+            self.assertEqual(ns.reconcile_parent_inbox("S1"),1)
+            self.assertEqual(ns.reconcile_parent_inbox("S1"),0)
+            events=ns.list_notifications(recipient=ns.RECIPIENT_PARENT,student_key="S1")
+            self.assertEqual(len(events),1)
+            event,changed=ns.mark_parent_source_read("S1","s1")
+            self.assertTrue(changed)
+            self.assertIsNotNone(event["read_at_utc"])
+            _,changed2=ns.mark_parent_source_read("S1","s1")
+            self.assertFalse(changed2)
+
 if __name__=="__main__": unittest.main()
