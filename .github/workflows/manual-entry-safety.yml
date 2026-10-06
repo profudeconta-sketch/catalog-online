@@ -15,6 +15,7 @@ on:
       - feature/nelutu-parent-assistant
       - feature/nelutu-system-mascot
       - feature/nelutu-cartoon-face
+      - feature/nelutu-fainosag
     paths:
       - "app_web_catalog.py"
       - "nelutu_mascot.py"
