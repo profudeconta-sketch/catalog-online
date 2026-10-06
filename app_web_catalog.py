@@ -1824,8 +1824,15 @@ try:
             st.info("Nu există documente sau solicitări noi de la părinți.")
         for _n in _teacher_notifications[:100]:
             _name=_student_name_by_key.get(_n.get("student_key"),"Elev")
-            _status="🆕 NECITIT" if not _n.get("read_at_utc") else "✓ văzut"
+            if _n.get("superseded_at_utc"):
+                _status=f"↪ înlocuită de revizia {_n.get('superseded_by_revision','curentă')}"
+            else:
+                _status="🆕 NECITIT" if not _n.get("read_at_utc") else "✓ văzut"
             st.markdown(f"**{_status} — {_n.get('title','Notificare')}**  \nElev: **{_name}**  \n{_n.get('message','')}")
+            if _n.get("superseded_at_utc"):
+                st.caption("Această formă rămâne în istoric pentru trasabilitate. Consultați revizia curentă a solicitării.")
+                st.divider()
+                continue
             _source_type=_n.get("source_type")
             _source_id=_n.get("source_id")
             _student_key=_n.get("student_key")
