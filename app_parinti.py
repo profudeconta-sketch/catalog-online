@@ -464,7 +464,9 @@ else:
         _parent_notifications=list_notifications(
             recipient=RECIPIENT_PARENT,student_key=_parent_student_key
         )
-        _parent_unread=[n for n in _parent_notifications if not n.get("read_at_utc")]
+        _parent_unread=list_notifications(
+            recipient=RECIPIENT_PARENT,student_key=_parent_student_key,unread_only=True
+        )
         if _parent_unread:
             st.info(f"🔔 Aveți {len(_parent_unread)} comunicare/comunicări noi de la școală.")
     except DocumentStorageError as _notification_error:
