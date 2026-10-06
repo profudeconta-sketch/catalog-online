@@ -95,6 +95,20 @@ class NelutuMascotTests(unittest.TestCase):
         self.assertNotIn("http://",html.lower())
         self.assertNotIn("https://",html.lower())
 
+    def test_idle_nudge_has_safe_contextual_repertoire(self):
+        school=render_nelutu_corner_nudge("school")
+        leave=render_nelutu_corner_nudge("leave")
+        docs=render_nelutu_corner_nudge("documents")
+        unknown=render_nelutu_corner_nudge("not-a-real-context")
+        self.assertIn("cele de la școală",school)
+        self.assertIn("învoiri",leave)
+        self.assertIn("hârtiile-s multe",docs)
+        self.assertIn("ce-ai găsit pe-acolo?",unknown)
+        for html in (school,leave,docs,unknown):
+            self.assertNotIn("<script",html.lower())
+            self.assertNotIn("http://",html.lower())
+            self.assertNotIn("https://",html.lower())
+
     def test_parent_portal_uses_small_click_assistant_not_giant_mascot(self):
         with open("app_parinti.py","r",encoding="utf-8") as handle:
             source=handle.read()
