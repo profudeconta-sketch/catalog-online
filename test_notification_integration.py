@@ -101,5 +101,28 @@ class NotificationIntegrationGuards(unittest.TestCase):
         self.assertIn("_parent_whatsapp_links",self.teacher)
         self.assertIn("_teacher_whatsapp_link",self.parent)
 
+    def test_teacher_sent_documents_keep_persistent_whatsapp_action(self):
+        section=self.teacher.index("Documente trimise către părinte/reprezentant legal")
+        block=self.teacher[section:section+7000]
+        self.assertIn("_parent_whatsapp_links(",block)
+        self.assertIn("teacher_sent_document_wa_",block)
+        self.assertIn("Deschide WhatsApp pentru părinte",block)
+
+    def test_parent_sent_documents_keep_persistent_whatsapp_action(self):
+        title=self.parent.index("Documente deja transmise dirigintelui")
+        section=self.parent.rfind("list_student_documents(",0,title)
+        self.assertNotEqual(section,-1)
+        block=self.parent[section:title+6000]
+        self.assertIn('direction="PARINTE_SCOALA"',block)
+        self.assertIn("_teacher_whatsapp_link(",block)
+        self.assertIn("parent_sent_document_wa_",block)
+
+    def test_parent_leave_request_keeps_persistent_whatsapp_action(self):
+        section=self.parent.index("current_leave_request = get_leave_request_for_day")
+        block=self.parent[section:section+3000]
+        self.assertIn("if current_leave_request:",block)
+        self.assertIn("_teacher_whatsapp_link(",block)
+        self.assertIn("leave_existing_wa_",block)
+
 
 if __name__=="__main__": unittest.main()
