@@ -2256,12 +2256,14 @@ with tab1:
                 if slot_found:
                     wb.save(selected_file)
                     if not update_excel_computed_values(selected_file):
-                        st.warning("⚠️ Modificarea a fost salvată, dar recalcularea valorilor derivate nu a fost confirmată.")
+                        _restore_manual_backup(selected_file, backup)
+                        raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
                     if push_to_github(selected_file):
                         st.success(f"✅ Notă salvată și sincronizată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
                         st.rerun()
                     else:
-                        st.warning("⚠️ Nota a fost salvată local, dar sincronizarea cu repository-ul privat nu a fost confirmată.")
+                        _restore_manual_backup(selected_file, backup)
+                        raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
                 else:
                     st.error("❌ Toate cele 10 sloturi de note sunt pline pentru această disciplină!")
                 wb.close()
@@ -2315,7 +2317,8 @@ with tab2:
                         st.success(f"✅ Absență salvată și sincronizată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
                         st.rerun()
                     else:
-                        st.warning("⚠️ Absența a fost salvată local, dar sincronizarea cu repository-ul privat nu a fost confirmată.")
+                        _restore_manual_backup(selected_file, backup)
+                        raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
                 else:
                     st.error("❌ Toate cele 30 de sloturi de absențe sunt pline pentru această disciplină!")
                 wb.close()
