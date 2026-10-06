@@ -2200,6 +2200,19 @@ def generate_pdf_pins(file_path):
     buffer.seek(0)
     return buffer
 
+def _normalize_manual_ddmm(value):
+    value = str(value or "").strip()
+    m = re.fullmatch(r"(\d{1,2})[./-](\d{1,2})", value)
+    if not m:
+        raise ValueError("Data trebuie introdusă în format DD.MM, de exemplu 02.10.")
+    day, month = map(int, m.groups())
+    datetime.date(2026, month, day)
+    return f"{day:02d}.{month:02d}"
+
+def _restore_manual_backup(path, backup):
+    if backup and os.path.exists(backup):
+        shutil.copy2(backup, path)
+
 # --- TAB 1: NOTĂ ---
 with tab1:
     st.subheader("Adăugare Notă Nouă (Sloturi N1 - N10)")
@@ -2217,7 +2230,12 @@ with tab1:
         if not os.path.exists(selected_file):
             st.error(f"Fișierul {selected_file} nu există!")
         else:
+            backup = None
+            wb = None
             try:
+                data_nota = _normalize_manual_ddmm(data_nota)
+                backup = selected_file + ".manual.bak"
+                shutil.copy2(selected_file, backup)
                 wb = openpyxl.load_workbook(selected_file)
                 sheet_name = "Cultură Generală" if cat_n == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
@@ -2230,6 +2248,11 @@ with tab1:
                     d_col = n_col + 1
                     cell_n = ws.cell(row=student_row, column=n_col)
                     cell_d = ws.cell(row=student_row, column=d_col)
+                    existing_date = str(cell_d.value or "").strip()
+                    if existing_date == data_nota:
+                        if str(cell_n.value).strip() == str(int(nota_val)):
+                            raise ValueError(f"Nota {nota_val} din {data_nota} există deja; nu a fost duplicată.")
+                        raise ValueError(f"Există deja nota {cell_n.value} în data {data_nota}; salvarea este blocată.")
                     if cell_n.value is None or str(cell_n.value).strip() == "":
                         cell_n.value = int(nota_val)
                         cell_d.value = str(data_nota)
@@ -2240,16 +2263,22 @@ with tab1:
                 if slot_found:
                     wb.save(selected_file)
                     if not update_excel_computed_values(selected_file):
-                        st.warning("⚠️ Modificarea a fost salvată, dar recalcularea valorilor derivate nu a fost confirmată.")
+                        _restore_manual_backup(selected_file, backup)
+                        raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
                     if push_to_github(selected_file):
                         st.success(f"✅ Notă salvată și sincronizată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
                         st.rerun()
                     else:
-                        st.warning("⚠️ Nota a fost salvată local, dar sincronizarea cu repository-ul privat nu a fost confirmată.")
+                        _restore_manual_backup(selected_file, backup)
+                        raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
                 else:
                     st.error("❌ Toate cele 10 sloturi de note sunt pline pentru această disciplină!")
                 wb.close()
             except Exception as ex:
+                if wb is not None:
+                    try: wb.close()
+                    except Exception: pass
+                _restore_manual_backup(selected_file, backup)
                 st.error(f"Eroare la salvare: {ex}")
 
 # --- TAB 2: ABSENȚĂ ---
@@ -2269,7 +2298,12 @@ with tab2:
         if not os.path.exists(selected_file):
             st.error(f"Fișierul {selected_file} nu există!")
         else:
+            backup = None
+            wb = None
             try:
+                data_abs = _normalize_manual_ddmm(data_abs)
+                backup = selected_file + ".manual.bak"
+                shutil.copy2(selected_file, backup)
                 wb = openpyxl.load_workbook(selected_file)
                 sheet_name = "Cultură Generală" if cat_a == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
@@ -2282,6 +2316,12 @@ with tab2:
                 for k in range(30):
                     a_col = start_col + 21 + k
                     cell_a = ws.cell(row=student_row, column=a_col)
+                    existing_abs = str(cell_a.value or "").strip()
+                    if existing_abs.lower().rstrip("m") == data_abs:
+                        requested = f"{data_abs}m" if is_mot else data_abs
+                        if existing_abs.lower() == requested.lower():
+                            raise ValueError(f"Absența din {data_abs} există deja; nu a fost duplicată.")
+                        raise ValueError(f"Absența din {data_abs} există deja cu altă stare de motivare; salvarea este blocată.")
                     if cell_a.value is None or str(cell_a.value).strip() == "":
                         cell_a.value = abs_val
                         cell_a.number_format = '@'
@@ -2291,12 +2331,14 @@ with tab2:
                 if slot_found:
                     wb.save(selected_file)
                     if not update_excel_computed_values(selected_file):
-                        st.warning("⚠️ Modificarea a fost salvată, dar recalcularea valorilor derivate nu a fost confirmată.")
+                        _restore_manual_backup(selected_file, backup)
+                        raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
                     if push_to_github(selected_file):
                         st.success(f"✅ Absență salvată și sincronizată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
                         st.rerun()
                     else:
-                        st.warning("⚠️ Absența a fost salvată local, dar sincronizarea cu repository-ul privat nu a fost confirmată.")
+                        _restore_manual_backup(selected_file, backup)
+                        raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
                 else:
                     st.error("❌ Toate cele 30 de sloturi de absențe sunt pline pentru această disciplină!")
                 wb.close()
