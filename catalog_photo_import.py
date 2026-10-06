@@ -337,13 +337,12 @@ def _parse_vision_records(body,student_names,start):
     except Exception as ex:
         raise PhotoImportError("Răspunsul AI nu este JSON valid; verificarea a fost oprită.") from ex
 
-def _vision_request(prompt,left,right,model=None,student_count=3,return_usage=False):
+def _vision_request(prompt,left,right,model=None,student_count=3,return_usage=False,images=None):
     model=model or os.environ.get("OPENAI_VISION_MODEL","gpt-5.4-mini")
+    selected=images if images is not None else (_student_band_crops(left,student_count)+_student_band_crops(right,student_count))
     payload={"model":model,"input":[{"role":"user","content":[
         {"type":"input_text","text":prompt},
-        {"type":"input_image","image_url":_data_url(left[0],left[1]),"detail":"high"},
-        {"type":"input_image","image_url":_data_url(right[0],right[1]),"detail":"high"},
-        *[{"type":"input_image","image_url":_data_url(n,d),"detail":"high"} for n,d in (_student_band_crops(left,student_count)+_student_band_crops(right,student_count))]]}]}
+        *[{"type":"input_image","image_url":_data_url(n,d),"detail":"high"} for n,d in selected]]}]}
     req=urllib.request.Request("https://api.openai.com/v1/responses",
         data=json.dumps(payload).encode(),
         headers={"Authorization":f"Bearer {_api_key()}","Content-Type":"application/json"},method="POST")
