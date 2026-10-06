@@ -88,6 +88,32 @@ class NotificationStorageTests(unittest.TestCase):
             _,changed2=ns.mark_parent_source_read("S1","s1")
             self.assertFalse(changed2)
 
+    def test_parent_reconcile_repairs_unread_notification_after_primary_access(self):
+        docs_unread={"schema_version":1,"documents":[
+            {"id":"s1","direction":"SCOALA_PARINTE","student_key":"S1",
+             "created_at_utc":"2026-10-06T11:00:00+00:00","first_accessed_at_utc":None}
+        ]}
+        docs_accessed={"schema_version":1,"documents":[
+            {"id":"s1","direction":"SCOALA_PARINTE","student_key":"S1",
+             "created_at_utc":"2026-10-06T11:00:00+00:00",
+             "first_accessed_at_utc":"2026-10-06T11:05:00+00:00"}
+        ]}
+        with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write), \
+             patch.object(ns,"load_registry",return_value=(docs_unread,None)):
+            self.assertEqual(ns.reconcile_parent_inbox("S1"),1)
+            self.assertEqual(len(ns.list_notifications(
+                recipient=ns.RECIPIENT_PARENT,student_key="S1",unread_only=True
+            )),1)
+        with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write), \
+             patch.object(ns,"load_registry",return_value=(docs_accessed,None)):
+            self.assertEqual(ns.reconcile_parent_inbox("S1"),0)
+            events=ns.list_notifications(recipient=ns.RECIPIENT_PARENT,student_key="S1")
+            self.assertEqual(len(events),1)
+            self.assertIsNotNone(events[0].get("read_at_utc"))
+            self.assertEqual(ns.list_notifications(
+                recipient=ns.RECIPIENT_PARENT,student_key="S1",unread_only=True
+            ),[])
+
     def test_academic_update_notifies_once_per_verified_version(self):
         with patch.object(ns,"private_read",self.read),patch.object(ns,"private_write",self.write):
             args=dict(recipient=ns.RECIPIENT_PARENT,event_type="SITUATIE_SCOLARA_ACTUALIZATA",
