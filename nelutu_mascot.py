@@ -76,14 +76,21 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
 
 
 def render_nelutu_corner_nudge() -> str:
-    """Două îndemnuri vizuale locale, după o scurtă liniște; fără JS, rețea, date sau acțiuni."""
+    """Curiozitate vizuală locală, CSS-only; fără JS, rețea, date sau acțiuni."""
     return """<style>
-.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{position:absolute;right:86px;bottom:50px;width:330px;padding:14px 16px;border:2px solid #c9a35f;border-radius:17px;background:#fffaf0;color:#211b17;font-size:1.02rem;font-weight:800;line-height:1.35;box-shadow:0 8px 24px rgba(55,38,20,.20);opacity:0;visibility:hidden;pointer-events:none}
-.nelutu-corner .nelutu-wrap::before{content:"No, ce-ai găsit pe-acolo? Dacă-i bai, zi-i lu’ Neluțu. Dacă nu-i bai, putem scormoni numa’ de curiozitate. 🤠";animation:nelutu-nudge-one 15s ease 1 forwards}
-.nelutu-corner .nelutu-wrap::after{content:"No,... zâ drept te ajută Neluțu! zâ nu-ț șie rusâne? că de nu api mai binie merem acasă, că vin lupii șâ tăt ne rup!";animation:nelutu-nudge-two 25s ease 1 forwards}
-@keyframes nelutu-nudge-one{0%,26%{opacity:0;visibility:hidden;transform:translateY(5px)}30%,92%{opacity:1;visibility:visible;transform:translateY(0)}100%{opacity:0;visibility:hidden}}
-@keyframes nelutu-nudge-two{0%,60%{opacity:0;visibility:hidden;transform:translateY(5px)}64%,96%{opacity:1;visibility:visible;transform:translateY(0)}100%{opacity:0;visibility:hidden}}
-@media(max-width:640px){.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{right:64px;bottom:38px;width:250px;font-size:.92rem}}
+.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{position:absolute;right:86px;bottom:50px;width:min(390px,72vw);padding:13px 15px;border:2px solid #b98b45;border-radius:16px;background:#fffaf0;color:#241d17;font-size:1rem;font-weight:800;line-height:1.35;box-shadow:0 7px 22px rgba(55,38,20,.20);opacity:0;visibility:hidden}
+.nelutu-corner .nelutu-wrap::before{content:"No, ce-ai găsit pe-acolo? Dacă-i bai, zi-i lu’ Neluțu. Dacă nu-i bai, putem scormoni numa’ de curiozitate. 🤠";animation:nelutu-curious-first 15s ease 1 forwards}
+.nelutu-corner .nelutu-wrap::after{content:"";animation:nelutu-curious-loop 67s step-end 1 forwards}
+@keyframes nelutu-curious-first{0%,32%{opacity:0;visibility:hidden;transform:translateY(5px)}34%,96%{opacity:1;visibility:visible;transform:translateY(0)}100%{opacity:0;visibility:hidden}}
+@keyframes nelutu-curious-loop{
+0%,1%{content:"";opacity:0;visibility:hidden}
+2%,17%{content:"No,... zâ drept te ajută Neluțu! zâ nu-ț șie rusâne? că de nu api mai binie merem acasă, că vin lupii șâ tăt ne rup!";opacity:1;visibility:visible}
+18%,27%{content:"";opacity:0;visibility:hidden}
+28%,37%,48%,57%,68%,77%{content:"No? mai stăm aci mult sau merem...";opacity:1;visibility:visible}
+38%,47%,58%,67%,78%,89%{content:"";opacity:0;visibility:hidden}
+90%,100%{content:"No! Io mă pui să mă culc ș-apăi mă huțuri tu când să mă scol... numa vezi... huțură-mă-ncet că io când mă scol, mă sâ ridic...";opacity:1;visibility:visible}
+}
+@media(max-width:640px){.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{right:64px;bottom:38px;width:min(285px,70vw);font-size:.86rem;max-height:34vh;overflow:auto}}
 @media(prefers-reduced-motion:reduce){.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{animation:none;display:none}}
 </style>"""
 
