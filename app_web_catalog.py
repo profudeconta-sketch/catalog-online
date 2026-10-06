@@ -45,7 +45,7 @@ from leave_pass_storage import (
     read_approved_leave_pass,
     refuse_leave_request,
 )
-from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_notification_read, reconcile_teacher_inbox, record_delivery
+from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_notification_read, reconcile_teacher_inbox, delivery_needs_retry, record_delivery
 from phone_delivery import PhoneDeliveryError, normalize_ro_phone, send_sms
 from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
@@ -271,8 +271,11 @@ def _deliver_parent_sms(event, student_rm_pg):
     delivered=0; errors=[]
     for phone in phones:
         try:
-            result=send_sms(phone,event.get("message") or "Catalog Online: aveți o actualizare nouă în Portalul Părinților.")
             key=hashlib.sha256(phone.encode("utf-8")).hexdigest()[:16]
+            if not delivery_needs_retry(event["id"],RECIPIENT_PARENT,key):
+                delivered+=1
+                continue
+            result=send_sms(phone,event.get("message") or "Catalog Online: aveți o actualizare nouă în Portalul Părinților.")
             record_delivery(event["id"],RECIPIENT_PARENT,key,result.get("status"),result.get("message_sid"))
             delivered+=1
         except (PhoneDeliveryError,DocumentStorageError,ValueError) as ex:
@@ -283,10 +286,8 @@ def _register_parent_alert(student_rm_pg, **kwargs):
     """Înregistrează/livrează notificarea fără a altera operația principală deja confirmată."""
     try:
         event,created=ensure_notification(recipient=RECIPIENT_PARENT,**kwargs)
-        if not created:
-            return event,False,0,[]
         sent,errors=_deliver_parent_sms(event,student_rm_pg)
-        return event,True,sent,errors
+        return event,created,sent,errors
     except (DocumentStorageError,ValueError) as ex:
         return None,False,0,[str(ex)]
 
