@@ -14,6 +14,6 @@ jobs:
           python-version: "3.13"
       - run: pip install -r requirements.txt
       - name: Compile notification and apps
-        run: python -m py_compile notification_storage.py app_web_catalog.py app_parinti.py
+        run: python -m py_compile notification_storage.py phone_delivery.py app_web_catalog.py app_parinti.py
       - name: Notification unit tests
-        run: python -m unittest -v test_notification_storage.py
+        run: python -m unittest -v test_notification_storage.py test_phone_delivery.py
