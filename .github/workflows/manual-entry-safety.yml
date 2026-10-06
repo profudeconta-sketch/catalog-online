@@ -1,0 +1,31 @@
+name: Manual entry safety
+on:
+  pull_request:
+    paths:
+      - "app_web_catalog.py"
+      - ".github/workflows/manual-entry-safety.yml"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile application
+        run: python -m py_compile app_web_catalog.py
+      - name: Verify protected existing functions and manual guards
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path("app_web_catalog.py").read_text(encoding="utf-8")
+          required=[
+              "def generate_pdf_student", "def generate_pdf_centralizator",
+              "def generate_pdf_raport", "def generate_pdf_pins",
+              "def _normalize_manual_ddmm", "def _restore_manual_backup",
+              "Nota {nota_val} din {data_nota} există deja",
+              "Absența din {data_abs} există deja",
+          ]
+          missing=[x for x in required if x not in s]
+          assert not missing, f"Missing protected functions/guards: {missing}"
+          PY
