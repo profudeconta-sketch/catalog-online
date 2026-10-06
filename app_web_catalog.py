@@ -41,6 +41,7 @@ from leave_pass_storage import (
     STATUS_REFUSED as LEAVE_STATUS_REFUSED,
     approve_leave_request,
     get_leave_request_for_day,
+    load_leave_pass_registry,
     read_approved_leave_pass,
     refuse_leave_request,
 )
@@ -1825,10 +1826,50 @@ try:
             _name=_student_name_by_key.get(_n.get("student_key"),"Elev")
             _status="🆕 NECITIT" if not _n.get("read_at_utc") else "✓ văzut"
             st.markdown(f"**{_status} — {_n.get('title','Notificare')}**  \nElev: **{_name}**  \n{_n.get('message','')}")
-            if not _n.get("read_at_utc"):
-                if st.button("Marchează ca văzut",key=f"inbox_read_{_n['id']}"):
-                    mark_notification_read(_n["id"],RECIPIENT_TEACHER)
-                    st.rerun()
+            _source_type=_n.get("source_type")
+            _source_id=_n.get("source_id")
+            _student_key=_n.get("student_key")
+            if _source_type=="DOCUMENT":
+                try:
+                    _doc_record,_doc_content=read_registered_document(_student_key,_source_id)
+                    _mime=_doc_record.get("mime_type") or "application/octet-stream"
+                    _filename=_doc_record.get("original_filename") or f"document_{_source_id}"
+                    if st.download_button(
+                        "📄 Deschide / descarcă documentul",
+                        data=_doc_content,file_name=_filename,mime=_mime,
+                        key=f"inbox_open_doc_{_n['id']}",
+                    ):
+                        mark_notification_read(_n["id"],RECIPIENT_TEACHER)
+                        st.rerun()
+                except DocumentStorageError as _source_error:
+                    st.error(f"Documentul sursă nu poate fi deschis în siguranță: {_source_error}")
+            elif _source_type=="INVOIRE":
+                try:
+                    _leave_registry,_=load_leave_pass_registry()
+                    _leave_matches=[
+                        item for item in _leave_registry.get("requests",[])
+                        if str(item.get("id"))==str(_source_id)
+                        and item.get("student_key")==str(_student_key)
+                        and str(item.get("revision",1))==str(_n.get("source_revision") or 1)
+                    ]
+                    if len(_leave_matches)!=1:
+                        raise DocumentStorageError("Solicitarea sursă nu există în revizia notificată.")
+                    _leave=dict(_leave_matches[0])
+                    with st.expander("📋 Deschide solicitarea de învoire"):
+                        st.write(f"Data: {_leave.get('request_date','-')}")
+                        st.write(f"Ora plecării: {_leave.get('departure_time','-')}")
+                        st.write(f"Motiv: {_leave.get('reason_label','-')}")
+                        st.write(f"Stare: {_leave.get('status','-')}")
+                        if not _n.get("read_at_utc") and st.button(
+                            "Confirmă vizualizarea solicitării",
+                            key=f"inbox_open_leave_{_n['id']}",
+                        ):
+                            mark_notification_read(_n["id"],RECIPIENT_TEACHER)
+                            st.rerun()
+                except DocumentStorageError as _source_error:
+                    st.error(f"Solicitarea sursă nu poate fi deschisă în siguranță: {_source_error}")
+            else:
+                st.warning("Tipul sursei notificării nu este recunoscut; notificarea rămâne necitită.")
             st.divider()
 except DocumentStorageError as _inbox_error:
     st.warning(f"Inbox-ul nu a putut fi sincronizat în siguranță: {_inbox_error}")
