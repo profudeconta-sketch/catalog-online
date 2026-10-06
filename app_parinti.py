@@ -478,8 +478,9 @@ else:
     @media(max-width:640px){div[data-testid="stPopover"]{right:10px;bottom:10px}div[data-testid="stPopover"] > button{min-width:70px;min-height:80px}}
     </style>
     """, unsafe_allow_html=True)
-    with st.popover("🤠 Neluțu", use_container_width=False):
-        st.markdown("**No, întreabă-mă orișâce vrei tu... da’ nu pre mult, că mă ieftinesc. 😄**")
+    with st.popover("🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST", use_container_width=False):
+        st.markdown("**🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST**")
+        st.caption("No, întreabă-mă orișâce vrei tu... da’ nu pre mult, că mă ieftinesc. 😄")
         _nelutu_topic = st.selectbox(
             "Poți porni de aici:",
             ["— alege o temă —", *NELUTU_QUICK_TOPICS],

@@ -44,9 +44,9 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
   <path d="M31 164 L34 128 Q40 113 55 109 L95 109 Q111 113 117 128 L120 164Z" fill="#49352b" stroke="#2f211c" stroke-width="3"/>
   <path d="M54 113 Q75 121 96 113 L101 164 L49 164Z" fill="#fffaf0" stroke="#5c4436" stroke-width="2"/>
   <path d="M55 124 L48 155 M95 124 L102 155" stroke="#b23a32" stroke-width="3"/>
-  <path class="nelutu-brau" d="M35 137 Q75 145 115 137 L117 160 Q75 168 33 160Z" fill="#8a2f2a" stroke="#3a241d" stroke-width="2"/>
-  <text class="nelutu-brau-title" x="75" y="148" text-anchor="middle" font-size="7.2" font-weight="900" fill="#fff8df">PRIMU’ AI</text>
-  <text class="nelutu-brau-subtitle" x="75" y="156.5" text-anchor="middle" font-size="5.8" font-weight="900" fill="#fff8df">DIN ARDEAL</text>
+  <path class="nelutu-brau" d="M25 133 Q75 143 125 133 L128 163 Q75 174 22 163Z" fill="#8a2f2a" stroke="#3a241d" stroke-width="2"/>
+  <text class="nelutu-brau-title" x="75" y="146" text-anchor="middle" font-size="8.4" font-weight="900" fill="#fff8df">PRIMU’ AI DIN ARDEAL</text>
+  <text class="nelutu-brau-subtitle" x="75" y="157" text-anchor="middle" font-size="7.0" font-weight="900" fill="#fff8df">NELUȚU-AL NOST 🤠</text>
   <title>PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST • PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST</title>
 
   <path d="M66 122 l5 5 -5 5 5 5 -5 5 M84 122 l-5 5 5 5 -5 5 5 5" fill="none" stroke="#b23a32" stroke-width="2"/>
@@ -123,8 +123,8 @@ def render_nelutu_corner(state:str="idle") -> str:
     mascot=render_nelutu_mascot(state,"")
     return f"""<div class="nelutu-corner">{mascot}</div>
 <style>
-.nelutu-corner .nelutu-wrap{{position:fixed;right:18px;bottom:18px;z-index:9999;width:92px;height:104px;padding:7px;display:block;border-radius:22px;background:rgba(255,250,240,.96);box-shadow:0 8px 26px rgba(55,38,20,.22);overflow:visible;pointer-events:none}}
-.nelutu-corner .nelutu-avatar{{width:82px;height:92px;display:block;margin:auto}}
+.nelutu-corner .nelutu-wrap{{position:fixed;right:18px;bottom:82px;z-index:10020;width:112px;height:132px;padding:7px;display:block;border-radius:22px;background:rgba(255,250,240,.96);box-shadow:0 8px 26px rgba(55,38,20,.22);overflow:visible;pointer-events:none}}
+.nelutu-corner .nelutu-avatar{{width:102px;height:116px;display:block;margin:auto}}
 .nelutu-corner .nelutu-bubble{{display:none}}
-@media(max-width:640px){{.nelutu-corner .nelutu-wrap{{right:9px;bottom:9px;width:70px;height:80px;padding:5px}}.nelutu-corner .nelutu-avatar{{width:62px;height:70px}}}}
+@media(max-width:640px){{.nelutu-corner .nelutu-wrap{{right:9px;bottom:70px;width:88px;height:104px;padding:5px}}.nelutu-corner .nelutu-avatar{{width:78px;height:90px}}}}
 </style>"""
