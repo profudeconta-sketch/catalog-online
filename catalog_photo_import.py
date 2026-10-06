@@ -232,9 +232,9 @@ def _student_band_crops(image, count):
         out.append((f"{PurePosixPath(image[0]).stem}-antet-elev-{idx+1}.jpg",buf.getvalue()))
     return out
 
-def _discipline_cell_crops(image, student_count, disciplines=11):
-    """Decupează o disciplină fizică: antetul tipărit + Absențe/Note + zona de înscriere a unui elev.
-    Geometria este măsurată pe formularul real; indexul coloanei NU atribuie semantic disciplina.
+def _discipline_cell_crops(image, student_count, layout="left"):
+    """Decupează discipline fizice folosind șabloane distincte pentru cele două pagini.
+    Indexul geometric NU atribuie semantic disciplina; numele trebuie citit din antet.
     """
     try:
         from PIL import Image
@@ -242,26 +242,31 @@ def _discipline_cell_crops(image, student_count, disciplines=11):
         return []
     im=Image.open(io.BytesIO(image[1])).convert("RGB")
     w,h=im.size
-    # Pe fotografia reală 1500x2000: disciplinele sunt aproximativ x=573..1500,
-    # antetul se termină înainte de y=150; înscrierile elevului 1 încep imediat după.
-    x0=int(w*0.382); x1=w
-    header_y0=int(h*0.020); header_y1=int(h*0.073)
-    row_tops=(0.075,0.360,0.670)
+    if layout=="left":
+        x0,x1,disciplines=int(w*0.382),w,11
+        header_y0,header_y1=int(h*0.020),int(h*0.073)
+        row_tops=(0.075,0.360,0.670)
+    elif layout=="right":
+        # Pagina dreaptă are mai multe discipline/module și începe mult mai la stânga.
+        # Excludem coloanele finale de purtare/total, care nu sunt discipline de import.
+        x0,x1,disciplines=int(w*0.150),int(w*0.855),14
+        header_y0,header_y1=int(h*0.020),int(h*0.073)
+        row_tops=(0.075,0.345,0.640)
+    else:
+        raise PhotoImportError("Șablon fizic de pagină necunoscut.")
     row_height=0.095
     out=[]
     for student in range(min(student_count,3)):
         y0=int(h*row_tops[student]); y1=min(h,int(h*(row_tops[student]+row_height)))
         for col in range(disciplines):
             cx0=x0+(x1-x0)*col//disciplines; cx1=x0+(x1-x0)*(col+1)//disciplines
-            # Mică margine laterală păstrează liniile delimitatoare și textul înclinat de perspectivă.
-            pad=max(2,int(w*0.003))
-            px0=max(0,cx0-pad); px1=min(w,cx1+pad)
+            pad=max(2,int(w*0.003)); px0=max(0,cx0-pad); px1=min(w,cx1+pad)
             head=im.crop((px0,header_y0,px1,header_y1))
             cell=im.crop((px0,y0,px1,y1))
             stitched=Image.new("RGB",(px1-px0,head.height+cell.height),"white")
             stitched.paste(head,(0,0)); stitched.paste(cell,(0,head.height))
             buf=io.BytesIO(); stitched.save(buf,format="JPEG",quality=95)
-            out.append((f"{PurePosixPath(image[0]).stem}-e{student+1}-d{col+1}.jpg",buf.getvalue()))
+            out.append((f"{PurePosixPath(image[0]).stem}-{layout}-e{student+1}-d{col+1}.jpg",buf.getvalue()))
     return out
 
 def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects,return_usage=False):
@@ -403,7 +408,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
           "nu deduce luna din perioada cerută și nu o împrumuta din altă rubrică. "
           "legible=true numai dacă TOATE câmpurile sunt citibile direct din fotografie, fără inferență. Nu ghici.")
         # Reverificarea primește celule fizice înguste: antetul coloanei + un singur elev.
-        focused=_discipline_cell_crops(left,len(student_names))+_discipline_cell_crops(right,len(student_names))
+        focused=_discipline_cell_crops(left,len(student_names),"left")+_discipline_cell_crops(right,len(student_names),"right")
         body, pass_usage=_vision_request(prompt,left,right,student_count=len(student_names),return_usage=True,images=focused)
         usage_totals["input_tokens"] += pass_usage["input_tokens"]
         usage_totals["output_tokens"] += pass_usage["output_tokens"]
