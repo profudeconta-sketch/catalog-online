@@ -263,8 +263,8 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
             val=str(r.get("value","")).strip()
             if kind=="grade" and (not val.isdigit() or not 1<=int(val)<=10): continue
             legible=bool(r.get("legible",False))
-            verifiable=legible and conf>=0.90
-            reason="" if verifiable else "Citirea nu este suficient de clară pentru scriere automată; necesită verificare."
+            verifiable=False
+            reason="Prima citire AI este doar candidat; procentul de încredere al modelului nu constituie dovadă. Este necesar consens independent sau verificare umană."
             out.append(ImportProposal(idx,str(r["category"]).strip(),str(r["subject"]).strip(),kind,val,date,bool(r.get("motivated",False)),conf,str(r.get("source_image","")),verifiable,reason))
         except Exception: continue
     if return_usage:
