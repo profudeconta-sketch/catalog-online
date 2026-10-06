@@ -330,15 +330,47 @@ def _normalized_header_label(value):
     raw=re.sub(r"\s+"," ",raw).strip()
     return raw
 
+PHYSICAL_TO_ONLINE_ALIASES={
+    "limba 1) engleză":"Limba engleză (L1)",
+    "limba 1 engleză":"Limba engleză (L1)",
+    "limba engleză":"Limba engleză (L1)",
+    "limba 2) franceză":"Limba franceză (L2)",
+    "limba 2 franceză":"Limba franceză (L2)",
+    "limba franceză":"Limba franceză (L2)",
+    "științe socio-umane logică":"Logică, argumentare și comunicare",
+    "logică":"Logică, argumentare și comunicare",
+    "religie / istoria religiilor":"Religie",
+    "religie/istoria religiilor":"Religie",
+    "educație plastică":"Arte vizuale și educație plastică",
+    "educație fizică și sport":"Educație fizică",
+    "informatică":"Informatică / TIC",
+    "tehnologia informației și a comunicațiilor":"Informatică / TIC",
+    "m1 bazele contabilității":"M1: Bazele contabilității",
+    "m1: bazele contabilității":"M1: Bazele contabilității",
+    "m2 etică și comunicare":"M2: Etică și comunicare",
+    "m2: etică și comunicare":"M2: Etică și comunicare",
+    "m3 structuri de primire turistică":"M3: Structuri de primire turistică",
+    "m3: structuri de primire turistică":"M3: Structuri de primire turistică",
+    "m4 procese și calitate în horeca":"M4: Procese și calitate în HoReCa",
+    "m4: procese și calitate în horeca":"M4: Procese și calitate în HoReCa",
+    "m5 cdeoș (ip) - instruire practică":"M5: CDEOȘ (IP) - Instruire Practică",
+    "m5: cdeoș (ip) - instruire practică":"M5: CDEOȘ (IP) - Instruire Practică",
+    "m6 curriculum de aprofundare și inserție profesională":"M6: Curriculum de aprofundare și inserție profesională",
+    "m6: curriculum de aprofundare și inserție profesională":"M6: Curriculum de aprofundare și inserție profesională",
+}
+
 def map_physical_label_to_online(label, category, allowed_subjects):
-    """Mapare conservatoare: ignorăm doar ghilimele și spații parazite.
-    Cuvintele trebuie să coincidă integral; poziția coloanei nu atribuie disciplina.
+    """Mapare conservatoare: egalitate textuală sau alias fizic explicit verificat.
+    Poziția coloanei nu atribuie niciodată disciplina.
     """
     raw=_normalized_header_label(label)
-    if not raw:
+    if not raw or raw in {"absente","absențe","note"}:
         return None
     matches=[name for name in allowed_subjects if _normalized_header_label(name)==raw]
-    return matches[0] if len(matches)==1 else None
+    if len(matches)==1:
+        return matches[0]
+    target=PHYSICAL_TO_ONLINE_ALIASES.get(raw)
+    return target if target in allowed_subjects else None
 
 def _semantic_key(p):
     return (p.student_index,p.category.casefold(),p.subject.casefold(),p.kind,p.date,
