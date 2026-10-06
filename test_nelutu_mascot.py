@@ -1,5 +1,5 @@
 import unittest
-from nelutu_mascot import render_nelutu_mascot, visual_contract
+from nelutu_mascot import render_nelutu_corner, render_nelutu_mascot, visual_contract
 
 class NelutuMascotTests(unittest.TestCase):
     def test_visual_contract_is_safe(self):
@@ -39,6 +39,15 @@ class NelutuMascotTests(unittest.TestCase):
     def test_unknown_state_falls_back_to_idle(self):
         html=render_nelutu_mascot("oare-ce-o-fi")
         self.assertIn("nelutu-idle",html)
+
+    def test_corner_mascot_is_small_fixed_and_non_interactive(self):
+        html=render_nelutu_corner("idle")
+        self.assertIn("position:fixed",html)
+        self.assertIn("right:18px",html)
+        self.assertIn("bottom:18px",html)
+        self.assertIn("pointer-events:none",html)
+        self.assertIn("width:82px",html)
+        self.assertIn("nelutu-bubble{display:none}",html)
 
     def test_no_external_or_script_dependencies(self):
         html=render_nelutu_mascot()
