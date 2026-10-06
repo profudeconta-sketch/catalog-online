@@ -2769,7 +2769,7 @@ with tab4:
                     message="Situația școlară din Catalog Online a fost verificată și actualizată. Accesați Portalul Părinților pentru detalii.",
                 )
                 if _created:
-                    _wa_links=_parent_whatsapp_links(_event,e_info[3]) if False else _parent_whatsapp_links(e_info[3],_event.get("message") or "")
+                    _wa_links=_parent_whatsapp_links(e_info[3],_event.get("message") or "")
                     st.success("✅ Informarea a fost înregistrată în Portalul Părinților.")
                     for _idx,_wa in enumerate(_wa_links):
                         st.link_button(f"📲 Deschide WhatsApp pentru părinte {(_idx+1)}",_wa,use_container_width=True)
