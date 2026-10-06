@@ -248,6 +248,16 @@ class PhotoImportSafetyTests(unittest.TestCase):
             body,usage=cpi._vision_request("x",("left.jpg",b"bad"),("right.jpg",b"bad"),images=[("cell.jpg",b"abc")],return_usage=True)
         self.assertEqual(usage["total_tokens"],2)
 
+    def test_candidate_cells_follow_verified_physical_template(self):
+        import catalog_photo_import as cpi
+        from PIL import Image
+        import io
+        im=Image.new('RGB',(1500,2000),'white'); buf=io.BytesIO(); im.save(buf,format='JPEG')
+        p=ImportProposal(0,'Cultură Generală','Matematică','absence','','30.09',False)
+        crops=cpi._candidate_cell_crops(('8.jpeg',buf.getvalue()),('9.jpeg',buf.getvalue()),3,[p])
+        self.assertEqual(len(crops),1)
+        self.assertIn('8-left-e1-d6',crops[0][0])
+
     def test_physical_cell_crops_use_distinct_page_templates(self):
         from PIL import Image
         import io
