@@ -63,6 +63,28 @@ def _context_lookup(q:str, context:dict|None):
             return str(item.get("answer") or "").strip() or None
     return None
 
+def build_student_context(*, media_generala=None, media_cultura=None, media_module=None,
+                          purtare=None, total_absente=None, absente_nemotivate=None,
+                          absente_motivate=None, discipline=None)->dict:
+    """Construiește numai fapte deja calculate/autorizate de portal; nu citește și nu scrie stocare."""
+    facts=[]
+    def put(keys, text):
+        facts.append({"keywords": tuple(keys), "answer": text})
+    if media_generala is not None: put(("media generala","media mea"), f"Media generală afișată acum este {media_generala}.")
+    if media_cultura is not None: put(("media cultura","cultura generala"), f"Media pentru cultura generală afișată este {media_cultura}.")
+    if media_module is not None: put(("media module","module tehnologice"), f"Media modulelor tehnologice afișată este {media_module}.")
+    if purtare is not None: put(("nota la purtare","purtare"), f"Nota la purtare afișată acum este {purtare}.")
+    if total_absente is not None:
+        put(("cate absente","total absente","absente am"), f"Portalul afișează {total_absente} absențe în total: {absente_nemotivate or 0} nemotivate și {absente_motivate or 0} motivate.")
+    if absente_nemotivate is not None:
+        put(("absente nemotivate","nemotivate"), f"Portalul afișează {absente_nemotivate} absențe nemotivate. Contextul arată starea, nu dovedește cauza individuală pentru care fiecare a rămas nemotivată.")
+    if absente_motivate is not None: put(("absente motivate","motivate"), f"Portalul afișează {absente_motivate} absențe motivate.")
+    for row in (discipline or ()):
+        name=str(row.get("name") or "").strip()
+        if not name: continue
+        put((name,), f"La {name}, portalul afișează: note {row.get('notes','—')}; absențe {row.get('absences','—')}; media actuală {row.get('average','—')}.")
+    return {"facts": facts}
+
 def answer_with_context(question:str, context:dict|None=None)->NelutuAnswer:
     q=_norm(question)
     contextual=_context_lookup(q, context)
