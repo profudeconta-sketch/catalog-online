@@ -345,7 +345,7 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
             physical=str(r.get("physical_label") or r.get("subject") or "").strip()
             mapped=map_physical_label_to_online(physical,str(r.get("category","")).strip(),allowed_subjects)
             if not mapped: reason="Rubrica fizică a fost citită, dar nu are o mapare textuală unică spre catalogul electronic; necesită mapare explicită."
-            out.append(ImportProposal(idx,str(r.get("category","")).strip(),mapped or "",kind,val,date,bool(r.get("motivated",False)),conf,str(r.get("source_image","")),verifiable,reason,physical,legible and bool(mapped)))
+            out.append(ImportProposal(idx,_canonical_category(mapped,str(r.get("category","")).strip()),mapped or "",kind,val,date,bool(r.get("motivated",False)),conf,str(r.get("source_image","")),verifiable,reason,physical,legible and bool(mapped)))
         except Exception: continue
     if return_usage:
         usage = body.get("usage", {}) if isinstance(body, dict) else {}
@@ -400,6 +400,11 @@ def map_physical_label_to_online(label, category, allowed_subjects):
         return matches[0]
     target=PHYSICAL_TO_ONLINE_ALIASES.get(raw)
     return target if target in allowed_subjects else None
+
+def _canonical_category(subject, reported=""):
+    if subject:
+        return "Module Tehnologice" if re.match(r"^M[1-6]:",subject,re.I) else "Cultură Generală"
+    return str(reported or "").strip()
 
 def _semantic_key(p):
     return (p.student_index,p.category.casefold(),p.subject.casefold(),p.kind,p.date,
@@ -494,7 +499,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
                 physical=str(r.get("physical_label") or r.get("subject") or "").strip()
                 mapped=map_physical_label_to_online(physical,str(r.get("category","")).strip(),allowed_subjects)
                 reason="" if mapped else "Rubrica fizică nu are mapare textuală unică spre catalogul electronic."
-                out.append(ImportProposal(idx,str(r.get("category","")).strip(),mapped or "",kind,val,date,
+                out.append(ImportProposal(idx,_canonical_category(mapped,str(r.get("category","")).strip()),mapped or "",kind,val,date,
                     bool(r.get("motivated",False)),conf,str(r.get("source_image","")),False,reason,physical,legible and bool(mapped)))
             except Exception:
                 continue
