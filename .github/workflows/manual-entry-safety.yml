@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - "app_web_catalog.py"
+      - "app_parinti.py"
+      - "test_notification_integration.py"
       - ".github/workflows/manual-entry-safety.yml"
   push:
     branches:
