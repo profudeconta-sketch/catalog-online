@@ -349,7 +349,7 @@ def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects
       "Acceptă data numai dacă luna este demonstrabilă vizual în aceeași rubrică; nu transfera luna de la alt elev, altă disciplină sau altă rubrică. "
       "Dacă se vede numai ziua, dar luna nu poate fi demonstrată, păstrează recordul cu legible=false; NU presupune luna din intervalul cerut. "
       "Dacă există orice dubiu, păstrează recordul, pune legible=false și confidence corespunzător; nu inventa valoarea.")
-    model=os.environ.get("OPENAI_VISION_MODEL","gpt-6-luna")
+    model=os.environ.get("OPENAI_VISION_MODEL","gpt-5.4-mini")
     payload={"model":model,"input":[{"role":"user","content":[
       {"type":"input_text","text":prompt},
       {"type":"input_image","image_url":_data_url(left[0],left[1]),"detail":"high"},
@@ -395,7 +395,7 @@ def _parse_vision_records(body,student_names,start):
         raise PhotoImportError("Răspunsul AI nu este JSON valid; verificarea a fost oprită.") from ex
 
 def _vision_request(prompt,left,right,model=None,student_count=3):
-    model=model or os.environ.get("OPENAI_VISION_MODEL","gpt-6-luna")
+    model=model or os.environ.get("OPENAI_VISION_MODEL","gpt-5.4-mini")
     payload={"model":model,"input":[{"role":"user","content":[
         {"type":"input_text","text":prompt},
         {"type":"input_image","image_url":_data_url(left[0],left[1]),"detail":"high"},
