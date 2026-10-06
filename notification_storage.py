@@ -139,3 +139,25 @@ def mark_parent_source_read(student_key, source_id):
     if not matches:
         return None,False
     return mark_notification_read(matches[0]["id"],RECIPIENT_PARENT)
+
+
+def record_delivery(event_id,recipient,delivery_key,status,provider_id=None):
+    """Păstrează starea livrării fără numărul de telefon în registru."""
+    for _ in range(3):
+        registry,sha=load_notification_registry()
+        matches=[x for x in registry["events"] if x.get("id")==str(event_id) and x.get("recipient")==recipient]
+        if len(matches)!=1: raise DocumentStorageError("Notificarea nu există pentru livrare.")
+        event=matches[0]
+        deliveries=event.setdefault("deliveries",{})
+        deliveries[str(delivery_key)]={
+            "status":str(status),"provider_id":str(provider_id or ""),
+            "updated_at_utc":dt.datetime.now(dt.timezone.utc).isoformat(),
+        }
+        event["delivery_status"]="DELIVERED" if any(
+            d.get("status") in {"accepted","queued","sent","delivered","DELIVERED"}
+            for d in deliveries.values()
+        ) else "PENDING"
+        try:
+            save_notification_registry(registry,sha); return dict(event)
+        except DocumentConflictError: continue
+    raise DocumentConflictError("Starea livrării nu a putut fi salvată.")
