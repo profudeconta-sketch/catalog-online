@@ -3744,6 +3744,17 @@ with tab8:
                     use_container_width=True,
                     key="teacher_download_sent_document",
                 )
+                _sent_wa_links = _parent_whatsapp_links(
+                    doc_student[3],
+                    "Catalog Online: aveți un document transmis de școală disponibil în Portalul Părinților.",
+                )
+                for _idx, _wa in enumerate(_sent_wa_links):
+                    st.link_button(
+                        f"📲 Deschide WhatsApp pentru părinte {(_idx + 1)}",
+                        _wa,
+                        use_container_width=True,
+                        key=f"teacher_sent_document_wa_{selected_sent_id}_{_idx}",
+                    )
             except DocumentStorageError as ex:
                 st.error(f"Documentul trimis nu poate fi deschis în siguranță: {ex}")
 
