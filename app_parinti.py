@@ -13,7 +13,7 @@ from parent_excuse_pdf import generate_parent_excuse_pdf
 from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_parent_source_read, reconcile_parent_inbox
 from whatsapp_delivery import teacher_phone, whatsapp_link
 from nelutu_assistant import QUICK_TOPICS as NELUTU_QUICK_TOPICS, answer as nelutu_answer
-from nelutu_mascot import render_nelutu_mascot
+from nelutu_mascot import render_nelutu_corner, render_nelutu_mascot
 from leave_pass_storage import (
     REASONS as LEAVE_PASS_REASONS,
     STATUS_APPROVED as LEAVE_STATUS_APPROVED,
@@ -456,6 +456,9 @@ else:
 
     st.divider()
 
+
+    # Neluțu rămâne vizibil discret în colț pe tot parcursul sesiunii autentificate.
+    st.markdown(render_nelutu_corner("idle"), unsafe_allow_html=True)
 
     # --- NELUȚU: asistent local, gratuit, exclusiv read-only ---
     with st.expander("🤠 Neluțu — ajutorul simpatic din Portal", expanded=False):
