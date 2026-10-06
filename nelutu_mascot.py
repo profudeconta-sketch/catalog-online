@@ -76,14 +76,14 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
 
 
 def render_nelutu_corner_nudge() -> str:
-    """Două îndemnuri vizuale locale după inactivitate; fără JS, rețea, date sau acțiuni."""
+    """Două îndemnuri vizuale locale, CSS-only; apoi Neluțu tace."""
     return """<style>
-.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{position:absolute;right:86px;bottom:50px;width:245px;padding:10px 12px;border:1px solid #dfc28d;border-radius:16px;background:#fffaf0;color:#2e2925;font-size:.88rem;line-height:1.3;box-shadow:0 6px 20px rgba(55,38,20,.16);opacity:0;visibility:hidden}
+.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{position:absolute;right:86px;bottom:50px;width:285px;padding:12px 14px;border:2px solid #b8955b;border-radius:16px;background:#fffaf0;color:#211b16;font-size:1rem;font-weight:800;line-height:1.35;box-shadow:0 7px 22px rgba(55,38,20,.20);opacity:0;visibility:hidden}
 .nelutu-corner .nelutu-wrap::before{content:"No, ce-ai găsit pe-acolo? Dacă-i bai, zi-i lu’ Neluțu. Dacă nu-i bai, putem scormoni numa’ de curiozitate. 🤠";animation:nelutu-curious-first 20s ease 1 forwards}
-.nelutu-corner .nelutu-wrap::after{content:"No, te ajut? Ori merem acasă, că vin lupii și tăt ne rup! 🐺";animation:nelutu-curious-last 30s ease 1 forwards}
-@keyframes nelutu-curious-first{0%,22%{opacity:0;visibility:hidden;transform:translateY(5px)}25%,72%{opacity:1;visibility:visible;transform:translateY(0)}78%,100%{opacity:0;visibility:hidden}}
-@keyframes nelutu-curious-last{0%,63%{opacity:0;visibility:hidden;transform:translateY(5px)}67%,94%{opacity:1;visibility:visible;transform:translateY(0)}100%{opacity:0;visibility:hidden}}
-@media(max-width:640px){.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{right:64px;bottom:38px;width:205px;font-size:.78rem}}
+.nelutu-corner .nelutu-wrap::after{content:"No, te ajut? ori merem acasă, că vin lupii și tăt ne rup! 🐺";animation:nelutu-curious-second 27s ease 1 forwards}
+@keyframes nelutu-curious-first{0%,19%{opacity:0;visibility:hidden;transform:translateY(5px)}25%,70%{opacity:1;visibility:visible;transform:translateY(0)}76%,100%{opacity:0;visibility:hidden}}
+@keyframes nelutu-curious-second{0%,73%{opacity:0;visibility:hidden;transform:translateY(5px)}78%,96%{opacity:1;visibility:visible;transform:translateY(0)}100%{opacity:0;visibility:hidden}}
+@media(max-width:640px){.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{right:64px;bottom:38px;width:225px;font-size:.86rem}}
 @media(prefers-reduced-motion:reduce){.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{animation:none;display:none}}
 </style>"""
 
