@@ -5,6 +5,8 @@ on:
       - "app_web_catalog.py"
       - "app_parinti.py"
       - "test_notification_integration.py"
+      - "nelutu_mascot.py"
+      - "test_nelutu_mascot.py"
       - ".github/workflows/manual-entry-safety.yml"
   push:
     branches:
@@ -12,8 +14,11 @@ on:
       - feature/persistent-whatsapp-actions
       - feature/nelutu-parent-assistant
       - feature/nelutu-system-mascot
+      - feature/nelutu-cartoon-face
     paths:
       - "app_web_catalog.py"
+      - "nelutu_mascot.py"
+      - "test_nelutu_mascot.py"
       - ".github/workflows/manual-entry-safety.yml"
 jobs:
   test:
