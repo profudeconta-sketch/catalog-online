@@ -301,7 +301,7 @@ def _candidate_cell_crops(left,right,student_count,items):
 def analyze_pair_with_vision(left,right,student_names,start,end,allowed_subjects,return_usage=False):
     prompt=("Analizează două fotografii ale aceleiași deschideri de catalog școlar românesc. "
       f"Elevii de sus în jos sunt exact {json.dumps(student_names,ensure_ascii=False)}. "
-      "După cele două pagini complete urmează decupaje în ordinea: pagina stângă elev 1..N, apoi pagina dreaptă elev 1..N. Fiecare decupaj conține antetul disciplinelor lipit de caseta UNUI SINGUR elev; nu atribui niciodată scris din alt decupaj acelui elev. "
+      Imaginile sunt exclusiv decupaje compacte, în ordinea: pagina stângă elev 1..N, apoi pagina dreaptă elev 1..N. Fiecare imagine conține antetul disciplinelor lipit de caseta UNUI SINGUR elev; nu atribui niciodată scris din alt decupaj acelui elev. "
       "Citește physical_label EXCLUSIV ca numele disciplinei/modulului din rândul superior al antetului fizic. Absențe/Absente, Note și înscrisurile de dată NU sunt physical_label. Nu presupune că ordinea sau denumirea rubricilor fizice coincide cu structura catalogului electronic. "
       f"Extrage NUMAI note și absențe cu data lizibilă în intervalul {start:%d.%m.%Y}-{end:%d.%m.%Y}. "
       "Nu ghici și nu completa valori incerte. Răspunde STRICT JSON cu cheia records; fiecare record are "
@@ -450,7 +450,7 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
     """
     def read_pass(pass_no, targets, complete=False, targets_source=None):
         targets_source=targets_source or []
-        scope=("o citire COMPLETĂ a ambelor pagini, inclusiv înscrieri omise anterior"
+        scope=("o citire COMPLETĂ a celor șase benzi compacte antet+elev, inclusiv înscrieri omise anterior"
                if complete else "o reverificare focalizată a candidaților nerezolvați")
         target_hint="" if complete else (
           "Reverifică numai aceste poziții structurale, FĂRĂ a primi valoarea sau data citită anterior: "
