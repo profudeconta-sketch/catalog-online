@@ -25,6 +25,13 @@ from leave_pass_storage import (
     submit_or_reformulate_leave_request,
 )
 
+def _nelutu_fresh_reply(answered_prompt, answered_reply, current_prompt):
+    """Returnează răspunsul doar cât timp aparține exact promptului curent."""
+    current = (current_prompt or "").strip()
+    if not current or answered_prompt != current:
+        return None, None
+    return answered_prompt, answered_reply
+
 def _teacher_whatsapp_link(event):
     """Link WhatsApp gratuit; părintele decide și efectuează manual trimiterea."""
     phone=teacher_phone()
@@ -483,10 +490,22 @@ else:
             placeholder="Ex.: Cum motivez absențele copilului?",
             key="nelutu_question",
         )
+        _nelutu_current_prompt = _nelutu_question.strip() or (
+            _nelutu_topic if _nelutu_topic != "— alege o temă —" else ""
+        )
         _nelutu_ask = st.button("💬 No, zi!", use_container_width=True, key="nelutu_ask")
-        if _nelutu_ask or _nelutu_topic != "— alege o temă —":
-            _nelutu_prompt = _nelutu_question.strip() or _nelutu_topic
-            _nelutu_reply = nelutu_answer(_nelutu_prompt)
+        if _nelutu_ask and _nelutu_current_prompt:
+            st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
+            st.session_state["nelutu_answered_reply"] = nelutu_answer(_nelutu_current_prompt)
+        _kept_prompt, _nelutu_reply = _nelutu_fresh_reply(
+            st.session_state.get("nelutu_answered_prompt"),
+            st.session_state.get("nelutu_answered_reply"),
+            _nelutu_current_prompt,
+        )
+        if _kept_prompt is None:
+            st.session_state.pop("nelutu_answered_prompt", None)
+            st.session_state.pop("nelutu_answered_reply", None)
+        if _nelutu_reply is not None:
             st.markdown(_nelutu_reply.text)
             if _nelutu_reply.source_label and _nelutu_reply.source_url:
                 st.caption("📚 Bază oficială:")

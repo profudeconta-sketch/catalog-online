@@ -36,6 +36,29 @@ class NelutuMascotTests(unittest.TestCase):
         self.assertIn("nelutu-serious-mouth",serious)
         self.assertIn("prefers-reduced-motion:reduce",idle)
 
+    def test_parent_portal_invalidates_stale_nelutu_answer(self):
+        with open("app_parinti.py", "r", encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn("def _nelutu_fresh_reply(", source)
+        self.assertIn('"nelutu_answered_prompt"', source)
+        self.assertIn('"nelutu_answered_reply"', source)
+        self.assertNotIn('_nelutu_ask or _nelutu_topic != "— alege o temă —"', source)
+
+    def test_fresh_reply_state_transitions(self):
+        import ast
+        with open("app_parinti.py", "r", encoding="utf-8") as handle:
+            tree = ast.parse(handle.read())
+        fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_nelutu_fresh_reply")
+        module = ast.Module(body=[fn], type_ignores=[])
+        ns = {}
+        exec(compile(module, "app_parinti.py", "exec"), ns)
+        fresh = ns["_nelutu_fresh_reply"]
+        reply = object()
+        self.assertEqual(fresh("A", reply, "A"), ("A", reply))
+        self.assertEqual(fresh("A", reply, "B"), (None, None))
+        self.assertEqual(fresh("A", reply, ""), (None, None))
+        self.assertEqual(fresh(None, None, "B"), (None, None))
+
     def test_unknown_state_falls_back_to_idle(self):
         html=render_nelutu_mascot("oare-ce-o-fi")
         self.assertIn("nelutu-idle",html)

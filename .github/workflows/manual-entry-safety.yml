@@ -18,6 +18,7 @@ on:
       - feature/nelutu-fainosag
       - feature/nelutu-global-corner
       - feature/nelutu-click-assistant
+      - feature/nelutu-fresh-answer-state
     paths:
       - "app_web_catalog.py"
       - "nelutu_mascot.py"
