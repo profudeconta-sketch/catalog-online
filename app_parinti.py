@@ -12,7 +12,9 @@ from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentSto
 from parent_excuse_pdf import generate_parent_excuse_pdf
 from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_parent_source_read, reconcile_parent_inbox
 from whatsapp_delivery import teacher_phone, whatsapp_link
-from nelutu_assistant import QUICK_TOPICS as NELUTU_QUICK_TOPICS, answer_with_context as nelutu_answer
+from nelutu_assistant import QUICK_TOPICS as _NELUTU_BASE_TOPICS
+from nelutu_parent_guide import TUTORIAL_TOPIC as NELUTU_TUTORIAL_TOPIC, answer_parent as nelutu_answer
+NELUTU_QUICK_TOPICS = (NELUTU_TUTORIAL_TOPIC, *_NELUTU_BASE_TOPICS)
 from nelutu_mascot import render_nelutu_corner, render_nelutu_corner_nudge, render_nelutu_mascot
 from leave_pass_storage import (
     REASONS as LEAVE_PASS_REASONS,
