@@ -362,7 +362,8 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
                 continue
         return out
 
-    usage_totals={"input_tokens":0,"output_tokens":0,"total_tokens":0,"model":os.environ.get("OPENAI_VISION_MODEL","gpt-5.4-mini")}\n    targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
+    usage_totals={"input_tokens":0,"output_tokens":0,"total_tokens":0,"model":os.environ.get("OPENAI_VISION_MODEL","gpt-5.4-mini")}
+    targets=[{"student_index":p.student_index,"category":p.category,"subject":p.subject,
               "kind":p.kind,"source_image":p.source_image} for p in items if not p.verifiable]
     second=read_pass(2,targets,complete=True)
     passes=[items,second]
@@ -400,7 +401,9 @@ def recover_uncertain_proposals(left,right,student_names,start,end,allowed_subje
             recovered.append(ImportProposal(p.student_index,p.category,p.subject,p.kind,p.value,p.date,p.motivated,
                 p.confidence,p.source_image,False,
                 "Fără consens de minimum două citiri independente lizibile după epuizarea recuperării automate."))
-    return (recovered,usage_totals) if return_usage else recovered\n\ndef deduplicate_proposals(items):
+    return (recovered,usage_totals) if return_usage else recovered
+
+def deduplicate_proposals(items):
     """O singură înregistrare per elev/disciplină/tip/dată; ambiguitățile se blochează.
     Dacă aceeași sursă fizică produce date contradictorii pentru aceeași rubrică,
     nu permitem ca interpretările să devină două înregistrări independente.
