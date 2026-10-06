@@ -106,3 +106,21 @@ def reconcile_teacher_inbox():
         )
         created+=int(was_created)
     return created
+
+
+def reconcile_parent_inbox(student_key):
+    """Derivă notificările părintelui din documentele Școală→Părinte."""
+    docs,_=load_registry()
+    created=0
+    for item in docs.get("documents",[]):
+        if item.get("direction")!="SCOALA_PARINTE" or item.get("student_key")!=str(student_key):
+            continue
+        _,was_created=ensure_notification(
+            recipient=RECIPIENT_PARENT,event_type="DOCUMENT_SCOALA",source_type="DOCUMENT",
+            source_id=item.get("id"),student_key=item.get("student_key"),
+            title="Comunicare nouă din partea dirigintelui",
+            message="Aveți o nouă comunicare în Portalul Părinților. Accesați portalul pentru detalii.",
+            created_at_utc=item.get("created_at_utc"),
+        )
+        created+=int(was_created)
+    return created
