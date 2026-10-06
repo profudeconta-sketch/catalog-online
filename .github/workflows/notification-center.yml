@@ -6,6 +6,7 @@ on:
       - feature/notification-center
       - feature/free-whatsapp-notifications
       - feature/persistent-whatsapp-actions
+      - feature/nelutu-parent-assistant
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -16,6 +17,6 @@ jobs:
           python-version: "3.13"
       - run: pip install -r requirements.txt
       - name: Compile notification and apps
-        run: python -m py_compile notification_storage.py whatsapp_delivery.py document_storage.py school_document_receipt_pdf.py leave_pass_storage.py app_web_catalog.py app_parinti.py
+        run: python -m py_compile notification_storage.py whatsapp_delivery.py document_storage.py school_document_receipt_pdf.py leave_pass_storage.py nelutu_assistant.py app_web_catalog.py app_parinti.py
       - name: Notification unit tests
-        run: python -m unittest -v test_notification_storage.py test_whatsapp_delivery.py test_notification_integration.py test_school_document_access.py test_notification_end_to_end.py
+        run: python -m unittest -v test_notification_storage.py test_whatsapp_delivery.py test_notification_integration.py test_school_document_access.py test_notification_end_to_end.py test_nelutu_assistant.py
