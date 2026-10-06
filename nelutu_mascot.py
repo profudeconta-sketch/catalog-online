@@ -80,25 +80,38 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
 <div class="nelutu-bubble"><strong>Neluțu</strong>{msg}</div></div>"""
 
 
-def render_nelutu_corner_nudge() -> str:
-    """Curiozitate vizuală rară, CSS-only; prezentă fără a deveni cicălitoare."""
-    return """<style>
-.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{position:absolute;right:86px;bottom:50px;width:min(390px,72vw);padding:13px 15px;border:2px solid #b98b45;border-radius:16px;background:#fffaf0;color:#241d17;font-size:1rem;font-weight:800;line-height:1.35;box-shadow:0 7px 22px rgba(55,38,20,.20);opacity:0;visibility:hidden}
-.nelutu-corner .nelutu-wrap::before{content:"No, ce-ai găsit pe-acolo? Dacă-i bai, zi-i lu’ Neluțu. Dacă nu-i bai, putem scormoni numa’ de curiozitate. 🤠";animation:nelutu-curious-first 42s ease 1 forwards}
-.nelutu-corner .nelutu-wrap::after{content:"";animation:nelutu-curious-later 390s step-end 42s 1 forwards}
-@keyframes nelutu-curious-first{0%,70%{opacity:0;visibility:hidden;transform:translateY(5px)}72%,94%{opacity:1;visibility:visible;transform:translateY(0)}100%{opacity:0;visibility:hidden}}
-@keyframes nelutu-curious-later{
-0%,11%{content:"";opacity:0;visibility:hidden}
-12%,15%{content:"No,... zâ drept te ajută Neluțu! zâ nu-ț șie rusâne? că de nu api mai binie merem acasă, că vin lupii șâ tăt ne rup!";opacity:1;visibility:visible}
-16%,41%{content:"";opacity:0;visibility:hidden}
-42%,45%{content:"No? mai stăm aci mult sau merem...";opacity:1;visibility:visible}
-46%,71%{content:"";opacity:0;visibility:hidden}
-72%,75%{content:"No? mai stăm aci mult sau merem...";opacity:1;visibility:visible}
-76%,98%{content:"";opacity:0;visibility:hidden}
-99%,100%{content:"No! Io mă pui să mă culc ș-apăi mă huțuri tu când să mă scol... numa vezi... huțură-mă-ncet că io când mă scol, mă sâ ridic...";opacity:1;visibility:visible}
-}
-@media(max-width:640px){.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{right:64px;bottom:38px;width:min(285px,70vw);font-size:.86rem;max-height:34vh;overflow:auto}}
-@media(prefers-reduced-motion:reduce){.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{animation:none;display:none}}
+def render_nelutu_corner_nudge(context:str="general") -> str:
+    """Intervenții rare, locale și contextuale doar pe stări demonstrate de aplicație."""
+    safe_context=context if context in {"general","school","leave","documents"} else "general"
+    first={
+        "general":"No, ce-ai găsit pe-acolo? Dacă-i bai, zi-i lu’ Neluțu. Dacă nu-i bai, putem scormoni numa’ de curiozitate. 🤠",
+        "school":"No, dacă te uiți prin cele de la școală și ceva nu-i limpede, strigă-mă. Io nu fug nicăieri. 🤠",
+        "leave":"No, la învoiri îi bine să citim tăt, nu numa’ ce ne place. Dacă-i bai, îs p-aci. 🤠",
+        "documents":"No, hârtiile-s multe, Neluțu-i unu’. Dacă nu găsești ce cauți, mă întrebi. 🤠",
+    }[safe_context]
+    second={
+        "general":"No,... zâ drept te ajută Neluțu! Da’ stai liniștit, nu te bat la cap.",
+        "school":"Aha no, școala are multe rânduri. Dacă vrei, ți le descurc io pe românește.",
+        "leave":"No, cu învoirea nu ne grăbim ca la autobuz. Întreabă-mă dacă ceva nu-i clar.",
+        "documents":"No, dacă te-o prins dosaru’ între hârtii, fluieră după mine. Da’ numa’ dacă ai nevoie.",
+    }[safe_context]
+    return f"""<style>
+.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{{position:absolute;right:86px;bottom:50px;width:min(390px,72vw);padding:13px 15px;border:2px solid #b98b45;border-radius:16px;background:#fffaf0;color:#241d17;font-size:1rem;font-weight:800;line-height:1.35;box-shadow:0 7px 22px rgba(55,38,20,.20);opacity:0;visibility:hidden}}
+.nelutu-corner .nelutu-wrap::before{{content:"{first}";animation:nelutu-curious-first 42s ease 1 forwards}}
+.nelutu-corner .nelutu-wrap::after{{content:"";animation:nelutu-curious-later 390s step-end 42s 1 forwards}}
+@keyframes nelutu-curious-first{{0%,70%{{opacity:0;visibility:hidden;transform:translateY(5px)}}72%,94%{{opacity:1;visibility:visible;transform:translateY(0)}}100%{{opacity:0;visibility:hidden}}}}
+@keyframes nelutu-curious-later{{
+0%,11%{{content:"";opacity:0;visibility:hidden}}
+12%,15%{{content:"{second}";opacity:1;visibility:visible}}
+16%,41%{{content:"";opacity:0;visibility:hidden}}
+42%,45%{{content:"No? mai stăm aci mult sau merem...";opacity:1;visibility:visible}}
+46%,71%{{content:"";opacity:0;visibility:hidden}}
+72%,75%{{content:"No, io-s p-aci. Numa’ zic, să nu crezi că m-o luat somnu’. 🤠";opacity:1;visibility:visible}}
+76%,98%{{content:"";opacity:0;visibility:hidden}}
+99%,100%{{content:"No! Io mă pui să mă culc ș-apăi mă huțuri tu când să mă scol... numa vezi... huțură-mă-ncet că io când mă scol, mă sâ ridic...";opacity:1;visibility:visible}}
+}}
+@media(max-width:640px){{.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{{right:64px;bottom:38px;width:min(285px,70vw);font-size:.86rem;max-height:34vh;overflow:auto}}}}
+@media(prefers-reduced-motion:reduce){{.nelutu-corner .nelutu-wrap::before,.nelutu-corner .nelutu-wrap::after{{animation:none;display:none}}}}
 </style>"""
 
 def visual_contract()->dict:
