@@ -7,7 +7,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
-from document_storage import DOCUMENT_ROOT, DocumentConflictError, DocumentStorageError, private_read, private_write
+from document_storage import DOCUMENT_ROOT, DocumentConflictError, DocumentStorageError, load_registry, private_read, private_write\nfrom leave_pass_storage import load_leave_pass_registry
 
 NOTIFICATION_REGISTRY_PATH=f"{DOCUMENT_ROOT}/registru_notificari.json"
 RECIPIENT_TEACHER="DIRIGINTE"
@@ -76,3 +76,32 @@ def mark_notification_read(event_id,recipient):
             save_notification_registry(registry,sha); return dict(event),True
         except DocumentConflictError: continue
     raise DocumentConflictError("Citirea notificării nu a putut fi confirmată.")
+
+
+def reconcile_teacher_inbox():
+    """Derivă idempotent Inbox-ul din sursele primare; nu modifică sursele."""
+    docs,_=load_registry()
+    leaves,_=load_leave_pass_registry()
+    created=0
+    for item in docs.get("documents",[]):
+        if item.get("direction")!="PARINTE_SCOALA":
+            continue
+        _,was_created=ensure_notification(
+            recipient=RECIPIENT_TEACHER,event_type="DOCUMENT_PARINTE",source_type="DOCUMENT",
+            source_id=item.get("id"),student_key=item.get("student_key"),
+            title="Document nou de la părinte/reprezentant legal",
+            message="A fost primit un document nou în Portalul Părinților.",
+            created_at_utc=item.get("created_at_utc"),
+        )
+        created+=int(was_created)
+    for item in leaves.get("requests",[]):
+        _,was_created=ensure_notification(
+            recipient=RECIPIENT_TEACHER,event_type="CERERE_INVOIRE",source_type="INVOIRE",
+            source_id=item.get("id"),source_revision=item.get("revision",1),
+            student_key=item.get("student_key"),
+            title="Cerere de învoire nouă",
+            message="A fost primită o cerere de învoire care necesită verificare.",
+            created_at_utc=item.get("transmitted_at_utc"),
+        )
+        created+=int(was_created)
+    return created
