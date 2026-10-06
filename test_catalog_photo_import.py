@@ -6,7 +6,7 @@ import unittest
 import urllib.error
 from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
-from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, pair_catalog_images, deduplicate_proposals, compare_with_workbook, apply_confirmed_import, _student_band_crops, absence_day_segmentations, resolve_concatenated_absence_days, _openai_json_request, map_physical_label_to_online
+from catalog_photo_import import ImportProposal, PhotoImportError, normalize_ddmm, parse_absence_month_group, pair_catalog_images, deduplicate_proposals, compare_with_workbook, apply_confirmed_import, _student_band_crops, absence_day_segmentations, resolve_concatenated_absence_days, _openai_json_request, map_physical_label_to_online, validate_proposal_batch
 
 CG=[("Matematică",8)]
 TH=[]
@@ -21,7 +21,7 @@ def workbook():
     wb.save(path); wb.close(); return path
 
 class PhotoImportSafetyTests(unittest.TestCase):
-    def test_physical_rubric_mapping_is_fail_closed(self):\n        allowed=["Limba și literatura română","Matematică"]\n        self.assertEqual(map_physical_label_to_online(" Matematică ","",allowed),"Matematică")\n        self.assertIsNone(map_physical_label_to_online("MAT.","",allowed))\n        self.assertIsNone(map_physical_label_to_online("Rubrică diferită","",allowed))\n\n    def test_dates(self):
+    def test_batch_prevalidation_blocks_conflicting_grade_and_absence_state(self):\n        a=ImportProposal(0,"Cultură Generală","Matematică","grade","8","02.10",verifiable=True)\n        b=ImportProposal(0,"Cultură Generală","Matematică","grade","9","02.10",verifiable=True)\n        with self.assertRaises(PhotoImportError): validate_proposal_batch([a,b])\n        c=ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",False,verifiable=True)\n        d=ImportProposal(0,"Cultură Generală","Matematică","absence","","01.10",True,verifiable=True)\n        with self.assertRaises(PhotoImportError): validate_proposal_batch([c,d])\n\n    def test_physical_rubric_mapping_is_fail_closed(self):\n        allowed=["Limba și literatura română","Matematică"]\n        self.assertEqual(map_physical_label_to_online(" Matematică ","",allowed),"Matematică")\n        self.assertIsNone(map_physical_label_to_online("MAT.","",allowed))\n        self.assertIsNone(map_physical_label_to_online("Rubrică diferită","",allowed))\n\n    def test_dates(self):
         self.assertEqual(normalize_ddmm("2/10"),"02.10")
         self.assertEqual(normalize_ddmm("30-9"),"30.09")
         self.assertEqual(normalize_ddmm("30/IX"),"30.09")
