@@ -21,6 +21,20 @@ class NelutuMascotTests(unittest.TestCase):
         self.assertNotIn("<script>",html)
         self.assertIn("&lt;script&gt;",html)
 
+    def test_cartoon_face_and_dynamic_states(self):
+        idle=render_nelutu_mascot("idle")
+        answering=render_nelutu_mascot("answering")
+        serious=render_nelutu_mascot("serious")
+        for part in ("nelutu-eye left","nelutu-eye right","nelutu-pupil","nelutu-brow","nelutu-nose","nelutu-mouth","nelutu-hat"):
+            self.assertIn(part,idle)
+        self.assertIn("@keyframes nelutu-blink",idle)
+        self.assertIn("@keyframes nelutu-breathe",idle)
+        self.assertIn("@keyframes nelutu-think",idle)
+        self.assertIn("@keyframes nelutu-talk",answering)
+        self.assertIn("@keyframes nelutu-nod",idle)
+        self.assertIn("nelutu-serious .nelutu-avatar{animation:none}",serious)
+        self.assertIn("prefers-reduced-motion:reduce",idle)
+
     def test_no_external_or_script_dependencies(self):
         html=render_nelutu_mascot()
         low=html.lower()
