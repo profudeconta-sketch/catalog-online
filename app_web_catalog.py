@@ -2230,6 +2230,7 @@ with tab1:
         if not os.path.exists(selected_file):
             st.error(f"Fișierul {selected_file} nu există!")
         else:
+            backup = None
             try:
                 data_nota = _normalize_manual_ddmm(data_nota)
                 backup = selected_file + ".manual.bak"
@@ -2273,6 +2274,7 @@ with tab1:
                     st.error("❌ Toate cele 10 sloturi de note sunt pline pentru această disciplină!")
                 wb.close()
             except Exception as ex:
+                _restore_manual_backup(selected_file, backup)
                 st.error(f"Eroare la salvare: {ex}")
 
 # --- TAB 2: ABSENȚĂ ---
@@ -2292,6 +2294,7 @@ with tab2:
         if not os.path.exists(selected_file):
             st.error(f"Fișierul {selected_file} nu există!")
         else:
+            backup = None
             try:
                 data_abs = _normalize_manual_ddmm(data_abs)
                 backup = selected_file + ".manual.bak"
@@ -2323,7 +2326,8 @@ with tab2:
                 if slot_found:
                     wb.save(selected_file)
                     if not update_excel_computed_values(selected_file):
-                        st.warning("⚠️ Modificarea a fost salvată, dar recalcularea valorilor derivate nu a fost confirmată.")
+                        _restore_manual_backup(selected_file, backup)
+                        raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
                     if push_to_github(selected_file):
                         st.success(f"✅ Absență salvată și sincronizată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
                         st.rerun()
