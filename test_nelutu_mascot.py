@@ -95,7 +95,7 @@ class NelutuMascotTests(unittest.TestCase):
         html=render_nelutu_corner("idle")
         self.assertIn("position:fixed",html)
         self.assertIn("left:0;right:0;top:0",html)
-        self.assertIn("top:min(75vh,calc(100vh - 160px))",html)
+        self.assertIn("bottom:42px",html)
         self.assertIn("pointer-events:none",html)
         self.assertIn("width:102px;height:116px",html)
         self.assertIn("nelutu-bubble{display:none}",html)
