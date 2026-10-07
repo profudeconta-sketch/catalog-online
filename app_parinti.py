@@ -539,9 +539,9 @@ else:
 
     st.markdown("""
     <style>
-    div[data-testid="stPopover"] {position:fixed;right:22px;top:24px;z-index:10001}
+    div[data-testid="stPopover"] {position:fixed;right:18px;top:82px;z-index:10021}
     div[data-testid="stPopover"] > button {min-width:92px;min-height:104px;opacity:.01;border-radius:22px}
-    @media(max-width:640px){div[data-testid="stPopover"]{right:10px;top:10px}div[data-testid="stPopover"] > button{min-width:70px;min-height:80px}}
+    @media(max-width:640px){div[data-testid="stPopover"]{right:9px;top:70px}div[data-testid="stPopover"] > button{min-width:88px;min-height:104px}}
     </style>
     """, unsafe_allow_html=True)
     with st.popover("🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST", use_container_width=False):
