@@ -14,7 +14,7 @@ from parent_excuse_pdf import generate_parent_excuse_pdf
 from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_parent_source_read, reconcile_parent_inbox
 from whatsapp_delivery import teacher_phone, whatsapp_link
 from nelutu_assistant import QUICK_TOPICS as _NELUTU_BASE_TOPICS
-from nelutu_parent_guide import TUTORIAL_TOPIC as NELUTU_TUTORIAL_TOPIC, answer_parent as nelutu_answer
+from nelutu_parent_guide import TUTORIAL_TOPIC as NELUTU_TUTORIAL_TOPIC, TUTORIAL_TEXT as NELUTU_TUTORIAL_TEXT, answer_parent as nelutu_answer
 NELUTU_QUICK_TOPICS = (NELUTU_TUTORIAL_TOPIC, *_NELUTU_BASE_TOPICS)
 from nelutu_mascot import render_nelutu_corner, render_nelutu_corner_nudge, render_nelutu_mascot
 from leave_pass_storage import (
@@ -547,6 +547,7 @@ else:
     with st.popover("🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST", use_container_width=False):
         st.markdown("**🤠 Neluțu**")
         st.markdown("No, gâdilă-mă o țârucă pă burtică ș-apoi lasă-mă să mă prezint: cine-s io, ce știe să facă aplicația asta și cum te pot ajuta. După-aia, dacă mă mai întrebi câte ceva, mă strădui să-ți răspund cât oi ști io mai bine. Da’ să știi ceva: mă uit atent și la cum lucrii p-aici, iar dacă te văd că te-ncurci... intervin io. 🤠")
+        st.markdown(NELUTU_TUTORIAL_TEXT)
         _nelutu_question = st.text_input(
             "No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",
             placeholder="Scrie-i lu’ Neluțu...",
