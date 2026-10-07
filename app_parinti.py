@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+import hmac
 import os
 import openpyxl
 import streamlit as st
@@ -442,7 +443,7 @@ if teacher_mode:
         )
     elif not teacher_password_input:
         st.warning("👈 Introduceți parola dirigintelui.")
-    elif not hashlib.compare_digest(teacher_password_input, teacher_secret):
+    elif not hmac.compare_digest(teacher_password_input, teacher_secret):
         st.error("❌ Parola dirigintelui este incorectă.")
     else:
         teacher_authenticated = True
