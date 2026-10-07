@@ -86,6 +86,72 @@ _ARD_REMARKS = {
     ),
 }
 
+# Vocabular productiv: rădăcini + forme flexionare/colocviale. Motorul combină numai
+# expresii de stil; faptele rămân exclusiv în răspunsul controlat.
+_ARD_LEXICON = {
+    "confirmare": ("no", "așe", "apăi", "amu", "ioi", "tulai", "servus", "bine mă", "no binie"),
+    "cantitate": ("o țâră", "oleacă", "un picuț", "barăm", "tăt", "tătă", "tăte"),
+    "miscare": ("merem", "venim", "scormonim", "cotrobăim", "purcedem", "ne-ntoarcem", "ne uităm"),
+    "obiecte": ("clop", "traistă", "sumăn", "opinci", "căruță", "șură", "ogradă", "poartă", "căpiță"),
+    "ritm": ("molcom", "temeinic", "pă rând", "fără grabă", "cu socoteală", "cu cap", "cum să cade"),
+    "adevar": ("din ce-i scris", "din ce putem dovedi", "din sursă", "cu dovadă", "fără povești"),
+    "negare": ("nu-i bai", "nu ne pripim", "nu ghicim", "nu scoatem din clop", "nu umblăm după auzite"),
+}
+
+_ARD_JOKE_PARTS = {
+    "open": (
+        "No", "Apăi", "Așe", "No binie", "Io zâc așe", "Amu", "Tulai, da' stai liniștit",
+        "No, ficior", "No, dragă omule", "No, să vedem",
+    ),
+    "work": (
+        "merem pă fir", "luăm treaba pă rând", "punem socoteala pă masă", "scormonim unde trăbă",
+        "ne uităm temeinic", "nu sărim gardu'", "nu punem căruța înaintea calului",
+        "ținem picioarele pă pământ", "nu facem căpiță din hârtii", "nu fugărim butoanele",
+    ),
+    "punch": (
+        "că rotițele mele n-au autobuz de prins",
+        "că graba-i bună numa' când plouă și rufele-s afară",
+        "că adevăru' nu crește dacă-l uzi cu povești",
+        "că din clop scot umbră, nu informații",
+        "că și procesoru' meu are demnitatea lui",
+        "că butonu' nu pleacă nicări fără noi",
+        "că hârtiile digitale măcar nu zboară prin curte",
+        "că media nu să înduplecă nici cu pălincă imaginară",
+        "că io-s digital, da' socoteala-i tăt socoteală",
+        "că una-i gluma și alta-i registru'",
+        "că bârfa aleargă, da' dovada merge drept",
+        "că dacă nu știm, mai bine zâcem decât să ne facem de minune",
+        "că Neluțu are clop, nu glob de cristal",
+        "că nu tăt ce lucește îi buton de apăsat",
+        "că și-n cloud tăt cu cap îi bine să umbli",
+        "că de povești îi podu' plin; noi căutăm ce-i scris",
+        "că n-am venit cu caru' de presupuneri",
+        "că io pot glumi, da' catalogu' nu râde",
+        "că faptele n-au nevoie de fluier",
+        "că treaba bună nu să face cu ochii închiși",
+    ),
+}
+
+def ardelean_productive_vocabulary_size()->int:
+    # Forme productive rezultate din combinații stilistice, nu afirmații factuale.
+    base=sum(len(v) for v in _ARD_LEXICON.values())
+    combinations=1
+    for v in _ARD_LEXICON.values():
+        combinations*=len(v)
+    return base + combinations
+
+def ardelean_joke_capacity()->int:
+    return len(_ARD_JOKE_PARTS["open"]) * len(_ARD_JOKE_PARTS["work"]) * len(_ARD_JOKE_PARTS["punch"])
+
+def _contextual_joke(question:str, intent:str)->str:
+    # Bancuri/poante compuse numai pentru intenții nesensibile.
+    digest=hashlib.sha256((intent+"|"+_norm(question)+"|joke").encode("utf-8")).digest()
+    a=_ARD_JOKE_PARTS["open"][digest[0] % len(_ARD_JOKE_PARTS["open"])]
+    b=_ARD_JOKE_PARTS["work"][digest[1] % len(_ARD_JOKE_PARTS["work"])]
+    d=_ARD_JOKE_PARTS["punch"][digest[2] % len(_ARD_JOKE_PARTS["punch"])]
+    return f"{a}, {b}, {d}. 😄"
+
+
 def _ardelean_remark(question:str, intent:str)->str:
     choices=_ARD_REMARKS.get(intent) or _ARD_REMARKS["general"]
     seed=(str(intent)+"|"+_norm(question)).encode("utf-8")
@@ -96,7 +162,10 @@ def _with_remark(answer:NelutuAnswer, question:str)->NelutuAnswer:
     if answer.serious or answer.intent in {"safety","discipline","legal_general"}:
         return answer
     remark=_ardelean_remark(question, answer.intent)
-    return NelutuAnswer(answer.intent, remark+"\n\n"+answer.text, answer.source_label, answer.source_url, answer.serious)
+    # O poantă suplimentară apare numai la intențiile cotidiene; nu alterează răspunsul factual.
+    joke_intents={"authorized_context","portal_component","hello","fallback","documents","leave","grades"}
+    joke=(" "+_contextual_joke(question, answer.intent)) if answer.intent in joke_intents else ""
+    return NelutuAnswer(answer.intent, remark+joke+"\n\n"+answer.text, answer.source_label, answer.source_url, answer.serious)
 
 PORTAL_KNOWLEDGE = {
     "scoala": "Fila Școală conține comunicările și documentele trimise de școală. Un document nou rămâne neaccesat până la deschiderea lui din contul autentificat; WhatsApp este doar alertă și nu ține locul confirmării interne.",
