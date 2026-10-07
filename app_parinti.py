@@ -541,12 +541,12 @@ else:
     <style>
     .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] {position:fixed;right:18px;top:154px;z-index:10021}
     .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] > button {width:150px;min-height:42px;opacity:.01;border-radius:13px}
-    .st-key-nelutu_qa_trigger div[data-testid="stPopover"] {position:fixed;right:28px;top:204px;z-index:10021}
+    .st-key-nelutu_qa_trigger div[data-testid="stPopover"] {position:fixed;right:28px;top:min(75vh,calc(100vh - 160px));z-index:10021}
     .st-key-nelutu_qa_trigger div[data-testid="stPopover"] > button {width:112px;min-height:132px;opacity:.01;border-radius:22px}
     @media(max-width:640px){
       .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"]{right:9px;top:138px}
       .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] > button{width:126px;min-height:38px}
-      .st-key-nelutu_qa_trigger div[data-testid="stPopover"]{right:16px;top:184px}
+      .st-key-nelutu_qa_trigger div[data-testid="stPopover"]{right:16px;top:min(72vh,calc(100vh - 132px))}
       .st-key-nelutu_qa_trigger div[data-testid="stPopover"] > button{width:88px;min-height:104px}
     }
     </style>
