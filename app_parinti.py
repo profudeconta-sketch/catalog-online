@@ -546,6 +546,7 @@ else:
     """, unsafe_allow_html=True)
     with st.popover("🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST", use_container_width=False):
         st.markdown("**🤠 Neluțu**")
+        st.markdown("No, gâdilă-mă o țârucă pă burtică ș-apoi lasă-mă să mă prezint: cine-s io, ce știe să facă aplicația asta și cum te pot ajuta. După-aia, dacă mă mai întrebi câte ceva, mă strădui să-ți răspund cât oi ști io mai bine. Da’ să știi ceva: mă uit atent și la cum lucrii p-aici, iar dacă te văd că te-ncurci... intervin io. 🤠")
         _nelutu_question = st.text_input(
             "No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",
             placeholder="Scrie-i lu’ Neluțu...",
