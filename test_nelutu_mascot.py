@@ -75,6 +75,13 @@ class NelutuMascotTests(unittest.TestCase):
         self.assertIn("width:112px;height:132px",source)
         self.assertIn("opacity:0;border:0;padding:0;cursor:pointer",source)
 
+    def test_nelutu_click_surface_is_invisible_and_bottom_sash_is_removed(self):
+        app=Path("app_parinti.py").read_text(encoding="utf-8")
+        mascot=Path("nelutu_mascot.py").read_text(encoding="utf-8")
+        self.assertIn("opacity:0!important;background:transparent!important;border:0!important;box-shadow:none!important;color:transparent!important",app)
+        self.assertNotIn('<div class="nelutu-bottom-brau">',mascot)
+        self.assertIn('st.popover("🤠 Întreabă-l pe Neluțu"',app)
+
     def test_parent_portal_invalidates_stale_nelutu_answer(self):
         with open("app_parinti.py", "r", encoding="utf-8") as handle:
             source = handle.read()
