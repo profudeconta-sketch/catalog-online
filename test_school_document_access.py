@@ -65,6 +65,29 @@ class SchoolDocumentAccessTests(unittest.TestCase):
                 document_id=self.source_id,
             )
 
+    def test_read_registered_document_by_student_key_does_not_rehash_key(self):
+        content=b"%PDF-1.4\ninbox\n%%EOF"
+        self.registry["documents"][0]["direction"]="PARINTE_SCOALA"
+        self.registry["documents"][0]["stored_path"]="documente_scolare/2026-2027/x/inbox.pdf"
+        self.registry["documents"][0]["sha256"]=hashlib.sha256(content).hexdigest()
+        self.files[self.registry["documents"][0]["stored_path"]]=content
+        with patch.object(ds,"private_read",self.private_read):
+            record,loaded=ds.read_registered_document_by_student_key(
+                self.student_key,self.source_id
+            )
+        self.assertEqual(record["id"],self.source_id)
+        self.assertEqual(loaded,content)
+
+    def test_read_registered_document_by_student_key_rejects_other_student(self):
+        content=b"%PDF-1.4\ninbox\n%%EOF"
+        self.registry["documents"][0]["stored_path"]="documente_scolare/2026-2027/x/inbox.pdf"
+        self.registry["documents"][0]["sha256"]=hashlib.sha256(content).hexdigest()
+        self.files[self.registry["documents"][0]["stored_path"]]=content
+        other_key=ds.normalize_student_key("RM-OTHER")
+        with patch.object(ds,"private_read",self.private_read):
+            with self.assertRaises(ds.DocumentStorageError):
+                ds.read_registered_document_by_student_key(other_key,self.source_id)
+
     def test_first_access_marks_source_and_creates_one_confirmation(self):
         result=self._run_access()
         self.assertTrue(result["created"])
