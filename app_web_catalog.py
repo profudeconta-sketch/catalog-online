@@ -23,7 +23,7 @@ import io
 import shutil
 import time
 import copy
-from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, normalize_student_key, parent_excuse_usage, read_registered_document, store_new_document
+from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, normalize_student_key, parent_excuse_usage, read_registered_document, read_registered_document_by_student_key, store_new_document
 from conduct_storage import ConductStorageError, conduct_grades_for_student, load_conduct_registry, save_conduct_grade
 from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, IX_TH_2026_2027_CLASS_CDEOS_HOURS, build_annual_closure_snapshot, build_student_subject_inputs, preview_annual_closure
 from annual_closure_storage import AnnualClosureStorageError, load_private_annual_closure_snapshots, persist_private_annual_closure_batch_once
@@ -1836,7 +1836,7 @@ try:
             _student_key=_n.get("student_key")
             if _source_type=="DOCUMENT":
                 try:
-                    _doc_record,_doc_content=read_registered_document(_student_key,_source_id)
+                    _doc_record,_doc_content=read_registered_document_by_student_key(_student_key,_source_id)
                     _mime=_doc_record.get("mime_type") or "application/octet-stream"
                     _filename=_doc_record.get("original_filename") or f"document_{_source_id}"
                     if st.download_button(

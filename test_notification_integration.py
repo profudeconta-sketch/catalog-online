@@ -64,7 +64,7 @@ class NotificationIntegrationGuards(unittest.TestCase):
     def test_teacher_document_read_requires_validated_source_access(self):
         p=self.teacher
         inbox=p.index("# Inbox global diriginte")
-        source=p.index("read_registered_document(_student_key,_source_id)",inbox)
+        source=p.index("read_registered_document_by_student_key(_student_key,_source_id)",inbox)
         mark=p.index('mark_notification_read(_n["id"],RECIPIENT_TEACHER)',source)
         self.assertLess(source,mark)
 
