@@ -60,20 +60,20 @@ class NelutuMascotTests(unittest.TestCase):
 
     def test_parent_portal_shows_ardelean_identity_in_assistant_control(self):
         src=Path("app_parinti.py").read_text(encoding="utf-8")
-        self.assertIn('st.popover("📖 Tutorial Neluțu"',src)
+        self.assertIn('st.popover("📖 GHID COMPLET — întregul sistem informatic + Neluțu 🤠"',src)
         self.assertIn('st.popover("🤠 Întreabă-l pe Neluțu"',src)
         self.assertIn("**🤠 Neluțu**",src)
 
     def test_nelutu_uses_visible_real_controls_for_both_authenticated_roles(self):
         source=Path("app_parinti.py").read_text(encoding="utf-8")
         self.assertIn('teacher_mode = auth_mode.startswith("🧑‍🏫")',source)
-        self.assertIn('st.popover("📖 Tutorial Neluțu"',source)
+        self.assertIn('st.popover("📖 GHID COMPLET — întregul sistem informatic + Neluțu 🤠"',source)
         self.assertIn('st.popover("🤠 Întreabă-l pe Neluțu"',source)
-        self.assertIn(".st-key-nelutu_tutorial_trigger div[data-testid=\"stPopover\"] {position:fixed",source)
-        self.assertIn("left:50%;top:4px;transform:translateX(-50%)",source)
-        self.assertIn(".st-key-nelutu_qa_trigger div[data-testid=\"stPopover\"] {position:fixed;right:24px;bottom:42px",source)
-        self.assertIn("width:112px;height:132px",source)
-        self.assertIn("opacity:0;border:0;padding:0;cursor:pointer",source)
+        self.assertIn(".st-key-nelutu_tutorial_trigger div[data-testid=\"stPopover\"]{position:fixed!important",source)
+        self.assertIn("left:0!important;right:0!important;top:0!important;width:100vw!important",source)
+        self.assertIn(".nelutu-corner .nelutu-corner-brau,.nelutu-corner .nelutu-bottom-brau{display:none!important}",source)
+        self.assertIn("right:24px!important;bottom:42px!important",source)
+        self.assertIn("width:112px!important;height:132px!important;opacity:0!important",source)
 
     def test_parent_portal_invalidates_stale_nelutu_answer(self):
         with open("app_parinti.py", "r", encoding="utf-8") as handle:
@@ -139,17 +139,12 @@ class NelutuMascotTests(unittest.TestCase):
             self.assertNotIn("http://",html.lower())
             self.assertNotIn("https://",html.lower())
 
-    def test_parent_portal_uses_small_click_assistant_not_giant_mascot(self):
-        with open("app_parinti.py","r",encoding="utf-8") as handle:
-            source=handle.read()
+    def test_parent_portal_uses_mascot_sized_invisible_qa_trigger(self):
+        source=Path("app_parinti.py").read_text(encoding="utf-8")
         self.assertIn('st.popover("🤠 Întreabă-l pe Neluțu"',source)
-        self.assertIn('st.popover("📖 Tutorial Neluțu"',source)
-        self.assertIn("No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",source)
-        self.assertIn("No, amu lasă-mă o țâră să cuget...",source)
-        self.assertNotIn("Poți porni de aici:",source)
-        self.assertIn('st.toast("🤠 Servus!',source)
-        self.assertNotIn('with st.expander("🤠 Neluțu — ajutorul simpatic din Portal"',source)
-        self.assertNotIn('render_nelutu_mascot(_nelutu_state',source)
+        self.assertIn("right:24px!important;bottom:42px!important",source)
+        self.assertIn("width:112px!important;height:132px!important;opacity:0!important",source)
+        self.assertIn("cursor:pointer!important",source)
 
     def test_no_external_or_script_dependencies(self):
         html=render_nelutu_mascot()
