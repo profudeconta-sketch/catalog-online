@@ -52,11 +52,11 @@ class NelutuMascotTests(unittest.TestCase):
     def test_corner_keeps_brau_near_top_of_streamlit_page(self):
         html=render_nelutu_corner("idle")
         self.assertIn("nelutu-corner-brau",html)
-        self.assertIn("top:154px",html)
-        self.assertIn("top:min(75vh,calc(100vh - 160px))",html)
+        self.assertIn("left:0;right:0;top:0",html)
+        self.assertIn("bottom:42px",html)
         self.assertIn("width:112px;height:132px",html)
         self.assertIn("width:102px;height:116px",html)
-        self.assertIn("top:min(72vh,calc(100vh - 132px))",html)
+        self.assertIn("bottom:38px",html)
 
     def test_parent_portal_shows_ardelean_identity_in_assistant_control(self):
         src=Path("app_parinti.py").read_text(encoding="utf-8")
@@ -94,8 +94,8 @@ class NelutuMascotTests(unittest.TestCase):
     def test_corner_mascot_is_small_fixed_and_non_interactive(self):
         html=render_nelutu_corner("idle")
         self.assertIn("position:fixed",html)
-        self.assertIn("right:18px",html)
-        self.assertIn("top:min(75vh,calc(100vh - 160px))",html)
+        self.assertIn("left:0;right:0;top:0",html)
+        self.assertIn("bottom:42px",html)
         self.assertIn("pointer-events:none",html)
         self.assertIn("width:102px;height:116px",html)
         self.assertIn("nelutu-bubble{display:none}",html)
