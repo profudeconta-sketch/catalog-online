@@ -545,28 +545,21 @@ else:
     </style>
     """, unsafe_allow_html=True)
     with st.popover("🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST", use_container_width=False):
-        st.markdown("**🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST**")
-        st.caption("No, întreabă-mă orișâce vrei tu... da’ nu pre mult, că mă ieftinesc. 😄")
-        _nelutu_topic = st.selectbox(
-            "Poți porni de aici:",
-            ["— alege o temă —", *NELUTU_QUICK_TOPICS],
-            key="nelutu_quick_topic",
-        )
+        st.markdown("**🤠 Neluțu**")
         _nelutu_question = st.text_input(
-            "Întreabă-l pe Neluțu:",
-            placeholder="Ex.: Cum motivez absențele copilului?",
+            "No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",
+            placeholder="Scrie-i lu’ Neluțu...",
             key="nelutu_question",
         )
-        _nelutu_current_prompt = _nelutu_question.strip() or (
-            _nelutu_topic if _nelutu_topic != "— alege o temă —" else ""
-        )
+        _nelutu_current_prompt = _nelutu_question.strip()
         _nelutu_context = {"facts": [
             {"keywords": ("portal", "cum folosesc portalul"), "answer": "Ești autentificat în Portalul Părinților; pot explica orice zonă vizibilă aici, fără să modific date."}
         ]}
-        _nelutu_ask = st.button("💬 No, zi!", use_container_width=True, key="nelutu_ask")
+        _nelutu_ask = st.button("💬 Întreabă-l pe Neluțu", use_container_width=True, key="nelutu_ask")
         if _nelutu_ask and _nelutu_current_prompt:
-            st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
-            st.session_state["nelutu_answered_reply"] = nelutu_answer(_nelutu_current_prompt, _nelutu_context)
+            with st.spinner("No, amu lasă-mă o țâră să cuget..."):
+                st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
+                st.session_state["nelutu_answered_reply"] = nelutu_answer(_nelutu_current_prompt, _nelutu_context)
         _kept_prompt, _nelutu_reply = _nelutu_fresh_reply(
             st.session_state.get("nelutu_answered_prompt"),
             st.session_state.get("nelutu_answered_reply"),
@@ -576,6 +569,7 @@ else:
             st.session_state.pop("nelutu_answered_prompt", None)
             st.session_state.pop("nelutu_answered_reply", None)
         if _nelutu_reply is not None:
+            st.markdown("**Neluțu:**")
             st.markdown(_nelutu_reply.text)
             if _nelutu_reply.source_label and _nelutu_reply.source_url:
                 st.caption("📚 Bază oficială:")
@@ -585,7 +579,6 @@ else:
                     use_container_width=True,
                     key=f"nelutu_source_{_nelutu_reply.intent}",
                 )
-        st.caption("🔒 Neluțu este informativ și nu modifică datele catalogului.")
 
     try:
         _parent_student_key=normalize_student_key(student_found[3])
