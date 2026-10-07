@@ -41,9 +41,22 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
 <svg class="nelutu-avatar nelutu-svg" viewBox="0 0 150 165" aria-hidden="true">
  <g>
   <!-- pieptar și cămașă -->
-  <path d="M31 164 L34 128 Q40 113 55 109 L95 109 Q111 113 117 128 L120 164Z" fill="#49352b" stroke="#2f211c" stroke-width="3"/>
-  <path d="M54 113 Q75 121 96 113 L101 164 L49 164Z" fill="#fffaf0" stroke="#5c4436" stroke-width="2"/>
-  <path d="M55 124 L48 155 M95 124 L102 155" stroke="#b23a32" stroke-width="3"/>
+  <!-- chemeșă albă și laibăr negru cu broderie tricoloră -->
+  <path d="M31 164 L34 128 Q40 113 55 109 L95 109 Q111 113 117 128 L120 164Z" fill="#171513" stroke="#080706" stroke-width="3"/>
+  <path d="M54 113 Q75 121 96 113 L101 164 L49 164Z" fill="#fffdf6" stroke="#5c4436" stroke-width="2"/>
+  <path d="M55 124 L48 155 M95 124 L102 155" fill="none" stroke="#174b9a" stroke-width="5"/>
+  <path d="M57 124 L50 155 M93 124 L100 155" fill="none" stroke="#f2cf35" stroke-width="3"/>
+  <path d="M59 124 L52 155 M91 124 L98 155" fill="none" stroke="#c73532" stroke-width="2"/>
+  <path d="M66 118 l4 4 -4 4 4 4 -4 4 M84 118 l-4 4 4 4 -4 4 4 4" fill="none" stroke="#174b9a" stroke-width="1.8"/>
+  <path d="M68 118 l4 4 -4 4 4 4 -4 4 M82 118 l-4 4 4 4 -4 4 4 4" fill="none" stroke="#f2cf35" stroke-width="1.5"/>
+  <path d="M70 118 l4 4 -4 4 4 4 -4 4 M80 118 l-4 4 4 4 -4 4 4 4" fill="none" stroke="#c73532" stroke-width="1.2"/>
+  <!-- cocardă tricoloră cu medalion stilizat Avram Iancu -->
+  <circle cx="104" cy="121" r="9" fill="#174b9a" stroke="#f6f0df" stroke-width="1"/>
+  <circle cx="104" cy="121" r="6.5" fill="#f2cf35"/>
+  <circle cx="104" cy="121" r="4.3" fill="#c73532"/>
+  <circle cx="104" cy="121" r="3.1" fill="#e8c39e" stroke="#4b3427" stroke-width=".6"/>
+  <path d="M101 120 Q104 116 107 120 M102 123 Q104 125 106 123" fill="none" stroke="#4b3427" stroke-width=".7" stroke-linecap="round"/>
+  <path d="M100 116 Q104 113 108 116" fill="none" stroke="#3c2a20" stroke-width="1.2"/>
   <path class="nelutu-brau" d="M18 131 Q75 143 132 131 L136 164 Q75 177 14 164Z" fill="#8a2f2a" stroke="#3a241d" stroke-width="2"/>
   <text class="nelutu-brau-title" x="75" y="146" text-anchor="middle" font-size="8.4" font-weight="900" fill="#fff8df">PRIMU’ AI DIN ARDEAL</text>
   <text class="nelutu-brau-subtitle" x="75" y="157" text-anchor="middle" font-size="7.0" font-weight="900" fill="#fff8df">NELUȚU-AL NOST 🤠</text>
@@ -71,10 +84,14 @@ def render_nelutu_mascot(state:str="idle",message:str="Servus! Eu-s Neluțu.") -
   <!-- gură -->
   <g class="nelutu-mouth"><path class="nelutu-smile" d="M65 96 Q75 105 86 96 Q83 108 75 109 Q67 108 65 96Z" fill="#8e4545" stroke="#6f3735" stroke-width="1.5"/><path class="nelutu-serious-mouth" d="M66 101 Q75 98 85 101" fill="none" stroke="#713b35" stroke-width="3" stroke-linecap="round"/></g>
   <!-- clop -->
-  <path d="M35 35 Q38 7 75 5 Q112 7 115 35 Q93 30 75 31 Q57 30 35 35Z" fill="#58402d" stroke="#302219" stroke-width="3"/>
-  <path d="M20 36 Q75 28 130 36 Q124 44 75 43 Q26 44 20 36Z" fill="#3d2c21" stroke="#2b1f18" stroke-width="2"/>
-  <path d="M104 18 Q114 5 118 0" fill="none" stroke="#4f743e" stroke-width="4" stroke-linecap="round"/>
-  <circle cx="113" cy="9" r="4" fill="#c9473e"/>
+  <!-- clop de paie galben -->
+  <path d="M35 35 Q38 7 75 5 Q112 7 115 35 Q93 30 75 31 Q57 30 35 35Z" fill="#e6bd55" stroke="#765c24" stroke-width="3"/>
+  <path d="M20 36 Q75 28 130 36 Q124 44 75 43 Q26 44 20 36Z" fill="#f0cd69" stroke="#765c24" stroke-width="2"/>
+  <path d="M42 27 Q75 17 108 27 M38 33 Q75 23 112 33" fill="none" stroke="#b88b34" stroke-width="1" opacity=".8"/>
+  <path d="M48 10 L44 32 M61 7 L59 30 M75 5 L75 30 M89 7 L91 30 M102 11 L106 32" stroke="#c89c3d" stroke-width=".8" opacity=".8"/>
+  <path d="M38 29 Q75 23 112 29" fill="none" stroke="#174b9a" stroke-width="2"/>
+  <path d="M38 31 Q75 25 112 31" fill="none" stroke="#f2cf35" stroke-width="2"/>
+  <path d="M38 33 Q75 27 112 33" fill="none" stroke="#c73532" stroke-width="2"/>
  </g>
 </svg>
 <div class="nelutu-bubble"><strong>Neluțu</strong>{msg}</div></div>"""
