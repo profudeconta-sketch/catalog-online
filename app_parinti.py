@@ -539,21 +539,23 @@ else:
 
     st.markdown("""
     <style>
-    .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] {position:fixed;left:50%;top:4px;transform:translateX(-50%);z-index:10023}
-    .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] > button {min-height:36px;border-radius:18px;font-weight:900;white-space:nowrap}
-    .st-key-nelutu_qa_trigger div[data-testid="stPopover"] {position:fixed;right:24px;bottom:42px;z-index:10024;width:112px;height:132px}
-    .st-key-nelutu_qa_trigger div[data-testid="stPopover"] > button {width:112px;height:132px;min-height:132px;opacity:0;border:0;padding:0;cursor:pointer}
+    /* Tutorial: control Streamlit real, vizibil și fix pe toată lățimea. */
+    .nelutu-corner .nelutu-corner-brau,.nelutu-corner .nelutu-bottom-brau{display:none!important}
+    .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"]{position:fixed!important;left:0!important;right:0!important;top:0!important;width:100vw!important;z-index:10030!important}
+    .st-key-nelutu_tutorial_trigger button{width:100vw!important;min-height:46px!important;border-radius:0!important;border:0!important;background:#8a2f2a!important;color:#fff8df!important;font-weight:900!important;box-shadow:0 3px 12px rgba(55,38,20,.18)!important}
+    /* Q&A: întreg trigger-ul Streamlit este invizibil, dar rămâne clickabil exact peste Neluțu. */
+    .st-key-nelutu_qa_trigger div[data-testid="stPopover"]{position:fixed!important;right:24px!important;bottom:42px!important;z-index:10031!important;width:112px!important;height:132px!important;opacity:0!important;cursor:pointer!important}
+    .st-key-nelutu_qa_trigger button{width:112px!important;height:132px!important;min-height:132px!important;border:0!important;padding:0!important;cursor:pointer!important}
     @media(max-width:640px){
-      .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"]{left:50%;top:3px;right:auto}
-      .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] > button{min-height:34px;font-size:11px}
-      .st-key-nelutu_qa_trigger div[data-testid="stPopover"]{right:12px;bottom:38px;width:88px;height:104px}
-      .st-key-nelutu_qa_trigger div[data-testid="stPopover"] > button{width:88px;height:104px;min-height:104px}
+      .st-key-nelutu_tutorial_trigger button{min-height:42px!important;font-size:11px!important}
+      .st-key-nelutu_qa_trigger div[data-testid="stPopover"]{right:12px!important;bottom:38px!important;width:88px!important;height:104px!important}
+      .st-key-nelutu_qa_trigger button{width:88px!important;height:104px!important;min-height:104px!important}
     }
     </style>
     """, unsafe_allow_html=True)
 
     with st.container(key="nelutu_tutorial_trigger"):
-        with st.popover("📖 Tutorial Neluțu", use_container_width=False):
+        with st.popover("📖 GHID COMPLET — întregul sistem informatic + Neluțu 🤠", use_container_width=False):
             st.markdown(NELUTU_TUTORIAL_TEXT)
 
     with st.container(key="nelutu_qa_trigger"):
