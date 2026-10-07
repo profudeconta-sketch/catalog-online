@@ -539,48 +539,59 @@ else:
 
     st.markdown("""
     <style>
-    div[data-testid="stPopover"] {position:fixed;right:18px;top:82px;z-index:10021}
-    div[data-testid="stPopover"] > button {min-width:92px;min-height:104px;opacity:.01;border-radius:22px}
-    @media(max-width:640px){div[data-testid="stPopover"]{right:9px;top:70px}div[data-testid="stPopover"] > button{min-width:88px;min-height:104px}}
+    .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] {position:fixed;right:18px;top:154px;z-index:10021}
+    .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] > button {width:150px;min-height:42px;opacity:.01;border-radius:13px}
+    .st-key-nelutu_qa_trigger div[data-testid="stPopover"] {position:fixed;right:28px;top:204px;z-index:10021}
+    .st-key-nelutu_qa_trigger div[data-testid="stPopover"] > button {width:112px;min-height:132px;opacity:.01;border-radius:22px}
+    @media(max-width:640px){
+      .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"]{right:9px;top:138px}
+      .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] > button{width:126px;min-height:38px}
+      .st-key-nelutu_qa_trigger div[data-testid="stPopover"]{right:16px;top:184px}
+      .st-key-nelutu_qa_trigger div[data-testid="stPopover"] > button{width:88px;min-height:104px}
+    }
     </style>
     """, unsafe_allow_html=True)
-    with st.popover("🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST", use_container_width=False):
-        st.markdown("**🤠 Neluțu**")
-        st.markdown("No, gâdilă-mă o țârucă pă burtică ș-apoi lasă-mă să mă prezint: cine-s io, ce știe să facă aplicația asta și cum te pot ajuta. După-aia, dacă mă mai întrebi câte ceva, mă strădui să-ți răspund cât oi ști io mai bine. Da’ să știi ceva: mă uit atent și la cum lucrii p-aici, iar dacă te văd că te-ncurci... intervin io. 🤠")
-        st.markdown(NELUTU_TUTORIAL_TEXT)
-        _nelutu_question = st.text_input(
-            "No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",
-            placeholder="Scrie-i lu’ Neluțu...",
-            key="nelutu_question",
-        )
-        _nelutu_current_prompt = _nelutu_question.strip()
-        _nelutu_context = {"facts": [
-            {"keywords": ("portal", "cum folosesc portalul"), "answer": "Ești autentificat în Portalul Părinților; pot explica orice zonă vizibilă aici, fără să modific date."}
-        ]}
-        _nelutu_ask = st.button("💬 Întreabă-l pe Neluțu", use_container_width=True, key="nelutu_ask")
-        if _nelutu_ask and _nelutu_current_prompt:
-            with st.spinner("No, amu lasă-mă o țâră să cuget..."):
-                st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
-                st.session_state["nelutu_answered_reply"] = nelutu_answer(_nelutu_current_prompt, _nelutu_context)
-        _kept_prompt, _nelutu_reply = _nelutu_fresh_reply(
-            st.session_state.get("nelutu_answered_prompt"),
-            st.session_state.get("nelutu_answered_reply"),
-            _nelutu_current_prompt,
-        )
-        if _kept_prompt is None:
-            st.session_state.pop("nelutu_answered_prompt", None)
-            st.session_state.pop("nelutu_answered_reply", None)
-        if _nelutu_reply is not None:
-            st.markdown("**Neluțu:**")
-            st.markdown(_nelutu_reply.text)
-            if _nelutu_reply.source_label and _nelutu_reply.source_url:
-                st.caption("📚 Bază oficială:")
-                st.link_button(
-                    _nelutu_reply.source_label,
-                    _nelutu_reply.source_url,
-                    use_container_width=True,
-                    key=f"nelutu_source_{_nelutu_reply.intent}",
-                )
+
+    with st.container(key="nelutu_tutorial_trigger"):
+        with st.popover("📖 Tutorial Neluțu", use_container_width=False):
+            st.markdown(NELUTU_TUTORIAL_TEXT)
+
+    with st.container(key="nelutu_qa_trigger"):
+        with st.popover("🤠 Întreabă-l pe Neluțu", use_container_width=False):
+            st.markdown("**🤠 Neluțu**")
+            _nelutu_question = st.text_input(
+                "No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",
+                placeholder="Scrie-i lu’ Neluțu...",
+                key="nelutu_question",
+            )
+            _nelutu_current_prompt = _nelutu_question.strip()
+            _nelutu_context = {"facts": [
+                {"keywords": ("portal", "cum folosesc portalul"), "answer": "Ești autentificat în Portalul Părinților; pot explica orice zonă vizibilă aici, fără să modific date."}
+            ]}
+            _nelutu_ask = st.button("💬 Întreabă-l pe Neluțu", use_container_width=True, key="nelutu_ask")
+            if _nelutu_ask and _nelutu_current_prompt:
+                with st.spinner("No, amu lasă-mă o țâră să cuget..."):
+                    st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
+                    st.session_state["nelutu_answered_reply"] = nelutu_answer(_nelutu_current_prompt, _nelutu_context)
+            _kept_prompt, _nelutu_reply = _nelutu_fresh_reply(
+                st.session_state.get("nelutu_answered_prompt"),
+                st.session_state.get("nelutu_answered_reply"),
+                _nelutu_current_prompt,
+            )
+            if _kept_prompt is None:
+                st.session_state.pop("nelutu_answered_prompt", None)
+                st.session_state.pop("nelutu_answered_reply", None)
+            if _nelutu_reply is not None:
+                st.markdown("**Neluțu:**")
+                st.markdown(_nelutu_reply.text)
+                if _nelutu_reply.source_label and _nelutu_reply.source_url:
+                    st.caption("📚 Bază oficială:")
+                    st.link_button(
+                        _nelutu_reply.source_label,
+                        _nelutu_reply.source_url,
+                        use_container_width=True,
+                        key=f"nelutu_source_{_nelutu_reply.intent}",
+                    )
 
     try:
         _parent_student_key=normalize_student_key(student_found[3])
