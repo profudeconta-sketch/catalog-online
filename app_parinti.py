@@ -539,11 +539,15 @@ else:
 
     st.markdown("""
     <style>
-    .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] > button {position:fixed;left:0;right:0;top:0;z-index:10021;width:100vw;height:44px;min-height:44px;opacity:.01;border-radius:0}
-    .st-key-nelutu_qa_trigger div[data-testid="stPopover"] > button {position:fixed;right:24px;bottom:42px;z-index:10022;width:112px;height:132px;min-height:132px;opacity:.01;border-radius:22px}
+    .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] {position:fixed;left:0;right:0;top:0;z-index:10021}
+    .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] > button {width:100vw;min-height:44px;opacity:.01;border-radius:0}
+    .st-key-nelutu_qa_trigger div[data-testid="stPopover"] {position:fixed;right:24px;bottom:42px;z-index:10022}
+    .st-key-nelutu_qa_trigger div[data-testid="stPopover"] > button {width:112px;min-height:132px;opacity:.01;border-radius:22px}
     @media(max-width:640px){
-      .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] > button{left:0;right:0;top:0;width:100vw;height:40px;min-height:40px}
-      .st-key-nelutu_qa_trigger div[data-testid="stPopover"] > button{right:12px;bottom:38px;width:88px;height:104px;min-height:104px}
+      .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"]{left:0;right:0;top:0}
+      .st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] > button{width:100vw;min-height:40px}
+      .st-key-nelutu_qa_trigger div[data-testid="stPopover"]{right:12px;bottom:38px}
+      .st-key-nelutu_qa_trigger div[data-testid="stPopover"] > button{width:88px;min-height:104px}
     }
     </style>
     """, unsafe_allow_html=True)
