@@ -142,6 +142,8 @@ def render_nelutu_corner(state:str="idle") -> str:
 <style>
 .nelutu-corner .nelutu-wrap{{position:fixed;right:18px;top:82px;z-index:10020;width:112px;height:132px;padding:7px;display:block;border-radius:22px;background:rgba(255,250,240,.96);box-shadow:0 8px 26px rgba(55,38,20,.22);overflow:visible;pointer-events:none}}
 .nelutu-corner .nelutu-avatar{{width:102px;height:116px;display:block;margin:auto}}
+.nelutu-corner .nelutu-avatar{{animation:nelutu-corner-dance 5.8s ease-in-out 1,nelutu-breathe 3s ease-in-out 5.8s infinite}}
+@keyframes nelutu-corner-dance{{0%,100%{{transform:translateY(0) rotate(0)}}12%{{transform:translateY(-5px) rotate(-4deg)}}24%{{transform:translateY(0) rotate(4deg)}}36%{{transform:translateY(-4px) rotate(-3deg)}}48%{{transform:translateY(0) rotate(3deg)}}60%{{transform:translateY(-3px) rotate(-2deg)}}72%{{transform:translateY(0) rotate(2deg)}}84%{{transform:translateY(-2px) rotate(-1deg)}}}}
 .nelutu-corner .nelutu-bubble{{display:none}}
 @media(max-width:640px){{.nelutu-corner .nelutu-wrap{{right:9px;top:70px;width:88px;height:104px;padding:5px}}.nelutu-corner .nelutu-avatar{{width:78px;height:90px}}}}
 </style>"""
