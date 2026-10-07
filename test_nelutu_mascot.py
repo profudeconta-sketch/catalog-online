@@ -67,13 +67,13 @@ class NelutuMascotTests(unittest.TestCase):
     def test_nelutu_uses_visible_real_controls_for_both_authenticated_roles(self):
         source=Path("app_parinti.py").read_text(encoding="utf-8")
         self.assertIn('teacher_mode = auth_mode.startswith("🧑‍🏫")',source)
-        self.assertIn('st.popover("📖 Tutorial Neluțu"',source)
+        self.assertIn('st.popover("📖 GHID COMPLET — întregul sistem informatic + Neluțu 🤠"',source)
         self.assertIn('st.popover("🤠 Întreabă-l pe Neluțu"',source)
         self.assertIn(".st-key-nelutu_tutorial_trigger div[data-testid=\"stPopover\"] {position:fixed",source)
-        self.assertIn("left:50%;top:4px;transform:translateX(-50%)",source)
-        self.assertIn(".st-key-nelutu_qa_trigger div[data-testid=\"stPopover\"] {position:fixed;right:24px;bottom:42px",source)
-        self.assertIn("width:112px;height:132px",source)
-        self.assertIn("opacity:0;border:0;padding:0;cursor:pointer",source)
+        self.assertIn("left:0!important;right:0!important;top:0!important;width:100vw!important",source)
+        self.assertIn(".nelutu-corner .nelutu-corner-brau,.nelutu-corner .nelutu-bottom-brau{display:none!important}",source)
+        self.assertIn("right:24px!important;bottom:42px!important",source)
+        self.assertIn("width:112px!important;height:132px!important;opacity:0!important",source)
 
     def test_parent_portal_invalidates_stale_nelutu_answer(self):
         with open("app_parinti.py", "r", encoding="utf-8") as handle:
