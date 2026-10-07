@@ -1,6 +1,7 @@
 """Neluțu — asistent local, gratuit și strict read-only pentru Portalul Părinților."""
 from __future__ import annotations
 import re, unicodedata
+import hashlib
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -29,6 +30,73 @@ def _has_any(q:str, words:Iterable[str])->bool:
 
 def _src(k:str):
     return LEGAL_SOURCES[k]
+
+# Replici scurte, locale și deterministe: varietate fără AI extern și fără efecte secundare.
+# Situațiile sensibile sunt excluse de apelant; aici condimentăm doar răspunsurile obișnuite.
+_ARD_REMARKS = {
+    "authorized_context": (
+        "No, amu vorbim din ce-i scris, nu din ce-o visat clopu'. 😄",
+        "Așe da: avem datele-n față și nu mai ghicim în zațu' de cafea. 🤠",
+        "No, aici îi treabă limpede; cifrele n-au unde să fugă.",
+        "Bun, am pus degetu' digital pă rându' care trăbă. 😄",
+        "No, vezi? Când avem faptele, și Neluțu grăiește mai cu spor.",
+    ),
+    "portal_component": (
+        "No, desfacem lucrurile pă rând, că nici slănina nu să taie cu toporu'. 😄",
+        "Așe, am ajuns la sertaru' potrivit. Să vedem ce-i în el. 🤠",
+        "No, nu-i bai: meniurile-s multe, da' Neluțu are răbdare cât o zi de post.",
+        "Bun, aici nu ne grăbim; butonu' nu pleacă nicări fără noi. 😄",
+        "No, tăt îi mai ușor când știi la ce poartă să bați.",
+    ),
+    "grades": (
+        "No, notele-s ca vremea-n Apuseni: uneori îți plac, alteori îți iei sumanu'. 😄",
+        "Așe, ne uităm la cifre fără să le speriem, că nu fug din catalog. 🤠",
+        "No, media n-o înduplecăm cu povești; da' o putem lămuri omenește.",
+        "Bun, punem socoteala pă masă și vedem de unde vine.",
+    ),
+    "documents": (
+        "No, hârtiile-s multe, da' măcar astea digitale nu cad din dosar. 😄",
+        "Așe, luăm actele pă rând; nu facem căpiță din PDF-uri. 🤠",
+        "No, documentu' întâi îl verificăm și numa' după aia îi dăm drumu' la drum.",
+        "Bun, aici Neluțu-i poștaș numa' cu gura; butonu' rămâne la tine. 😄",
+    ),
+    "leave": (
+        "No, la învoire nu fugim înaintea aprobării, că nici căruța înaintea calului n-o punem. 😄",
+        "Așe, cererea merge la poartă; aprobarea-i cheia, nu clanța. 🤠",
+        "No, întâi starea, apoi plecarea. Altfel ne trezim cu Neluțu portar fără fluier.",
+    ),
+    "hello": (
+        "No, servus! Clopu'-i pă cap, rotițele-s unse, putem începe. 🤠",
+        "Servus! No, zi ce bai ai, că de stat degeaba pot și fără procesor. 😄",
+        "No, bine-ai venit! Io-s aci; numa' adevăru' să-l cerem, că povești avem destule.",
+        "Servus! Așe-mi place: omu' întreabă, Neluțu scormonește prin ce știe. 🤠",
+    ),
+    "fallback": (
+        "No, aici m-ai prins cu un picior în ceață și unu-n opinci. 😄",
+        "Așe întrebare... de-mi mai dai un fir, facem ghem din ea. 🤠",
+        "No, n-o să mă dau rotund numa' ca să par pătrat de deștept. Mai zi-mi o țâră.",
+        "Hmmm... aici clopu' nu-i antenă. Reformulează oleacă și ne prindem noi. 😄",
+    ),
+    "general": (
+        "No, încet și bine, că graba strică și treaba digitală. 😄",
+        "Așe, mergem pă fir; nu sărim gardu' până nu vedem ce-i dincolo. 🤠",
+        "No, io am răbdare. Curentu' să nu să ia, că în rest ne descurcăm. 😄",
+        "Bun. Întrebarea-i la noi, răspunsu' îl ținem cu picioarele pă pământ.",
+        "No, dacă știm, spunem; dacă nu știm, nu scoatem iepuri din clop. 🤠",
+    ),
+}
+
+def _ardelean_remark(question:str, intent:str)->str:
+    choices=_ARD_REMARKS.get(intent) or _ARD_REMARKS["general"]
+    seed=(str(intent)+"|"+_norm(question)).encode("utf-8")
+    idx=int.from_bytes(hashlib.sha256(seed).digest()[:4],"big") % len(choices)
+    return choices[idx]
+
+def _with_remark(answer:NelutuAnswer, question:str)->NelutuAnswer:
+    if answer.serious or answer.intent in {"safety","discipline","legal_general"}:
+        return answer
+    remark=_ardelean_remark(question, answer.intent)
+    return NelutuAnswer(answer.intent, remark+"\n\n"+answer.text, answer.source_label, answer.source_url, answer.serious)
 
 PORTAL_KNOWLEDGE = {
     "scoala": "Fila Școală conține comunicările și documentele trimise de școală. Un document nou rămâne neaccesat până la deschiderea lui din contul autentificat; WhatsApp este doar alertă și nu ține locul confirmării interne.",
@@ -93,10 +161,10 @@ def answer_with_context(question:str, context:dict|None=None)->NelutuAnswer:
         return safety
     contextual=_context_lookup(q, context)
     if contextual:
-        return NelutuAnswer("authorized_context", "No, aici pot să mă uit la ce-ți arată chiar portalul tău. 😄 " + contextual + " Eu îți explic ce-i înregistrat; nu schimb nimic.")
+        return _with_remark(NelutuAnswer("authorized_context", "No, aici pot să mă uit la ce-ți arată chiar portalul tău. 😄 " + contextual + " Eu îți explic ce-i înregistrat; nu schimb nimic."), question)
     for topic, explanation in PORTAL_KNOWLEDGE.items():
         if _has_any(q, (topic,)):
-            return NelutuAnswer("portal_component", "No binie mă. 😄 " + explanation + " Dacă-mi spui ce anume vezi acolo, îl desfacem fir cu fir; io am vreme, rotițele n-au autobuz de prins. 😂")
+            return _with_remark(NelutuAnswer("portal_component", "No binie mă. 😄 " + explanation + " Dacă-mi spui ce anume vezi acolo, îl desfacem fir cu fir; io am vreme, rotițele n-au autobuz de prins. 😂"), question)
     return answer(question)
 
 def answer(question:str)->NelutuAnswer:
@@ -150,7 +218,7 @@ def answer(question:str)->NelutuAnswer:
     if _has_any(q,("salut","buna","servus","ceau","cine esti","nelutu")):
         return NelutuAnswer("hello","Ie mă, servus! Eu-s Neluțu. 😄 Mocan digital de pe Valea Arieșului: iute la minte, molcom la vorbă și cu rotițele unse cât să nu scârțâie prin portal. 😂 Nu mă supăr, nu judec și nu modific nimic în catalog. Întreabă-mă; dacă nu știu, îți spun. Îi mai sănătos decât să scot adevărul din clop.")
 
-    return NelutuAnswer("fallback","No, amu m-ai băgat oleacă-n ceață. 😄 Nu vreau să scot un răspuns din clop doar ca să par deștept. Spune-mi altfel sau alege o temă: portal, note, absențe, învoire, documente, burse, înștiințări ori drepturi. Dacă-i un caz pe care nu-l pot lămuri sigur, te trimit la omul competent — mai bine Neluțu prudent decât Neluțu morișcă. 😂")
+    return _with_remark(NelutuAnswer("fallback","No, amu m-ai băgat oleacă-n ceață. 😄 Nu vreau să scot un răspuns din clop doar ca să par deștept. Spune-mi altfel sau alege o temă: portal, note, absențe, învoire, documente, burse, înștiințări ori drepturi. Dacă-i un caz pe care nu-l pot lămuri sigur, te trimit la omul competent — mai bine Neluțu prudent decât Neluțu morișcă. 😂"), question)
 
 # Contract invariabil: doctor în portal, dar cu caracterul lui Neluțu și cu mâinile în buzunar.
 EXPERT_CONTRACT = {
