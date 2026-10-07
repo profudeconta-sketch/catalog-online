@@ -53,10 +53,10 @@ class NelutuMascotTests(unittest.TestCase):
         html=render_nelutu_corner("idle")
         self.assertIn("nelutu-corner-brau",html)
         self.assertIn("top:154px",html)
-        self.assertIn("top:204px",html)
+        self.assertIn("top:min(75vh,calc(100vh - 160px))",html)
         self.assertIn("width:112px;height:132px",html)
         self.assertIn("width:102px;height:116px",html)
-        self.assertIn("top:184px",html)
+        self.assertIn("top:min(72vh,calc(100vh - 132px))",html)
 
     def test_parent_portal_shows_ardelean_identity_in_assistant_control(self):
         src=Path("app_parinti.py").read_text(encoding="utf-8")
