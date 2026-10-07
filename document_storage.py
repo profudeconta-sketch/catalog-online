@@ -442,10 +442,28 @@ def list_student_documents(student_rm_pg, direction=None):
 
 def read_registered_document(student_rm_pg, document_id):
     student_key = normalize_student_key(student_rm_pg)
+    return read_registered_document_by_student_key(student_key, document_id)
+
+
+def read_registered_document_by_student_key(student_key, document_id):
+    """Citeste un document folosind cheia deja normalizata a elevului.
+
+    Folosit de fluxuri interne (de exemplu Inbox) care stocheaza student_key,
+    pentru a evita normalizarea/hash-uirea a doua oara. Verificarea stricta
+    document -> elev si verificarea SHA-256 raman obligatorii.
+    """
+    student_key = str(student_key or "").strip()
+    document_id = str(document_id or "").strip()
+    if not re.fullmatch(r"[0-9a-f]{24}", student_key):
+        raise DocumentStorageError("Cheia elevului este invalida.")
+    if not document_id:
+        raise DocumentStorageError("Identificatorul documentului lipseste.")
+
     registry, _ = load_registry()
     matches = [
         item for item in registry["documents"]
-        if item.get("id") == document_id and item.get("student_key") == student_key
+        if str(item.get("id")) == document_id
+        and item.get("student_key") == student_key
     ]
     if len(matches) != 1:
         raise DocumentStorageError("Documentul nu exista pentru elevul selectat.")
