@@ -51,15 +51,17 @@ class NelutuMascotTests(unittest.TestCase):
 
     def test_corner_keeps_brau_near_top_of_streamlit_page(self):
         html=render_nelutu_corner("idle")
-        self.assertIn("top:82px",html)
+        self.assertIn("nelutu-corner-brau",html)
+        self.assertIn("top:154px",html)
+        self.assertIn("top:204px",html)
         self.assertIn("width:112px;height:132px",html)
         self.assertIn("width:102px;height:116px",html)
-        self.assertIn("top:70px",html)
+        self.assertIn("top:184px",html)
 
     def test_parent_portal_shows_ardelean_identity_in_assistant_control(self):
         src=Path("app_parinti.py").read_text(encoding="utf-8")
-        identity="🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST"
-        self.assertGreaterEqual(src.count(identity),1)
+        self.assertIn('st.popover("📖 Tutorial Neluțu"',src)
+        self.assertIn('st.popover("🤠 Întreabă-l pe Neluțu"',src)
         self.assertIn("**🤠 Neluțu**",src)
 
     def test_parent_portal_invalidates_stale_nelutu_answer(self):
@@ -93,7 +95,7 @@ class NelutuMascotTests(unittest.TestCase):
         html=render_nelutu_corner("idle")
         self.assertIn("position:fixed",html)
         self.assertIn("right:18px",html)
-        self.assertIn("top:82px",html)
+        self.assertIn("top:204px",html)
         self.assertIn("pointer-events:none",html)
         self.assertIn("width:102px;height:116px",html)
         self.assertIn("nelutu-bubble{display:none}",html)
@@ -129,7 +131,8 @@ class NelutuMascotTests(unittest.TestCase):
     def test_parent_portal_uses_small_click_assistant_not_giant_mascot(self):
         with open("app_parinti.py","r",encoding="utf-8") as handle:
             source=handle.read()
-        self.assertIn('st.popover("🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST"',source)
+        self.assertIn('st.popover("🤠 Întreabă-l pe Neluțu"',source)
+        self.assertIn('st.popover("📖 Tutorial Neluțu"',source)
         self.assertIn("No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",source)
         self.assertIn("No, amu lasă-mă o țâră să cuget...",source)
         self.assertNotIn("Poți porni de aici:",source)
