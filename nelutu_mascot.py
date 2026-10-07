@@ -138,7 +138,7 @@ def visual_contract()->dict:
 def render_nelutu_corner(state:str="idle") -> str:
     """Mascota mică, persistentă vizual în colț; fără date, JS sau acțiuni."""
     mascot=render_nelutu_mascot(state,"")
-    return f"""<div class="nelutu-corner"><div class="nelutu-corner-brau"><b>PRIMU’ AI DIN ARDEAL</b><span>NELUȚU-AL NOST 🤠</span></div>{mascot}</div>
+    return f"""<div class="nelutu-corner"><div class="nelutu-corner-brau"><b>📖 NELUȚU — GHIDUL ÎNTREGULUI SISTEM INFORMATIC</b><span>Apasă aici pentru tutorialul complet, cap-coadă 🤠</span></div><div class="nelutu-bottom-brau">🤠 ÎNTREABĂ-L PE NELUȚU — no, zâ ce vrei să afli!</div>{mascot}</div>
 <style>
 .nelutu-corner .nelutu-corner-brau{{position:fixed;right:18px;top:154px;z-index:10020;width:150px;min-height:42px;padding:6px 8px;border:2px solid #3a241d;border-radius:13px;background:#8a2f2a;color:#fff8df;text-align:center;box-shadow:0 6px 18px rgba(55,38,20,.20);pointer-events:none;font-size:11px;font-weight:900;line-height:1.12}}
 .nelutu-corner .nelutu-corner-brau span{{display:block;font-size:9px;margin-top:3px}}
