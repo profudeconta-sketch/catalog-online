@@ -64,6 +64,15 @@ class NelutuMascotTests(unittest.TestCase):
         self.assertIn('st.popover("🤠 Întreabă-l pe Neluțu"',src)
         self.assertIn("**🤠 Neluțu**",src)
 
+    def test_nelutu_uses_visible_real_controls_for_both_authenticated_roles(self):
+        source=Path("app_parinti.py").read_text(encoding="utf-8")
+        self.assertIn('teacher_mode = auth_mode.startswith("🧑‍🏫")',source)
+        self.assertIn('st.popover("📖 Tutorial Neluțu"',source)
+        self.assertIn('st.popover("🤠 Întreabă-l pe Neluțu"',source)
+        self.assertNotIn("opacity:.01",source)
+        self.assertIn(".st-key-nelutu_tutorial_trigger div[data-testid=\"stPopover\"] {position:fixed",source)
+        self.assertIn(".st-key-nelutu_qa_trigger div[data-testid=\"stPopover\"] {position:fixed",source)
+
     def test_parent_portal_invalidates_stale_nelutu_answer(self):
         with open("app_parinti.py", "r", encoding="utf-8") as handle:
             source = handle.read()
