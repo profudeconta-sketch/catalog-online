@@ -140,13 +140,14 @@ def render_nelutu_corner(state:str="idle") -> str:
     mascot=render_nelutu_mascot(state,"")
     return f"""<div class="nelutu-corner"><div class="nelutu-corner-brau"><b>📖 NELUȚU — GHIDUL ÎNTREGULUI SISTEM INFORMATIC</b><span>Apasă aici pentru tutorialul complet, cap-coadă 🤠</span></div><div class="nelutu-bottom-brau">🤠 ÎNTREABĂ-L PE NELUȚU — no, zâ ce vrei să afli!</div>{mascot}</div>
 <style>
-.nelutu-corner .nelutu-corner-brau{{position:fixed;right:18px;top:154px;z-index:10020;width:150px;min-height:42px;padding:6px 8px;border:2px solid #3a241d;border-radius:13px;background:#8a2f2a;color:#fff8df;text-align:center;box-shadow:0 6px 18px rgba(55,38,20,.20);pointer-events:none;font-size:11px;font-weight:900;line-height:1.12}}
-.nelutu-corner .nelutu-corner-brau span{{display:block;font-size:9px;margin-top:3px}}
-.nelutu-corner .nelutu-wrap{{position:fixed;right:28px;top:min(75vh,calc(100vh - 160px));z-index:10020;width:112px;height:132px;padding:7px;display:block;border-radius:22px;background:rgba(255,250,240,.96);box-shadow:0 8px 26px rgba(55,38,20,.22);overflow:visible;pointer-events:none}}
+.nelutu-corner .nelutu-corner-brau{{position:fixed;left:0;right:0;top:0;z-index:10020;min-height:44px;padding:5px 150px 5px 12px;border-bottom:2px solid #3a241d;background:#8a2f2a;color:#fff8df;text-align:center;box-shadow:0 3px 12px rgba(55,38,20,.18);pointer-events:none;font-size:12px;font-weight:900;line-height:1.12}}
+.nelutu-corner .nelutu-corner-brau span{{display:block;font-size:9px;margin-top:2px}}
+.nelutu-corner .nelutu-bottom-brau{{position:fixed;left:0;right:0;bottom:0;z-index:10020;min-height:38px;padding:9px 145px 7px 12px;border-top:2px solid #3a241d;background:#8a2f2a;color:#fff8df;text-align:center;box-shadow:0 -3px 12px rgba(55,38,20,.18);pointer-events:none;font-size:11px;font-weight:900;line-height:1.12}}
+.nelutu-corner .nelutu-wrap{{position:fixed;right:24px;bottom:42px;z-index:10020;width:112px;height:132px;padding:7px;display:block;border-radius:22px;background:rgba(255,250,240,.96);box-shadow:0 8px 26px rgba(55,38,20,.22);overflow:visible;pointer-events:none}}
 .nelutu-corner .nelutu-brau,.nelutu-corner .nelutu-brau-title,.nelutu-corner .nelutu-brau-subtitle{{display:none}}
 .nelutu-corner .nelutu-avatar{{width:102px;height:116px;display:block;margin:auto}}
 .nelutu-corner .nelutu-avatar{{animation:nelutu-corner-dance 5.8s ease-in-out 1,nelutu-breathe 3s ease-in-out 5.8s infinite}}
 @keyframes nelutu-corner-dance{{0%,100%{{transform:translateY(0) rotate(0)}}12%{{transform:translateY(-5px) rotate(-4deg)}}24%{{transform:translateY(0) rotate(4deg)}}36%{{transform:translateY(-4px) rotate(-3deg)}}48%{{transform:translateY(0) rotate(3deg)}}60%{{transform:translateY(-3px) rotate(-2deg)}}72%{{transform:translateY(0) rotate(2deg)}}84%{{transform:translateY(-2px) rotate(-1deg)}}}}
 .nelutu-corner .nelutu-bubble{{display:none}}
-@media(max-width:640px){{.nelutu-corner .nelutu-corner-brau{{right:9px;top:138px;width:126px;min-height:38px;font-size:9px}}.nelutu-corner .nelutu-wrap{{right:16px;top:min(72vh,calc(100vh - 132px));width:88px;height:104px;padding:5px}}.nelutu-corner .nelutu-avatar{{width:78px;height:90px}}}}
+@media(max-width:640px){{.nelutu-corner .nelutu-corner-brau{{left:0;right:0;top:0;min-height:40px;padding:5px 100px 5px 8px;font-size:9px}}.nelutu-corner .nelutu-bottom-brau{{left:0;right:0;bottom:0;min-height:34px;padding:8px 100px 6px 8px;font-size:9px}}.nelutu-corner .nelutu-wrap{{right:12px;bottom:38px;width:88px;height:104px;padding:5px}}.nelutu-corner .nelutu-avatar{{width:78px;height:90px}}}}
 </style>"""
