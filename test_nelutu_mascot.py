@@ -130,7 +130,9 @@ class NelutuMascotTests(unittest.TestCase):
         with open("app_parinti.py","r",encoding="utf-8") as handle:
             source=handle.read()
         self.assertIn('st.popover("🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST"',source)
-        self.assertIn("No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",source)\n        self.assertIn("No, amu lasă-mă o țâră să cuget...",source)\n        self.assertNotIn("Poți porni de aici:",source)
+        self.assertIn("No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",source)
+        self.assertIn("No, amu lasă-mă o țâră să cuget...",source)
+        self.assertNotIn("Poți porni de aici:",source)
         self.assertIn('st.toast("🤠 Servus!',source)
         self.assertNotIn('with st.expander("🤠 Neluțu — ajutorul simpatic din Portal"',source)
         self.assertNotIn('render_nelutu_mascot(_nelutu_state',source)
