@@ -59,7 +59,7 @@ class NelutuMascotTests(unittest.TestCase):
     def test_parent_portal_shows_ardelean_identity_in_assistant_control(self):
         src=Path("app_parinti.py").read_text(encoding="utf-8")
         identity="🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST"
-        self.assertGreaterEqual(src.count(identity),2)
+        self.assertGreaterEqual(src.count(identity),1)\n        self.assertIn("**🤠 Neluțu**",src)
 
     def test_parent_portal_invalidates_stale_nelutu_answer(self):
         with open("app_parinti.py", "r", encoding="utf-8") as handle:
@@ -129,7 +129,7 @@ class NelutuMascotTests(unittest.TestCase):
         with open("app_parinti.py","r",encoding="utf-8") as handle:
             source=handle.read()
         self.assertIn('st.popover("🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST"',source)
-        self.assertIn("întreabă-mă orișâce vrei tu... da’ nu pre mult, că mă ieftinesc",source)
+        self.assertIn("No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",source)\n        self.assertIn("No, amu lasă-mă o țâră să cuget...",source)\n        self.assertNotIn("Poți porni de aici:",source)
         self.assertIn('st.toast("🤠 Servus!',source)
         self.assertNotIn('with st.expander("🤠 Neluțu — ajutorul simpatic din Portal"',source)
         self.assertNotIn('render_nelutu_mascot(_nelutu_state',source)
