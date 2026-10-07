@@ -69,9 +69,11 @@ class NelutuMascotTests(unittest.TestCase):
         self.assertIn('teacher_mode = auth_mode.startswith("🧑‍🏫")',source)
         self.assertIn('st.popover("📖 Tutorial Neluțu"',source)
         self.assertIn('st.popover("🤠 Întreabă-l pe Neluțu"',source)
-        self.assertNotIn("opacity:.01",source)
         self.assertIn(".st-key-nelutu_tutorial_trigger div[data-testid=\"stPopover\"] {position:fixed",source)
-        self.assertIn(".st-key-nelutu_qa_trigger div[data-testid=\"stPopover\"] {position:fixed",source)
+        self.assertIn("left:50%;top:4px;transform:translateX(-50%)",source)
+        self.assertIn(".st-key-nelutu_qa_trigger div[data-testid=\"stPopover\"] {position:fixed;right:24px;bottom:42px",source)
+        self.assertIn("width:112px;height:132px",source)
+        self.assertIn("opacity:0;border:0;padding:0;cursor:pointer",source)
 
     def test_parent_portal_invalidates_stale_nelutu_answer(self):
         with open("app_parinti.py", "r", encoding="utf-8") as handle:
