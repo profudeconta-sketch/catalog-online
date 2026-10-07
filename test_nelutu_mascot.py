@@ -143,3 +143,19 @@ class NelutuMascotTests(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
+
+
+class NelutuVocabularyCapacityTests(unittest.TestCase):
+    def test_productive_regional_vocabulary_exceeds_requested_scale(self):
+        from nelutu_assistant import ardelean_productive_vocabulary_size
+        self.assertGreaterEqual(ardelean_productive_vocabulary_size(), 3000)
+
+    def test_contextual_joke_capacity_exceeds_500(self):
+        from nelutu_assistant import ardelean_joke_capacity
+        self.assertGreaterEqual(ardelean_joke_capacity(), 500)
+
+    def test_sensitive_topics_never_receive_contextual_joke(self):
+        from nelutu_assistant import answer_with_context
+        out=answer_with_context("Este vorba despre violență și amenințare.")
+        self.assertTrue(out.serious)
+        self.assertNotIn("rotițele mele n-au autobuz", out.text)
