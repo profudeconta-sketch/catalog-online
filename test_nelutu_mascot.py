@@ -59,7 +59,8 @@ class NelutuMascotTests(unittest.TestCase):
     def test_parent_portal_shows_ardelean_identity_in_assistant_control(self):
         src=Path("app_parinti.py").read_text(encoding="utf-8")
         identity="🤠 Neluțu — PRIMU’ AI DIN ARDEAL • NELUȚU-AL NOST"
-        self.assertGreaterEqual(src.count(identity),1)\n        self.assertIn("**🤠 Neluțu**",src)
+        self.assertGreaterEqual(src.count(identity),1)
+        self.assertIn("**🤠 Neluțu**",src)
 
     def test_parent_portal_invalidates_stale_nelutu_answer(self):
         with open("app_parinti.py", "r", encoding="utf-8") as handle:
