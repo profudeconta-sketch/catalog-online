@@ -64,6 +64,13 @@ class NelutuMascotTests(unittest.TestCase):
         self.assertIn('st.popover("🤠 Întreabă-l pe Neluțu"',src)
         self.assertIn("**🤠 Neluțu**",src)
 
+    def test_parent_portal_click_targets_are_fixed_on_actual_buttons(self):
+        source=Path("app_parinti.py").read_text(encoding="utf-8")
+        self.assertIn('.st-key-nelutu_tutorial_trigger div[data-testid="stPopover"] > button {position:fixed;left:0;right:0;top:0',source)
+        self.assertIn('.st-key-nelutu_qa_trigger div[data-testid="stPopover"] > button {position:fixed;right:24px;bottom:42px',source)
+        self.assertIn('height:132px;min-height:132px',source)
+        self.assertNotIn('.st-key-nelutu_qa_trigger div[data-testid="stPopover"] {position:fixed',source)
+
     def test_parent_portal_invalidates_stale_nelutu_answer(self):
         with open("app_parinti.py", "r", encoding="utf-8") as handle:
             source = handle.read()
