@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+import hmac
 import os
 import openpyxl
 import streamlit as st
@@ -334,24 +335,50 @@ st.title("🏫 Colegiul 'Emil Negruțiu' Turda")
 st.subheader("👨‍👩‍👧‍👦 Portal Părinți — Vizualizare Fișă Școlară Elev (IX TH)")
 st.info("🔒 Acces securizat pentru părinți. Vă rugăm să vă autentificați mai jos cu Numărul Matricol și Codul PIN confidențial primit de la diriginte.")
 
-col_auth1, col_auth2 = st.columns(2)
+auth_mode = st.radio(
+    "Tip acces:",
+    ("👨‍👩‍👧‍👦 Părinte / reprezentant legal", "🧑‍🏫 Diriginte — verificare portal"),
+    horizontal=True,
+    key="parent_portal_auth_mode",
+)
+teacher_mode = auth_mode.startswith("🧑‍🏫")
 
-with col_auth1:
-    nr_matricol_input = st.text_input(
-        "🔑 Introduceți Numărul Matricol:",
-        value="",
-        placeholder="Introduceți numărul matricol",
-        help="Numărul matricol se găsește pe carnetul de elev sau adeverința de înscriere."
-    ).strip()
+nr_matricol_input = ""
+pin_input = ""
+teacher_password_input = ""
+teacher_selected_student = None
 
-with col_auth2:
-    pin_input = st.text_input(
-        "🔒 Introduceți Codul PIN Confidențial (4 cifre):",
+if teacher_mode:
+    st.caption(
+        "Mod de verificare pentru diriginte. Autentificarea părinților și PIN-urile elevilor "
+        "rămân neschimbate."
+    )
+    teacher_password_input = st.text_input(
+        "🔐 Parola dirigintelui:",
         value="",
         type="password",
-        placeholder="Introduceți codul PIN",
-        help="Codul PIN confidențial individual eliberat de către diriginte."
+        placeholder="Introduceți parola de acces",
+        key="teacher_portal_password",
     ).strip()
+else:
+    col_auth1, col_auth2 = st.columns(2)
+
+    with col_auth1:
+        nr_matricol_input = st.text_input(
+            "🔑 Introduceți Numărul Matricol:",
+            value="",
+            placeholder="Introduceți numărul matricol",
+            help="Numărul matricol se găsește pe carnetul de elev sau adeverința de înscriere."
+        ).strip()
+
+    with col_auth2:
+        pin_input = st.text_input(
+            "🔒 Introduceți Codul PIN Confidențial (4 cifre):",
+            value="",
+            type="password",
+            placeholder="Introduceți codul PIN",
+            help="Codul PIN confidențial individual eliberat de către diriginte."
+        ).strip()
 
 def safe_str(val):
     if val is None:
@@ -399,20 +426,51 @@ def safe_float_str(val):
 
 student_found = None
 pin_correct = False
+teacher_authenticated = False
 
-if nr_matricol_input:
-    for e in ELEVI:
-        if nr_matricol_input == str(e[2]) or nr_matricol_input == str(e[3]) or nr_matricol_input.lower() == str(e[3]).lower():
-            student_found = e
-            if pin_input and pin_input == str(e[4]):
-                pin_correct = True
-            break
+if teacher_mode:
+    teacher_secret = os.environ.get("PARENT_PORTAL_TEACHER_PASSWORD") or ""
+    try:
+        if hasattr(st, "secrets") and "PARENT_PORTAL_TEACHER_PASSWORD" in st.secrets:
+            teacher_secret = teacher_secret or str(st.secrets["PARENT_PORTAL_TEACHER_PASSWORD"])
+    except Exception:
+        pass
 
-if not nr_matricol_input or not pin_input:
+    if not teacher_secret:
+        st.error(
+            "❌ Accesul dirigintelui nu este configurat. "
+            "Adăugați PARENT_PORTAL_TEACHER_PASSWORD în Streamlit Secrets."
+        )
+    elif not teacher_password_input:
+        st.warning("👈 Introduceți parola dirigintelui.")
+    elif not hmac.compare_digest(teacher_password_input, teacher_secret):
+        st.error("❌ Parola dirigintelui este incorectă.")
+    else:
+        teacher_authenticated = True
+        teacher_selected_student = st.selectbox(
+            "👤 Selectați elevul pentru verificarea portalului:",
+            ELEVI,
+            format_func=lambda e: f"{e[1]} — Nr. matr. {e[2]}",
+            key="teacher_portal_student",
+        )
+        student_found = teacher_selected_student
+        pin_correct = True
+else:
+    if nr_matricol_input:
+        for e in ELEVI:
+            if nr_matricol_input == str(e[2]) or nr_matricol_input == str(e[3]) or nr_matricol_input.lower() == str(e[3]).lower():
+                student_found = e
+                if pin_input and pin_input == str(e[4]):
+                    pin_correct = True
+                break
+
+if teacher_mode and not teacher_authenticated:
+    pass
+elif not teacher_mode and (not nr_matricol_input or not pin_input):
     st.warning("👈 Vă rugăm să completați atât Numărul Matricol, cât și Codul PIN confidențial de mai sus.")
-elif not student_found:
+elif not teacher_mode and not student_found:
     st.error("❌ Nu s-a găsit niciun elev cu acest Număr Matricol. Verificați carnetul elevului și încercați din nou.")
-elif not pin_correct:
+elif not teacher_mode and not pin_correct:
     st.error("❌ Cod PIN incorect pentru acest elev! Vă rugăm să verificați biletul confidențial primit de la diriginte.")
 else:
     status_scolar = str(student_found[5] if len(student_found) > 5 else "ACTIV").upper()
@@ -424,16 +482,22 @@ else:
 
     col_hdr1, col_hdr2 = st.columns([3, 1])
     with col_hdr1:
-       st.success(
-        f"✅ Autentificare securizată reușită pentru elevul:"
-        f" **{student_found[1]}** (Matricol {student_found[3]})"
-    )
+       if teacher_mode:
+           st.success(
+               f"✅ Acces diriginte reușit — verificare portal pentru:"
+               f" **{student_found[1]}** (Matricol {student_found[3]})"
+           )
+       else:
+           st.success(
+               f"✅ Autentificare securizată reușită pentru elevul:"
+               f" **{student_found[1]}** (Matricol {student_found[3]})"
+           )
 
     # --- ÎNREGISTRARE CONECTARE ÎN GOOGLE SHEETS (O SINGURĂ DATĂ PER SESIUNE) ---
     if "logged_to_sheet" not in st.session_state:
       st.session_state["logged_to_sheet"] = False
 
-    if not st.session_state["logged_to_sheet"]:
+    if not teacher_mode and not st.session_state["logged_to_sheet"]:
       import requests
 
       try:
