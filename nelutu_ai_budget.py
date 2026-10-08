@@ -12,9 +12,9 @@ class SessionAIBudget:
     used: int = 0
 
     def __post_init__(self):
-        if not isinstance(self.max_requests, int) or not 0 <= self.max_requests <= 100:
+        if type(self.max_requests) is not int or not 0 <= self.max_requests <= 100:
             raise ValueError("invalid_limit")
-        if not isinstance(self.used, int) or not 0 <= self.used <= self.max_requests:
+        if type(self.used) is not int or not 0 <= self.used <= self.max_requests:
             raise ValueError("invalid_usage")
 
     @property
