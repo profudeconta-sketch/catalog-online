@@ -27,7 +27,7 @@ class AIResult:
 class AIUnavailable(Exception):
     pass
 
-def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=None,transport=None):
+def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=None,transport=None,max_output_tokens=None):
     """Returnează AIUnavailable fără rețea dacă nu există configurare sau eligibilitate."""
     if history is not None:
         raise AIUnavailable("history_not_allowed")
@@ -39,8 +39,11 @@ def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=N
         raise AIUnavailable("invalid_account")
     if not model.startswith("@cf/"):
         raise AIUnavailable("invalid_model")
+    token_limit = ExperimentalPolicy().max_output_tokens if max_output_tokens is None else max_output_tokens
+    if type(token_limit) is not int or not 1 <= token_limit <= 1600:
+        raise AIUnavailable("invalid_token_limit")
     url="https://api.cloudflare.com/client/v4/accounts/"+account_id+"/ai/run/"+model
-    payload=json.dumps({"messages":external_messages(question,SYSTEM_PROMPT),"max_tokens":ExperimentalPolicy().max_output_tokens}).encode("utf-8")
+    payload=json.dumps({"messages":external_messages(question,SYSTEM_PROMPT),"max_tokens":token_limit}).encode("utf-8")
     request=urllib.request.Request(url,data=payload,headers={
         "Authorization":"Bearer "+api_token,
         "Content-Type":"application/json",
