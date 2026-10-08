@@ -12,6 +12,8 @@ from nelutu_ai_memory import NelutuMemory
 from nelutu_ai_privacy import approved_external_question
 from nelutu_ai_answer_guard import safe_memory_answer
 
+MAX_CIPHERTEXT_BYTES = 256_000
+
 class MemoryStoreError(Exception):
     pass
 
@@ -36,6 +38,8 @@ class EncryptedMemoryStore:
             raise MemoryStoreError("invalid_ciphertext_type")
         if encrypted is None:
             return NelutuMemory()
+        if len(encrypted) > MAX_CIPHERTEXT_BYTES:
+            raise MemoryStoreError("ciphertext_too_large")
         try:
             data = json.loads(self._cipher.decrypt(encrypted).decode("utf-8"))
             if not isinstance(data, list) or len(data) > 60 or len(data) % 2:
@@ -77,7 +81,10 @@ class EncryptedMemoryStore:
             if not safe_memory_answer(answer):
                 raise MemoryStoreError("invalid_answer")
         payload = json.dumps(memory.recent_local(60), ensure_ascii=False).encode("utf-8")
-        self.backend.put(scope, self._cipher.encrypt(payload))
+        encrypted = self._cipher.encrypt(payload)
+        if len(encrypted) > MAX_CIPHERTEXT_BYTES:
+            raise MemoryStoreError("ciphertext_too_large")
+        self.backend.put(scope, encrypted)
 
     def delete(self, scope: str) -> None:
         self.backend.delete(_validate_scope(scope))
