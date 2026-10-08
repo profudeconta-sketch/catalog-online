@@ -2,6 +2,9 @@
 from __future__ import annotations
 import re, unicodedata
 from nelutu_assistant import NelutuAnswer, answer_with_context as _base_answer
+from nelutu_education_dialogue import educational_reply
+from nelutu_pedagogy_library import lookup as pedagogy_lookup, clarify as pedagogy_clarify
+from nelutu_portal_faq import answer_portal
 
 TUTORIAL_TOPIC="Tutorial complet — Portalul Părinților"
 TUTORIAL_TEXT="""# 🤠 No, io-s Neluțu. Hai să-ți arăt tăt sistemu’, cap-coadă.
@@ -313,22 +316,38 @@ def _norm(text):
     text="".join(ch for ch in text if not unicodedata.combining(ch)).lower()
     return re.sub(r"[^a-z0-9]+"," ",text).strip()
 
+# Prioritate pentru intențiile concrete; fără potriviri pe fragmente de cuvinte.
+# Folosim doar biblioteca standard, fără AI/API extern.
 ALIASES={
-"tutorial":("tutorial","ghid","arata mi aplicatia","explica mi aplicatia","cum folosesc tot","cum merge tot"),
-"school":("unde vad ce o trimis scoala","ce a trimis scoala","instiintare","mesaj de la scoala"),
-"medical":("unde bag scutirea","scutire medicala","adeverinta medicala","trimit scutirea"),
-"documents":("trimit hartia","trimit actul","trimit la dirigu","incarc document","unde incarc"),
-"excuse":("motivez absente","motivare absente","mai trebe sa duc","mai trebuie sa duc","cererea pe hartie","cererea tiparita"),
-"leave":("invoire","iau copilul","plece de la scoala","cer voie"),
-"sent":("ce am trimis","s a trimis","document transmis","cum stiu ca am trimis"),
+"tutorial":("tutorial","ghid complet","prezinta sistemul","arata mi aplicatia","explica mi aplicatia","cum folosesc tot","cum merge tot"),
+"medical":("unde bag scutirea","scutire medicala","adeverinta medicala","trimit scutirea","unde trimit adeverinta","incarc scutirea","depun scutirea","scutirea copilului"),
+"excuse":("motivez absente","motivare absente","motivarea absentelor","cerere de motivare","mai trebe sa duc","mai trebuie sa duc","cererea pe hartie","cererea tiparita","cum justific absentele"),
+"leave":("invoire","invoirea","iau copilul","plece de la scoala","cer voie","bilet de voie","pleaca mai devreme","sa plece acasa"),
+"sent":("ce am trimis","s a trimis","document transmis","cum stiu ca am trimis","unde vad actele trimise","a ajuns documentul","am depus cererea"),
+"school":("unde vad ce o trimis scoala","ce a trimis scoala","instiintare","mesaj de la scoala","notificare de la scoala","confirmare de primire","unde vad comunicarile"),
+"documents":("trimit hartia","trimit actul","trimit la dirigu","incarc document","unde incarc","dosar personal","dosar bursa","unde pun documentele"),
 }
+def _contains_phrase(text, phrase):
+    # Delimitare de cuvinte: «pin» nu trebuie găsit în «opinii».
+    return bool(re.search(r"(?<![a-z0-9])"+re.escape(_norm(phrase))+r"(?![a-z0-9])", text))
+
 def _match(q):
     nq=_norm(q)
-    for intent,phrases in ALIASES.items():
-        if any(_norm(p) in nq for p in phrases): return intent
-    return None
+    if not nq: return None
+    # Expresiile specifice câștigă în fața celor generale.
+    hits=[]
+    for priority,(intent,phrases) in enumerate(ALIASES.items()):
+        for phrase in phrases:
+            normalized=_norm(phrase)
+            if _contains_phrase(nq,normalized):
+                hits.append((len(normalized.split()),len(normalized),-priority,intent))
+    return max(hits)[3] if hits else None
 
 def answer_parent(question,context=None):
+    # Nu lăsăm aliasurile să mascheze situațiile de siguranță.
+    safety=_base_answer(question,context)
+    if safety.intent=="safety":
+        return safety
     intent=_match(question)
     if intent=="tutorial":
         return NelutuAnswer("portal_tutorial",TUTORIAL_TEXT)
@@ -341,7 +360,23 @@ def answer_parent(question,context=None):
       "sent":"No, în **📁 Documente → Documente deja transmise dirigintelui** verifici ce a fost înregistrat. Nu confundăm selectarea ori previzualizarea cu transmiterea confirmată. 🤠",
     }
     if intent in guides: return NelutuAnswer("parent_guide_"+intent,guides[intent])
-    return _base_answer(question,context)
+    # Întrebările despre funcționarea portalului și datele autorizate au prioritate.
+    base=_base_answer(question,context)
+    if base.intent == "authorized_context":
+        return base
+    faq=answer_portal(question)
+    if faq is not None:
+        return faq
+    if base.intent != "fallback":
+        return base
+    pedagogical=pedagogy_lookup(question)
+    if pedagogical is not None:
+        return pedagogical
+    educational=educational_reply(question)
+    if educational is not None:
+        return educational
+    clarification=pedagogy_clarify(question)
+    return clarification if clarification is not None else base
 
 def contract():
     return {"writes_data":False,"uses_network":False,"external_ai":False,"changes_school_workflow":False}
