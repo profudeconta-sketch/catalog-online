@@ -38,7 +38,7 @@ def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=N
         raise AIUnavailable("not_configured")
     if not isinstance(account_id,str) or not isinstance(api_token,str):
         raise AIUnavailable("invalid_credentials")
-    if not api_token.strip() or "\\r" in api_token or "\\n" in api_token:
+    if not api_token.strip() or "\r" in api_token or "\n" in api_token:
         raise AIUnavailable("invalid_credentials")
     if not re.fullmatch(r"[a-zA-Z0-9_-]{8,64}",account_id):
         raise AIUnavailable("invalid_account")
