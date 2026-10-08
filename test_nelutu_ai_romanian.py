@@ -7,6 +7,7 @@ class RomanianPolishTests(unittest.TestCase):
             "pasând prin economie": "trecând prin economie",
             "cu cuvinte tale": "cu propriile tale cuvinte",
             "nu ezita să cere ajutorul": "nu ezita să ceri ajutor",
+            "Nu ezita să cere ajutorul.": "Nu ezita să ceri ajutor.",
             "să devină autonome în domenii concrete": "să devină autonomi în domenii concrete",
             "ca un seminț de curiozitate": "ca o sămânță de curiozitate",
             "știriile": "știrile",
