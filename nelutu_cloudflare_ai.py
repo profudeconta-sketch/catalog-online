@@ -78,6 +78,8 @@ def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=N
         # Never present a cut-off sentence as a complete educational answer.
         if len(answer.strip()) > MAX_RESPONSE:
             raise AIUnavailable("oversized_response")
+        if "<think" in answer.lower() or "</think" in answer.lower():
+            raise AIUnavailable("untrusted_model_output")
         return AIResult(polish_romanian(answer.strip()),True)
     except AIUnavailable:
         raise
