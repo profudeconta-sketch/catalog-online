@@ -4,6 +4,7 @@ import re, unicodedata
 from nelutu_assistant import NelutuAnswer, answer_with_context as _base_answer
 from nelutu_education_dialogue import educational_reply
 from nelutu_pedagogy_library import lookup as pedagogy_lookup, clarify as pedagogy_clarify
+from nelutu_portal_faq import answer_portal
 
 TUTORIAL_TOPIC="Tutorial complet — Portalul Părinților"
 TUTORIAL_TEXT="""# 🤠 No, io-s Neluțu. Hai să-ți arăt tăt sistemu’, cap-coadă.
@@ -361,6 +362,11 @@ def answer_parent(question,context=None):
     if intent in guides: return NelutuAnswer("parent_guide_"+intent,guides[intent])
     # Întrebările despre funcționarea portalului și datele autorizate au prioritate.
     base=_base_answer(question,context)
+    if base.intent == "authorized_context":
+        return base
+    faq=answer_portal(question)
+    if faq is not None:
+        return faq
     if base.intent != "fallback":
         return base
     pedagogical=pedagogy_lookup(question)
