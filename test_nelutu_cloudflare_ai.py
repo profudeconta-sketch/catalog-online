@@ -99,8 +99,8 @@ class CloudflarePrototypeTests(unittest.TestCase):
         def forbidden(*args, **kwargs):
             self.fail("Network call is forbidden for invalid credentials")
         for account, token in ((12345678, "dummy"), (["abcdefgh"], "dummy"),
-                               ("abcdefgh1234", 1234), ("abcdefgh1234", "bad\\nheader"),
-                               ("abcdefgh1234", "bad\\rheader")):
+                               ("abcdefgh1234", 1234), ("abcdefgh1234", "bad\nheader"),
+                               ("abcdefgh1234", "bad\rheader")):
             with self.subTest(account=repr(account), token=repr(token)):
                 with self.assertRaisesRegex(AIUnavailable, "invalid_credentials"):
                     generate("Ce rol are educația tehnică?", account_id=account,
