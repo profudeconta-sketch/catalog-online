@@ -56,7 +56,9 @@ def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=N
     opener=transport or urllib.request.urlopen
     try:
         with opener(request,timeout=18) as response:
-            body=response.read(131072)
+            body=response.read(131073)
+        if len(body) > 131072:
+            raise AIUnavailable("oversized_provider_payload")
         data=json.loads(body)
         if not isinstance(data,dict):
             raise AIUnavailable("invalid_response")
