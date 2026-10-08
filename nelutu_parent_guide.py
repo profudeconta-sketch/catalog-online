@@ -313,22 +313,38 @@ def _norm(text):
     text="".join(ch for ch in text if not unicodedata.combining(ch)).lower()
     return re.sub(r"[^a-z0-9]+"," ",text).strip()
 
+# Prioritate pentru intențiile concrete; fără potriviri pe fragmente de cuvinte.
+# Folosim doar biblioteca standard, fără AI/API extern.
 ALIASES={
-"tutorial":("tutorial","ghid","arata mi aplicatia","explica mi aplicatia","cum folosesc tot","cum merge tot"),
-"school":("unde vad ce o trimis scoala","ce a trimis scoala","instiintare","mesaj de la scoala"),
-"medical":("unde bag scutirea","scutire medicala","adeverinta medicala","trimit scutirea"),
-"documents":("trimit hartia","trimit actul","trimit la dirigu","incarc document","unde incarc"),
-"excuse":("motivez absente","motivare absente","mai trebe sa duc","mai trebuie sa duc","cererea pe hartie","cererea tiparita"),
-"leave":("invoire","iau copilul","plece de la scoala","cer voie"),
-"sent":("ce am trimis","s a trimis","document transmis","cum stiu ca am trimis"),
+"tutorial":("tutorial","ghid complet","prezinta sistemul","arata mi aplicatia","explica mi aplicatia","cum folosesc tot","cum merge tot"),
+"medical":("unde bag scutirea","scutire medicala","adeverinta medicala","trimit scutirea","unde trimit adeverinta","incarc scutirea","depun scutirea","scutirea copilului"),
+"excuse":("motivez absente","motivare absente","motivarea absentelor","cerere de motivare","mai trebe sa duc","mai trebuie sa duc","cererea pe hartie","cererea tiparita","cum justific absentele"),
+"leave":("invoire","invoirea","iau copilul","plece de la scoala","cer voie","bilet de voie","pleaca mai devreme","sa plece acasa"),
+"sent":("ce am trimis","s a trimis","document transmis","cum stiu ca am trimis","unde vad actele trimise","a ajuns documentul","am depus cererea"),
+"school":("unde vad ce o trimis scoala","ce a trimis scoala","instiintare","mesaj de la scoala","notificare de la scoala","confirmare de primire","unde vad comunicarile"),
+"documents":("trimit hartia","trimit actul","trimit la dirigu","incarc document","unde incarc","dosar personal","dosar bursa","unde pun documentele"),
 }
+def _contains_phrase(text, phrase):
+    # Delimitare de cuvinte: «pin» nu trebuie găsit în «opinii».
+    return bool(re.search(r"(?<![a-z0-9])"+re.escape(_norm(phrase))+r"(?![a-z0-9])", text))
+
 def _match(q):
     nq=_norm(q)
-    for intent,phrases in ALIASES.items():
-        if any(_norm(p) in nq for p in phrases): return intent
-    return None
+    if not nq: return None
+    # Expresiile specifice câștigă în fața celor generale.
+    hits=[]
+    for priority,(intent,phrases) in enumerate(ALIASES.items()):
+        for phrase in phrases:
+            normalized=_norm(phrase)
+            if _contains_phrase(nq,normalized):
+                hits.append((len(normalized.split()),len(normalized),-priority,intent))
+    return max(hits)[3] if hits else None
 
 def answer_parent(question,context=None):
+    # Nu lăsăm aliasurile să mascheze situațiile de siguranță.
+    safety=_base_answer(question,context)
+    if safety.intent=="safety":
+        return safety
     intent=_match(question)
     if intent=="tutorial":
         return NelutuAnswer("portal_tutorial",TUTORIAL_TEXT)
