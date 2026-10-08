@@ -12,6 +12,7 @@ class RomanianPolishTests(unittest.TestCase):
             "știriile": "informațiile",
             "Învăță activ": "Învață activ",
             "Repetați cu timp": "Repetă la intervale regulate",
+            "repetai la intervale crescute": "repetă la intervale din ce în ce mai mari",
         }
         for source, expected in samples.items():
             with self.subTest(source=source):
