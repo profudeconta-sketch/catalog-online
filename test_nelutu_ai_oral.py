@@ -33,7 +33,7 @@ class OralExamTests(unittest.TestCase):
             def __exit__(self, *args): return False
             def read(self, n):
                 return json.dumps({"success": True, "result": {"response": "   "}}).encode()
-        result = timed_oral_exam("De ce învățăm matematica?", transport=lambda *args: Response())
+        result = timed_oral_exam("De ce învățăm matematica?", transport=lambda *args, **kwargs: Response())
         self.assertFalse(result.available)
         self.assertEqual(result.reason, "invalid_response")
 
@@ -64,7 +64,7 @@ class OralExamTests(unittest.TestCase):
             def __exit__(self, *args): return False
             def read(self, n):
                 return json.dumps({"success": True, "result": {"response": "Incomplet", "choices": [{"finish_reason": "length"}]}}).encode()
-        result = timed_oral_exam("De ce învățăm matematica?", transport=lambda *args: Response())
+        result = timed_oral_exam("De ce învățăm matematica?", transport=lambda *args, **kwargs: Response())
         self.assertFalse(result.available)
         self.assertEqual(result.reason, "truncated_response")
 
