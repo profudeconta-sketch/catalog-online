@@ -59,6 +59,21 @@ def reply_local(message: str) -> LocalReply:
     if key in REPLIES:
         category, text = REPLIES[key]
         return LocalReply(text, category)
+    # Conservative local handling for common paraphrases. Never sends data
+    # externally; avoids guessing facts about any actual incident.
+    tokens = set(key.split())
+    if ("hartui" in key or "bullying" in key) and ({"copilul", "baiatul", "fata", "colegii", "elev"} & tokens):
+        return LocalReply(
+            "Îmi pare rău că se întâmplă asta. Ascultați copilul, notați faptele și cereți sprijinul dirigintelui sau consilierului școlar. Dacă există pericol imediat, sunați la 112. Nu am verificat cazul și nu am trimis o sesizare.",
+            "bullying")
+    if ("amenint" in key or "agresat" in key or "batut" in key) and ({"copil", "elev", "colegii", "scoala"} & tokens):
+        return LocalReply(
+            "Această situație trebuie tratată serios. Asigurați siguranța copilului și informați un adult de încredere, dirigintele sau conducerea școlii. În pericol imediat, sunați la 112. Nu pot verifica faptele și nu am anunțat automat școala.",
+            "threat")
+    if ("notele" in tokens or "absentele" in tokens or "telefonul" in tokens) and ({"coleg", "colegului", "altui", "altei", "elev"} & tokens):
+        return LocalReply(
+            "Nu pot divulga datele școlare sau de contact ale altor persoane și nu pot verifica drepturile de acces într-o conversație. Folosiți doar canalele autorizate.",
+            "privacy")
     if approved_external_question(message):
         return LocalReply("Este o întrebare educațională generală; răspunsul AI extern este separat și opțional.", "public")
     if choose_tone(message).mode == "serious":
