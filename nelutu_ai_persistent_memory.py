@@ -45,6 +45,8 @@ class EncryptedMemoryStore:
                     raise ValueError("invalid_turn")
                 if user.get("role") != "user" or assistant.get("role") != "assistant":
                     raise ValueError("invalid_role")
+                if set(user) != {"role", "content"} or set(assistant) != {"role", "content"}:
+                    raise ValueError("unexpected_fields")
                 if not memory.add(user.get("content", ""), assistant.get("content", "")):
                     raise ValueError("invalid_content")
             return memory
@@ -65,6 +67,8 @@ class EncryptedMemoryStore:
                 raise MemoryStoreError("invalid_turn")
             if user.get("role") != "user" or assistant.get("role") != "assistant":
                 raise MemoryStoreError("invalid_role")
+            if set(user) != {"role", "content"} or set(assistant) != {"role", "content"}:
+                raise MemoryStoreError("unexpected_fields")
             if not approved_external_question(user.get("content", "")):
                 raise MemoryStoreError("private_question")
             answer = assistant.get("content")
