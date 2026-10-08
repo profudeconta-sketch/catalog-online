@@ -26,7 +26,7 @@ def _norm(text:str)->str:
     return re.sub(r"[^a-z0-9]+"," ",text).strip()
 
 def _has_any(q:str, words:Iterable[str])->bool:
-    return any(_norm(w) in q for w in words)
+    return any(re.search(r"(?<![a-z0-9])"+re.escape(_norm(w))+r"(?![a-z0-9])", q) for w in words if _norm(w))
 
 def _src(k:str):
     return LEGAL_SOURCES[k]
@@ -248,7 +248,7 @@ def answer(question:str)->NelutuAnswer:
     if _has_any(q,("cum functioneaza nelutu","ce poti face","ce stii sa faci","esti ai","inteligenta artificiala")):
         return NelutuAnswer("about","Ie mă. 😄 Eu-s Neluțu, ajutor local al portalului. Nu-s vreun balaur cu inteligență artificială plătită: răspund dintr-o bază controlată de informații și reguli. Nu citesc secrete, nu schimb catalogul, nu trimit acte și nu aprob nimic. Pe scurt: am gură digitală, da' mâinile le țin în buzunar. 😂")
 
-    if _has_any(q,("cum folosesc portalul","portal","meniu","unde gasesc","cum functioneaza")):
+    if _has_any(q,("cum folosesc portalul","portal","meniu","unde gasesc","cum functioneaza","sistemul acesta","sistemul informatic","despre sistem","prezinta sistemul","cum merge sistemul")):
         return NelutuAnswer("portal","Ie mă! Portalul îi mai cuminte decât pare. 😄 După autentificare ai trei zone mari: „Școală” pentru comunicările primite, „Învoire” pentru cereri și „Documente” pentru ce trimiți dirigintelui. Mai jos vezi situația școlară. Spune-mi ce vrei să faci și te duc până la buton; nu-l apăs eu, că n-am degete, numa' păreri. 😂")
 
     if _has_any(q,("pin","autentific","logare","matricol","nu pot intra")):
