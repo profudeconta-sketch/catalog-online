@@ -19,6 +19,7 @@ SERIOUS_PATTERNS = (
     r"\b(?:sunt|am fost|ma simt)\s+(?:hartuit\w*|amenintat\w*|umilit\w*|agresat\w*)\b",
     r"\b(?:mi-e frica|imi este frica|ma simt in pericol|vreau sa mor|nu mai vreau sa traiesc|vreau sa imi fac rau)\b",
     r"\b(?:deces|a murit|accident grav|urgenta medicala)\b",
+    r"\b(?:ma gandesc sa ma sinucid|vreau sa[- ]?mi fac rau|in pericol|agresat\w*|amenint\w*)\b",
 )
 STYLE_RULES = {
     "warm": "Vorbește firesc, cald, cu regionalisme autentice și rare.",
