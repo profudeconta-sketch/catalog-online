@@ -85,7 +85,7 @@ Aici sunt organizate documentele pentru tipurile de bursă disponibile: cereri, 
 ### 📝 Motivare absențe părinte
 Părintele completează datele cererii. Poate genera o previzualizare pentru verificare, dar previzualizarea nu transmite nimic. Abia acțiunea **„Generează, salvează și trimite”** înregistrează cererea.
 
-Pentru acest flux există evidența limitei anuale de ore gestionate prin cererea părintelui. Sistemul verifică utilizarea și blochează depășirea regulii implementate. După transmiterea reușită, portalul spune clar că cererea este transmisă și considerată depusă; nu mai este necesar să fie adusă la școală aceeași cerere tipărită. Dacă există o problemă de fond, dirigintele poate lua legătura separat cu părintele.
+Pentru acest flux există evidența limitei anuale de ore gestionate prin cererea părintelui. Sistemul verifică utilizarea și blochează depășirea regulii implementate. După transmiterea reușită, portalul spune clar că cererea este transmisă și considerată depusă; nu mai este necesar să fie adusă la școală aceeași cerere tipărită. Dacă există o problemă de fond, dirigintele poate lua legătura separat cu părintele. Portalul nu inventează aprobarea directorului și nu adaugă o etapă de avizare care nu există în acest flux.
 
 No, aici hârtia nu mai face turism până la școală dacă sistemul o confirmat depusă. Destul turism avem în denumirea clasei. 😄
 
@@ -319,7 +319,7 @@ def _norm(text):
 # Prioritate pentru intențiile concrete; fără potriviri pe fragmente de cuvinte.
 # Folosim doar biblioteca standard, fără AI/API extern.
 ALIASES={
-"tutorial":("tutorial","ghid complet","prezinta sistemul","arata mi aplicatia","explica mi aplicatia","cum folosesc tot","cum merge tot"),
+"tutorial":("tutorial","ghid aplicatie","ghid aplicație","ghid complet","prezinta sistemul","arata mi aplicatia","explica mi aplicatia","cum folosesc tot","cum merge tot"),
 "medical":("unde bag scutirea","scutire medicala","adeverinta medicala","trimit scutirea","unde trimit adeverinta","incarc scutirea","depun scutirea","scutirea copilului"),
 "excuse":("motivez absente","motivare absente","motivarea absentelor","cerere de motivare","mai trebe sa duc","mai trebuie sa duc","cererea pe hartie","cererea tiparita","cum justific absentele"),
 "leave":("invoire","invoirea","iau copilul","plece de la scoala","cer voie","bilet de voie","pleaca mai devreme","sa plece acasa"),
