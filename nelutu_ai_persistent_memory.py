@@ -56,9 +56,19 @@ class EncryptedMemoryStore:
             raise MemoryStoreError("consent_required")
         if not isinstance(memory, NelutuMemory):
             raise MemoryStoreError("invalid_memory")
-        for item in memory.turns:
-            if not isinstance(item, dict):
+        if len(memory.turns) > 60 or len(memory.turns) % 2:
+            raise MemoryStoreError("invalid_length")
+        for index in range(0, len(memory.turns), 2):
+            user, assistant = memory.turns[index:index + 2]
+            if not isinstance(user, dict) or not isinstance(assistant, dict):
                 raise MemoryStoreError("invalid_turn")
+            if user.get("role") != "user" or assistant.get("role") != "assistant":
+                raise MemoryStoreError("invalid_role")
+            if not approved_external_question(user.get("content", "")):
+                raise MemoryStoreError("private_question")
+            answer = assistant.get("content")
+            if not isinstance(answer, str) or not answer.strip() or len(answer) > 2200:
+                raise MemoryStoreError("invalid_answer")
         payload = json.dumps(memory.recent_local(60), ensure_ascii=False).encode("utf-8")
         self.backend.put(scope, self._cipher.encrypt(payload))
 
