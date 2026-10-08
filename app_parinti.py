@@ -563,16 +563,18 @@ else:
     with st.container(key="nelutu_qa_trigger"):
         with st.popover("🤠 Întreabă-l pe Neluțu", use_container_width=False):
             st.markdown("**🤠 Neluțu**")
-            _nelutu_question = st.text_input(
-                "No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",
-                placeholder="Scrie-i lu’ Neluțu...",
-                key="nelutu_question",
-            )
-            _nelutu_current_prompt = _nelutu_question.strip()
             _nelutu_context = {"facts": [
                 {"keywords": ("portal", "cum folosesc portalul"), "answer": "Ești autentificat în Portalul Părinților; pot explica orice zonă vizibilă aici, fără să modific date."}
             ]}
-            _nelutu_ask = st.button("💬 Întreabă-l pe Neluțu", use_container_width=True, key="nelutu_ask")
+            # Formularul trimite întrebarea direct la Enter, fără al doilea clic.
+            with st.form(key="nelutu_question_form", clear_on_submit=False):
+                _nelutu_question = st.text_input(
+                    "No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",
+                    placeholder="Scrie-i lu’ Neluțu și apasă Enter...",
+                    key="nelutu_question",
+                )
+                _nelutu_ask = st.form_submit_button("💬 Întreabă-l pe Neluțu", use_container_width=True)
+            _nelutu_current_prompt = _nelutu_question.strip()
             if _nelutu_ask and _nelutu_current_prompt:
                 with st.spinner("No, amu lasă-mă o țâră să cuget..."):
                     st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
