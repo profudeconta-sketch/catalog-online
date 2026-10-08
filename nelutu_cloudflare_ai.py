@@ -14,7 +14,6 @@ from nelutu_ai_privacy import approved_external_question, external_messages
 
 DEFAULT_MODEL="@cf/qwen/qwen3-30b-a3b-fp8"
 MAX_QUESTION=1200
-MAX_HISTORY=4
 MAX_RESPONSE=2200
 
 SYSTEM_PROMPT = NELUTU_PERSONA
@@ -28,49 +27,10 @@ class AIResult:
 class AIUnavailable(Exception):
     pass
 
-# Politică strictă: numai teme educaționale generale. Întrebările despre
-# elevul concret sau despre operații din portal rămân la motorul local.
-PRIVATE_PATTERNS=(
-    r"\b(?:pin|parola|cnp|matricol|catalog|nota|note|medie|absent[ae]|scutire|motivare|"
-    r"invoire|document|dosar|bursa|burse|instiintare|whatsapp|telefon|adresa|"
-    r"elevul meu|fiul meu|fiica mea|copilul meu|al meu|a mea)\b",
-    r"\b[0-9]{9,}\b",
-    r"\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b",
-)
-GENERAL_TOPICS=(
-    "educatie","invatamant","matematic","pedagog","adolescent","meserie","profesional",
-    "tehnic","scoala","profesor","parinte","familie","invatare","motivatie",
-    "istorie","cuza","haret","interbelic","comunism","facultate","cariera",
-    "copii","copil","tineri","revolutia","1989",
-)
-
-def _ascii(value):
-    import unicodedata
-    value=unicodedata.normalize("NFKD",str(value or ""))
-    return "".join(c for c in value if not unicodedata.combining(c)).lower()
-
-def eligible(question):
-    q=_ascii(question).strip()
-    if not q or len(q)>MAX_QUESTION:
-        return False
-    if any(re.search(pattern,q,re.I) for pattern in PRIVATE_PATTERNS):
-        return False
-    return any(re.search(r"(?<![a-z])"+re.escape(topic)+r"[a-z]*(?![a-z])",q) for topic in GENERAL_TOPICS)
-
-def _messages(question,history):
-    messages=[{"role":"system","content":SYSTEM_PROMPT}]
-    for item in (history or [])[-MAX_HISTORY:]:
-        if not isinstance(item,dict):
-            continue
-        role=item.get("role")
-        content=item.get("content")
-        if role in ("user","assistant") and isinstance(content,str) and len(content)<=MAX_QUESTION and (role!="user" or eligible(content)):
-            messages.append({"role":role,"content":content})
-    messages.append({"role":"user","content":question})
-    return messages
-
 def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=None,transport=None):
     """Returnează AIUnavailable fără rețea dacă nu există configurare sau eligibilitate."""
+    if history is not None:
+        raise AIUnavailable("history_not_allowed")
     if not approved_external_question(question):
         raise AIUnavailable("not_eligible")
     if not account_id or not api_token:
