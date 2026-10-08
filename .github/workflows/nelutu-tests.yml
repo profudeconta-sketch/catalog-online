@@ -1,0 +1,23 @@
+name: Nelutu offline regression tests
+on:
+  pull_request:
+    paths:
+      - 'nelutu_*.py'
+      - 'test_nelutu_*.py'
+      - '.github/workflows/nelutu-tests.yml'
+  workflow_dispatch:
+jobs:
+  nelutu:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile Neluțu modules
+        run: python -m py_compile nelutu_assistant.py nelutu_parent_guide.py nelutu_education_dialogue.py nelutu_pedagogy_library.py nelutu_portal_faq.py
+      - name: Run offline unit tests
+        run: python -m unittest -v test_nelutu_intents.py test_nelutu_education_dialogue.py test_nelutu_pedagogy.py
