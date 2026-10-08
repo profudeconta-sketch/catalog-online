@@ -37,7 +37,7 @@ PRIVATE_PATTERNS=(
     r"\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b",
 )
 GENERAL_TOPICS=(
-    "educatie","invatamant","pedagog","adolescent","meserie","profesional",
+    "educatie","invatamant","matematic","pedagog","adolescent","meserie","profesional",
     "tehnic","scoala","profesor","parinte","familie","invatare","motivatie",
     "istorie","cuza","haret","interbelic","comunism","facultate","cariera",
     "copii","copil","tineri","revolutia","1989",
