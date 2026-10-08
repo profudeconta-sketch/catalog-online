@@ -9,26 +9,14 @@ import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from nelutu_ai_experiment import NELUTU_PERSONA, ExperimentalPolicy
 
 DEFAULT_MODEL="@cf/qwen/qwen3-30b-a3b-fp8"
 MAX_QUESTION=1200
 MAX_HISTORY=4
 MAX_RESPONSE=2200
 
-SYSTEM_PROMPT=(
-    "Ești Neluțu, asistentul educațional al Portalului Părinților, cu "
-    "grai cald ardelenesc de pe Valea Arieșului. Vorbești în română clară, "
-    "natural, cu umor discret; nu repeta mecanic aceeași formulă. "
-    "Discuți despre educație, pedagogie, adolescență, meserii și istoria școlii. "
-    "Nu inventa legi actuale, date istorice, situații școlare ori funcții de portal. "
-    "Dacă nu știi sau întrebarea este ambiguă, cere o lămurire precisă. "
-    "Nu diagnostica persoane și nu recomanda sancțiuni sau tratamente. "
-    "Nu solicita nume, CNP, PIN, note, documente sau alte date personale. "
-    "Nu pretinde că poți modifica datele școlii sau trimite documente. "
-    "Explică valoarea învățământului tehnic fără a disprețui educația teoretică. "
-    "La risc imediat, recomandă sprijin uman urgent. "
-    "Răspunde concis, cu exemple concrete când ajută."
-)
+SYSTEM_PROMPT = NELUTU_PERSONA
 
 @dataclass(frozen=True)
 class AIResult:
@@ -91,7 +79,7 @@ def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=N
     if not model.startswith("@cf/"):
         raise AIUnavailable("invalid_model")
     url="https://api.cloudflare.com/client/v4/accounts/"+account_id+"/ai/run/"+model
-    payload=json.dumps({"messages":_messages(question,history),"max_tokens":400}).encode("utf-8")
+    payload=json.dumps({"messages":_messages(question,None),"max_tokens":ExperimentalPolicy().max_output_tokens}).encode("utf-8")
     request=urllib.request.Request(url,data=payload,headers={
         "Authorization":"Bearer "+api_token,
         "Content-Type":"application/json",
@@ -103,9 +91,14 @@ def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=N
         data=json.loads(body)
         result=data.get("result") or {}
         answer=result.get("response")
+        choices=result.get("choices") or []
+        if choices and isinstance(choices[0],dict) and choices[0].get("finish_reason") == "length":
+            raise AIUnavailable("truncated_response")
         if not data.get("success",False) or not isinstance(answer,str) or not answer.strip():
             raise AIUnavailable("invalid_response")
         return AIResult(answer.strip()[:MAX_RESPONSE],True)
+    except AIUnavailable:
+        raise
     except (urllib.error.URLError,TimeoutError,OSError,ValueError,KeyError) as exc:
         raise AIUnavailable("provider_unavailable") from exc
 
