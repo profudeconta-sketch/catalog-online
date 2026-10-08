@@ -129,6 +129,20 @@ class CloudflarePrototypeTests(unittest.TestCase):
             generate("Ce rol are educația tehnică?", account_id="abcdefgh1234",
                      api_token="dummy", transport=lambda request, timeout: Response())
 
+    def test_provider_reasoning_tags_are_not_displayed(self):
+        for answer in ("<think>hidden reasoning</think>Răspuns public.",
+                       "Răspuns public.</think>", "<THINK>hidden"):
+            class Response:
+                def __enter__(self): return self
+                def __exit__(self, *args): return False
+                def read(self, n):
+                    return json.dumps({"success": True, "result": {"response": answer}}).encode()
+            with self.subTest(answer=answer):
+                with self.assertRaisesRegex(AIUnavailable, "untrusted_model_output"):
+                    generate("Ce rol are educația tehnică?",
+                             account_id="abcdefgh1234", api_token="synthetic",
+                             transport=lambda request, timeout: Response())
+
     def test_contract(self):
         self.assertTrue(contract()["external_processing_when_enabled"])
         self.assertFalse(contract()["forwards_student_records"])
