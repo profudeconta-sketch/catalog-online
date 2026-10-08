@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from nelutu_ai_experiment import NELUTU_PERSONA, ExperimentalPolicy
+from nelutu_ai_privacy import approved_external_question, external_messages
 
 DEFAULT_MODEL="@cf/qwen/qwen3-30b-a3b-fp8"
 MAX_QUESTION=1200
@@ -70,7 +71,7 @@ def _messages(question,history):
 
 def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=None,transport=None):
     """Returnează AIUnavailable fără rețea dacă nu există configurare sau eligibilitate."""
-    if not eligible(question):
+    if not approved_external_question(question):
         raise AIUnavailable("not_eligible")
     if not account_id or not api_token:
         raise AIUnavailable("not_configured")
@@ -79,7 +80,7 @@ def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=N
     if not model.startswith("@cf/"):
         raise AIUnavailable("invalid_model")
     url="https://api.cloudflare.com/client/v4/accounts/"+account_id+"/ai/run/"+model
-    payload=json.dumps({"messages":_messages(question,None),"max_tokens":ExperimentalPolicy().max_output_tokens}).encode("utf-8")
+    payload=json.dumps({"messages":external_messages(question,SYSTEM_PROMPT),"max_tokens":ExperimentalPolicy().max_output_tokens}).encode("utf-8")
     request=urllib.request.Request(url,data=payload,headers={
         "Authorization":"Bearer "+api_token,
         "Content-Type":"application/json",
