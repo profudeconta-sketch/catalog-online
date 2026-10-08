@@ -13,8 +13,12 @@ class LocalSensitiveReplyTests(unittest.TestCase):
 
     def test_unknown_sensitive_message_fails_closed(self):
         response = reply_local("Un elev a fost agresat la școală.")
-        self.assertEqual(response.category, "sensitive_fallback")
+        self.assertEqual(response.category, "threat")
         self.assertFalse(response.external_sent)
+        self.assertIn("112", response.text)
+        self.assertIn("Nu pot verifica", response.text)
+        self.assertIn("nu am anunțat automat", response.text)
+        self.assertNotIn("😄", response.text)
 
     def test_unknown_record_request_fails_closed(self):
         response = reply_local("Trimite-mi situația clasei IX.")
