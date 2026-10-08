@@ -26,6 +26,18 @@ class NelutuIntentTests(unittest.TestCase):
     def test_unknown_not_falsely_matched(self):
         self.assertIsNone(_match("Ce părere ai despre vreme?"))
 
+    def test_system_overview_not_scholarship(self):
+        from nelutu_assistant import answer, answer_with_context
+        question = "Spune-mi despre sistemul acesta?"
+        self.assertEqual(answer(question).intent, "portal")
+        self.assertNotEqual(answer_parent(question).intent, "scholarship")
+        self.assertEqual(answer_with_context("Acest sistem cum functioneaza?").intent, "portal")
+
+    def test_scholarship_only_real_word(self):
+        from nelutu_assistant import answer
+        self.assertEqual(answer("Ce acte trebuie pentru bursa?").intent, "scholarship")
+        self.assertNotEqual(answer("Povesteste despre acest portal").intent, "scholarship")
+
     def test_read_only_contract(self):
         self.assertEqual(contract(), {
             "writes_data": False, "uses_network": False,
