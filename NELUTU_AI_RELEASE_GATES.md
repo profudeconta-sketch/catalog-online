@@ -29,6 +29,14 @@ Nicio îmbinare în producție fără validare documentată și acord final.
 - Nicio probă completă de dialog generativ multi-turn nu a fost demonstrată.
 - Testele adăugate după ultima validare nu au încă jurnal CI confirmat.
 
+## Situația bugetului zero (verificare 2026-10-09)
+
+- Limita pe sesiune nu reprezintă plafon financiar global și nu garantează zero lei.
+- Verificarea de tip pentru contor și limită a fost întărită; există teste sintetice pentru valori booleene.
+- Nu există confirmare în această evaluare a unei limite de facturare zero impuse de furnizor.
+- Nu se activează AI extern în producție cât timp o cerere poate genera un cost facturabil.
+- Nu există jurnal CI confirmat pentru cel mai nou commit experimental; nu se pretinde validarea acestuia.
+
 ## Principiul deciziei
 
 Dacă o probă critică eșuează, verdictul rămâne **NU SE ACTIVEAZĂ**.
