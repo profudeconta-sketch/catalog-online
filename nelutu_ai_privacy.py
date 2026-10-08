@@ -42,6 +42,9 @@ def approved_external_question(text: str) -> bool:
 
 def external_messages(question: str, system_prompt: str) -> list[dict[str, str]]:
     """Never forwards chat history, local portal context or student records."""
+    from nelutu_ai_experiment import NELUTU_PERSONA
+    if system_prompt != NELUTU_PERSONA:
+        raise ValueError("unapproved_system_prompt")
     if not approved_external_question(question):
         raise ValueError("local_only")
     return [
