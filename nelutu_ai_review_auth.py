@@ -30,4 +30,4 @@ def approve_with_authorization(
         raise ReviewDenied("invalid_principal")
     if not callable(authorize) or authorize(identity.principal_id, "nelutu_lesson_review") is not True:
         raise ReviewDenied("not_authorized")
-    return notebook.approve(question, reviewer=identity.principal_id)
+    return notebook._approve_authorized(question, reviewer=identity.principal_id)
