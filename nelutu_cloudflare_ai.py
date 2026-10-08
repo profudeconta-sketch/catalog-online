@@ -11,6 +11,7 @@ import urllib.request
 from dataclasses import dataclass
 from nelutu_ai_experiment import NELUTU_PERSONA, ExperimentalPolicy
 from nelutu_ai_privacy import approved_external_question, external_messages
+from nelutu_ai_romanian import polish_romanian
 
 DEFAULT_MODEL="@cf/qwen/qwen3-30b-a3b-fp8"
 MAX_QUESTION=1200
@@ -60,7 +61,7 @@ def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=N
             raise AIUnavailable("truncated_response")
         if not data.get("success",False) or not isinstance(answer,str) or not answer.strip():
             raise AIUnavailable("invalid_response")
-        return AIResult(answer.strip()[:MAX_RESPONSE],True)
+        return AIResult(polish_romanian(answer.strip()[:MAX_RESPONSE]),True)
     except AIUnavailable:
         raise
     except (urllib.error.URLError,TimeoutError,OSError,ValueError,KeyError) as exc:
