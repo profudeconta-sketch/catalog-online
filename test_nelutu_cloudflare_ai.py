@@ -117,6 +117,18 @@ class CloudflarePrototypeTests(unittest.TestCase):
             generate("Ce rol are educația tehnică?", account_id="abcdefgh1234",
                      api_token="dummy", transport=lambda request, timeout: Response())
 
+    def test_oversized_provider_json_fails_closed(self):
+        expected_limit = 131073
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, n):
+                assert n == expected_limit
+                return b"x" * expected_limit
+        with self.assertRaisesRegex(AIUnavailable, "oversized_provider_payload"):
+            generate("Ce rol are educația tehnică?", account_id="abcdefgh1234",
+                     api_token="dummy", transport=lambda request, timeout: Response())
+
     def test_contract(self):
         self.assertTrue(contract()["external_processing_when_enabled"])
         self.assertFalse(contract()["forwards_student_records"])
