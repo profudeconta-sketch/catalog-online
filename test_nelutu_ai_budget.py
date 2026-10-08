@@ -14,6 +14,14 @@ class BudgetTests(unittest.TestCase):
             guarded_generate("c",budget=budget,consent=True,generator=fake)
         self.assertEqual(len(calls),2)
 
+    def test_boolean_values_are_not_quotas(self):
+        for value in (True, False):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    SessionAIBudget(max_requests=value)
+                with self.assertRaises(ValueError):
+                    SessionAIBudget(used=value)
+
     def test_consent(self):
         budget = SessionAIBudget()
         with self.assertRaises(PermissionError):
