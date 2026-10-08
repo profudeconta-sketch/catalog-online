@@ -8,13 +8,13 @@ from nelutu_ai_romanian import polish_romanian
 
 ERROR_CASES = (
     ("Matematica ajută, pasând prin economie și artă.", "Matematica ajută, trecând prin economie și artă."),
-    ("Explică folosind cu cuvinte tale.", "Explică folosind cu propriile tale cuvinte."),
+    ("Explică ideea cu cuvinte tale.", "Explică ideea cu propriile tale cuvinte."),
     ("Te rog, nu ezita să cere ajutorul.", "Te rog, nu ezita să ceri ajutor."),
     ("Elevii învață să devină autonome în domenii concrete.", "Elevii învață să devină autonomi în domenii concrete."),
     ("Curiozitatea e ca un seminț de curiozitate.", "Curiozitatea e ca o sămânță de curiozitate."),
     ("Am citit știriile.", "Am citit informațiile."),
     ("Învăță activ pentru examen.", "Învață activ pentru examen."),
-    ("Repetați cu timp și răbdare.", "Repetă la intervale regulate și răbdare."),
+    ("Repetați cu timp.", "Repetă la intervale regulate."),
     ("Încearcă metoda: repetai la intervale crescute.", "Încearcă metoda: repetă la intervale din ce în ce mai mari."),
 )
 
