@@ -1,7 +1,7 @@
 import unittest
 from cryptography.fernet import Fernet
 from nelutu_ai_memory import NelutuMemory
-from nelutu_ai_persistent_memory import EncryptedMemoryStore, MemoryStoreError
+from nelutu_ai_persistent_memory import EncryptedMemoryStore, MemoryStoreError, MAX_CIPHERTEXT_BYTES
 
 class PrivateBackend:
     def __init__(self): self.items = {}
@@ -55,6 +55,11 @@ class EncryptedMemoryTests(unittest.TestCase):
         with self.assertRaises(MemoryStoreError):
             self.store.save(self.scope_a, memory, consent=True)
         self.assertEqual(self.backend.items, {})
+
+    def test_reject_oversized_ciphertext_before_decrypt(self):
+        self.backend.items[self.scope_a] = b"x" * (MAX_CIPHERTEXT_BYTES + 1)
+        with self.assertRaisesRegex(MemoryStoreError, "ciphertext_too_large"):
+            self.store.load(self.scope_a)
 
     def test_scope_validation(self):
         with self.assertRaises(MemoryStoreError):
