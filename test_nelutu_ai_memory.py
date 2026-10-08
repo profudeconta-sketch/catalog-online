@@ -22,6 +22,12 @@ class MemoryTests(unittest.TestCase):
         m.clear()
         self.assertEqual(m.size(), 0)
 
+    def test_zero_requested_history_returns_nothing(self):
+        m = NelutuMemory()
+        m.add("De ce învățăm matematica?", "Pentru logică.")
+        self.assertEqual(m.recent_local(0), [])
+        self.assertEqual(m.recent_local(-1), [])
+
     def test_local_copy(self):
         m = NelutuMemory()
         m.add("De ce învățăm matematica?", "Pentru logică.")
