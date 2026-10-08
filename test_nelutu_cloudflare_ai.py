@@ -95,6 +95,28 @@ class CloudflarePrototypeTests(unittest.TestCase):
                     generate("Ce rol are educația tehnică?", account_id="abcdefgh1234",
                              api_token="dummy", transport=fake)
 
+    def test_invalid_credentials_are_rejected_before_network(self):
+        def forbidden(*args, **kwargs):
+            self.fail("Network call is forbidden for invalid credentials")
+        for account, token in ((12345678, "dummy"), (["abcdefgh"], "dummy"),
+                               ("abcdefgh1234", 1234), ("abcdefgh1234", "bad\\nheader"),
+                               ("abcdefgh1234", "bad\\rheader")):
+            with self.subTest(account=repr(account), token=repr(token)):
+                with self.assertRaisesRegex(AIUnavailable, "invalid_credentials"):
+                    generate("Ce rol are educația tehnică?", account_id=account,
+                             api_token=token, transport=forbidden)
+
+    def test_malformed_choice_is_rejected(self):
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, n):
+                return json.dumps({"success": True, "result": {
+                    "response": "Text valid", "choices": [123]}}).encode()
+        with self.assertRaisesRegex(AIUnavailable, "invalid_response"):
+            generate("Ce rol are educația tehnică?", account_id="abcdefgh1234",
+                     api_token="dummy", transport=lambda request, timeout: Response())
+
     def test_contract(self):
         self.assertTrue(contract()["external_processing_when_enabled"])
         self.assertFalse(contract()["forwards_student_records"])
