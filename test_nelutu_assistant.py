@@ -43,7 +43,8 @@ class NelutuTests(unittest.TestCase):
         self.assertIn("Nu vreau să scot un răspuns din clop",a.text)
 
     def test_no_mutation_storage_network_or_ai_imports(self):
-        source=open("nelutu_assistant.py",encoding="utf-8").read()
+        with open("nelutu_assistant.py", encoding="utf-8") as source_file:
+            source = source_file.read()
         forbidden=("document_storage","notification_storage","leave_pass_storage","urllib","requests","openai","anthropic","streamlit")
         for item in forbidden:
             self.assertNotIn("import "+item,source)
