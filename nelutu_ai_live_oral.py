@@ -30,7 +30,7 @@ def main():
     for number, (question, keywords) in enumerate(QUESTIONS, 1):
         start = time.perf_counter()
         try:
-            result = generate(question, account_id=account, api_token=token)
+            result = generate(question, account_id=account, api_token=token, max_output_tokens=1600)
             elapsed = time.perf_counter() - start
             answer = result.text
             keyword_match = any(word in answer.casefold() for word in keywords)
