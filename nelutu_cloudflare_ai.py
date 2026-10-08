@@ -38,7 +38,7 @@ def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=N
         raise AIUnavailable("not_configured")
     if not re.fullmatch(r"[a-zA-Z0-9_-]{8,64}",account_id):
         raise AIUnavailable("invalid_account")
-    if not model.startswith("@cf/"):
+    if model != DEFAULT_MODEL:
         raise AIUnavailable("invalid_model")
     token_limit = ExperimentalPolicy().max_output_tokens if max_output_tokens is None else max_output_tokens
     if type(token_limit) is not int or not 1 <= token_limit <= 1600:
@@ -54,9 +54,15 @@ def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=N
         with opener(request,timeout=18) as response:
             body=response.read(131072)
         data=json.loads(body)
+        if not isinstance(data,dict):
+            raise AIUnavailable("invalid_response")
         result=data.get("result") or {}
+        if not isinstance(result,dict):
+            raise AIUnavailable("invalid_response")
         answer=result.get("response")
         choices=result.get("choices") or []
+        if not isinstance(choices,list):
+            raise AIUnavailable("invalid_response")
         if choices and isinstance(choices[0],dict) and choices[0].get("finish_reason") == "length":
             raise AIUnavailable("truncated_response")
         if not data.get("success",False) or not isinstance(answer,str) or not answer.strip():
