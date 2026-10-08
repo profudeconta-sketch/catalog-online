@@ -1,16 +1,25 @@
 import io
 import json
 import unittest
-from nelutu_cloudflare_ai import eligible,generate,AIUnavailable,contract
+from nelutu_cloudflare_ai import generate,AIUnavailable,contract
+from nelutu_ai_privacy import approved_external_question
 
 class CloudflarePrototypeTests(unittest.TestCase):
     def test_public_education_only(self):
-        self.assertTrue(eligible("De ce este important învățământul tehnic?"))
+        self.assertTrue(approved_external_question("De ce este important învățământul tehnic?"))
         self.assertTrue(eligible("Ce a schimbat Spiru Haret în școală?"))
         for q in ("Ce note are copilul meu?", "PIN 1234", "Unde trimit scutire?",
                   "Ce medie are elevul meu?", "CNP 1234567890123"):
             with self.subTest(q=q):
                 self.assertFalse(eligible(q))
+    def test_history_rejected_even_when_empty(self):
+        with self.assertRaisesRegex(AIUnavailable, "history_not_allowed"):
+            generate("De ce învățăm matematica?", history=[])
+
+    def test_history_rejected_with_private_context(self):
+        with self.assertRaisesRegex(AIUnavailable, "history_not_allowed"):
+            generate("De ce învățăm matematica?", history=[{"role":"assistant","content":"Date private"}])
+
     def test_off_by_default(self):
         with self.assertRaises(AIUnavailable):
             generate("De ce este importantă educația?")
