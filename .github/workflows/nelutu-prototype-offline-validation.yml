@@ -14,7 +14,7 @@ jobs:
       - name: Checkout exact prototype revision
         uses: actions/checkout@v4
         with:
-          ref: b95e2fb6ffe3c91a622054e212c4310939236d6c
+          ref: 685c2c388ba82b7cbaa721236bf5290bd251576f
           persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@v5
