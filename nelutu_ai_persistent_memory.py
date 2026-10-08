@@ -32,6 +32,8 @@ class EncryptedMemoryStore:
     def load(self, scope: str) -> NelutuMemory:
         scope = _validate_scope(scope)
         encrypted = self.backend.get(scope)
+        if encrypted is not None and not isinstance(encrypted, bytes):
+            raise MemoryStoreError("invalid_ciphertext_type")
         if encrypted is None:
             return NelutuMemory()
         try:
