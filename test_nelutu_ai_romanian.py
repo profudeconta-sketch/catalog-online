@@ -8,7 +8,7 @@ class RomanianPolishTests(unittest.TestCase):
             "cu cuvinte tale": "cu propriile tale cuvinte",
             "nu ezita să cere ajutorul": "nu ezita să ceri ajutor",
             "Nu ezita să cere ajutorul.": "Nu ezita să ceri ajutor.",
-            "să devină autonome în domenii concrete": "să devină autonomi în domenii concrete",
+            "Elevii învață să devină autonome în domenii concrete": "Elevii învață să devină autonomi în domenii concrete",
             "ca un seminț de curiozitate": "ca o sămânță de curiozitate",
             "știriile": "știrile",
             "Învăță activ": "Învață activ",
@@ -25,6 +25,7 @@ class RomanianPolishTests(unittest.TestCase):
 
     def test_does_not_overcorrect_other_contexts(self):
         self.assertEqual(polish_romanian("Ele devin autonome."), "Ele devin autonome.")
+        self.assertEqual(polish_romanian("Ele vor să devină autonome în domenii concrete."), "Ele vor să devină autonome în domenii concrete.")
         self.assertEqual(polish_romanian("Cere ajutorul unui profesor."), "Cere ajutorul unui profesor.")
 
     def test_idempotent(self):
