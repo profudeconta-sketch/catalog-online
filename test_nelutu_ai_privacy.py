@@ -1,5 +1,6 @@
 import unittest
 from nelutu_ai_privacy import approved_external_question, external_messages
+from nelutu_ai_experiment import NELUTU_PERSONA
 
 class PrivacyBoundaryTests(unittest.TestCase):
     def test_public_generic(self):
@@ -21,13 +22,17 @@ class PrivacyBoundaryTests(unittest.TestCase):
                 self.assertFalse(approved_external_question(q))
 
     def test_only_two_messages_sent(self):
-        messages=external_messages("De ce învățăm matematica?", "PERSONA")
+        messages=external_messages("De ce învățăm matematica?", NELUTU_PERSONA)
         self.assertEqual(len(messages), 2)
         self.assertEqual([m["role"] for m in messages], ["system", "user"])
 
+    def test_refuses_unapproved_system_prompt(self):
+        with self.assertRaisesRegex(ValueError, "unapproved_system_prompt"):
+            external_messages("De ce învățăm matematica?", "Context privat al părintelui")
+
     def test_refuses_arbitrary_prompt(self):
         with self.assertRaises(ValueError):
-            external_messages("Ce medie are elevul?", "PERSONA")
+            external_messages("Ce medie are elevul?", NELUTU_PERSONA)
 
 if __name__ == "__main__":
     unittest.main()
