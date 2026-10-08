@@ -52,6 +52,28 @@ class CloudflarePrototypeTests(unittest.TestCase):
             with self.subTest(limit=limit):
                 with self.assertRaisesRegex(AIUnavailable,"invalid_token_limit"):
                     generate("Ce rol are educația tehnică?",account_id="abcdefgh1234",api_token="dummy",transport=fake,max_output_tokens=limit)
+    def test_oversized_provider_answer_is_rejected_not_cut(self):
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self,*args): return False
+            def read(self,n):
+                return json.dumps({"success":True,"result":{"response":"x"*2201}}).encode()
+        def fake(request,timeout):
+            return Response()
+        with self.assertRaisesRegex(AIUnavailable,"oversized_response"):
+            generate("Ce rol are educația tehnică?",account_id="abcdefgh1234",api_token="dummy",transport=fake)
+
+    def test_polish_applied_to_provider_answer(self):
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self,*args): return False
+            def read(self,n):
+                return json.dumps({"success":True,"result":{"response":"Nu ezita să cere ajutorul."}}).encode()
+        def fake(request,timeout):
+            return Response()
+        result=generate("Ce rol are educația tehnică?",account_id="abcdefgh1234",api_token="dummy",transport=fake)
+        self.assertEqual(result.text,"Nu ezita să ceri ajutor.")
+
     def test_contract(self):
         self.assertTrue(contract()["external_processing_when_enabled"])
         self.assertFalse(contract()["forwards_student_records"])
