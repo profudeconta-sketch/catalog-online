@@ -12,9 +12,9 @@ _RULES = (
     (r"\bnu ezita să cere ajutorul\b", "nu ezita să ceri ajutor"),
     (r"\bsă devină autonome în domenii concrete\b", "să devină autonomi în domenii concrete"),
     (r"\bca un seminț de curiozitate\b", "ca o sămânță de curiozitate"),
-    (r"\bștiriile\b", "informațiile"),
+    (r"\bștiriile\b", "știrile"),
     (r"\bÎnvăță activ\b", "Învață activ"),
-    (r"\bRepetați cu timp\b", "Repetă la intervale regulate"),
+    (r"\bRepetați cu timp\b", "Repetați la intervale regulate"),
     (r"\brepetai la intervale crescute\b", "repetă la intervale din ce în ce mai mari"),
 )
 
