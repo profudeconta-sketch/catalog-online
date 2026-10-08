@@ -1,0 +1,46 @@
+name: Nelutu LIVE oral exam (manual only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type RUN_PUBLIC_TEST to authorize three public AI calls'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nelutu-live-oral
+  cancel-in-progress: false
+
+jobs:
+  oral-exam:
+    if: ${{ inputs.confirmation == 'RUN_PUBLIC_TEST' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout reviewed prototype revision (pinned)
+        uses: actions/checkout@v4
+        with:
+          ref: a1563bf718242b72d62cfe5bfb704322fdc40c59
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exactly three public-only questions
+        run: |
+          python - <<'PY'
+          from nelutu_ai_live_oral import QUESTIONS
+          from nelutu_ai_privacy import approved_external_question
+          assert len(QUESTIONS) == 3
+          assert all(approved_external_question(q) for q, _ in QUESTIONS)
+          print('Three public allowlisted questions confirmed')
+          PY
+      - name: Execute real model oral exam
+        env:
+          NELUTU_CF_ACCOUNT_ID: ${{ secrets.NELUTU_CF_ACCOUNT_ID }}
+          NELUTU_CF_API_TOKEN: ${{ secrets.NELUTU_CF_API_TOKEN }}
+        run: python nelutu_ai_live_oral.py
