@@ -28,6 +28,18 @@ class ToneTests(unittest.TestCase):
     def test_threat_is_serious(self):
         self.assertFalse(choose_tone("Am fost amenințat de colegi.").humor_allowed)
 
+    def test_more_distress_and_threat_phrasings_never_trigger_humor(self):
+        messages = (
+            "Mă sinucid.", "Nu mai pot trăi.", "Nu mai rezist.",
+            "Îmi pun capăt zilelor.", "Îmi fac rău.",
+            "M-a lovit un coleg.", "M-a bătut un coleg.",
+            "M-au amenințat colegii.",
+        )
+        for message in messages:
+            with self.subTest(message=message):
+                self.assertEqual(choose_tone(message).mode, "serious")
+                self.assertFalse(choose_tone(message).humor_allowed)
+
     def test_empty_does_not_crash(self):
         self.assertEqual(choose_tone(None).mode, "warm")
 
