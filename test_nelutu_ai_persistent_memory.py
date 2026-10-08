@@ -48,6 +48,14 @@ class EncryptedMemoryTests(unittest.TestCase):
             self.store.save(self.scope_a, memory, consent=True)
         self.assertEqual(self.backend.items, {})
 
+    def test_reject_directly_mutated_sensitive_answer(self):
+        memory = NelutuMemory()
+        memory.add("De ce învățăm matematica?", "Pentru logică.")
+        memory.turns[1]["content"] = "Parola nu trebuie păstrată."
+        with self.assertRaises(MemoryStoreError):
+            self.store.save(self.scope_a, memory, consent=True)
+        self.assertEqual(self.backend.items, {})
+
     def test_scope_validation(self):
         with self.assertRaises(MemoryStoreError):
             self.store.load("../school_catalog")
