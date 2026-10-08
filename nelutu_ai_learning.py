@@ -24,7 +24,7 @@ class LearningNotebook:
         self.lessons[question] = Lesson(question, answer, "pending", "")
         return True
 
-    def approve(self, question: str, *, reviewer: str) -> bool:
+    def _approve_authorized(self, question: str, *, reviewer: str) -> bool:
         if not isinstance(reviewer, str) or not reviewer.strip():
             return False
         lesson = self.lessons.get(question)
@@ -32,6 +32,10 @@ class LearningNotebook:
             return False
         self.lessons[question] = Lesson(lesson.question, lesson.answer, "approved", reviewer.strip())
         return True
+
+    def approve(self, question: str, *, reviewer: str) -> bool:
+        """Legacy direct approval is forbidden; use authorized review gateway."""
+        raise PermissionError("review_gateway_required")
 
     def recall_verified(self, question: str) -> str | None:
         lesson = self.lessons.get(question)
