@@ -32,7 +32,9 @@ class NelutuMemory:
 
     def recent_local(self, count: int = 8) -> list[dict[str, str]]:
         """Local display only; never pass to an external AI provider."""
-        return [dict(item) for item in self.turns[-max(0, min(count, 2 * MAX_TURNS)):]]
+        if count <= 0:
+            return []
+        return [dict(item) for item in self.turns[-min(count, 2 * MAX_TURNS):]]
 
     def size(self) -> int:
         return len(self.turns) // 2
