@@ -18,6 +18,6 @@ jobs:
         with:
           python-version: '3.11'
       - name: Compile Neluțu modules
-        run: python -m py_compile nelutu_assistant.py nelutu_parent_guide.py nelutu_education_dialogue.py nelutu_pedagogy_library.py nelutu_portal_faq.py nelutu_cloudflare_ai.py
+        run: python -m py_compile nelutu_assistant.py nelutu_parent_guide.py nelutu_education_dialogue.py nelutu_pedagogy_library.py nelutu_portal_faq.py nelutu_cloudflare_ai.py nelutu_ai_experiment.py
       - name: Run offline unit tests
-        run: python -m unittest -v test_nelutu_intents.py test_nelutu_education_dialogue.py test_nelutu_pedagogy.py test_nelutu_portal_faq.py test_nelutu_cloudflare_ai.py
+        run: python -m unittest -v test_nelutu_intents.py test_nelutu_education_dialogue.py test_nelutu_pedagogy.py test_nelutu_portal_faq.py test_nelutu_cloudflare_ai.py test_nelutu_ai_experiment.py
