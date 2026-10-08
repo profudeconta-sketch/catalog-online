@@ -34,7 +34,7 @@ def normalize(text: str) -> str:
     text = "".join(c for c in text if not unicodedata.combining(c))
     text = text.lower().strip()
     text = re.sub(r"[?!. ,;:]+", " ", text)
-    return re.sub(r"\\s+", " ", text).strip()
+    return re.sub(r"\s+", " ", text).strip()
 
 def approved_external_question(text: str) -> bool:
     """Only exact, public, general educational prompts are externally eligible."""
