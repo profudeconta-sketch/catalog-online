@@ -15,6 +15,7 @@ _RULES = (
     (r"\bștiriile\b", "informațiile"),
     (r"\bÎnvăță activ\b", "Învață activ"),
     (r"\bRepetați cu timp\b", "Repetă la intervale regulate"),
+    (r"\brepetai la intervale crescute\b", "repetă la intervale din ce în ce mai mari"),
 )
 
 def polish_romanian(answer: str) -> str:
