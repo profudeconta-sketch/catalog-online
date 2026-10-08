@@ -27,7 +27,7 @@ Nicio îmbinare în producție fără validare documentată și acord final.
 - Sunt implementate reguli locale de corectare a unor expresii și teste offline sintetice.
 - Testele de securitate pentru întrebări publice și private verifică un contract **limitat**; nu constituie un audit complet.
 - Nicio probă completă de dialog generativ multi-turn nu a fost demonstrată.
-- Testele adăugate după ultima validare nu au încă jurnal CI confirmat.
+- Validarea offline manuală #20 a încheiat cu SUCCESS versiunea experimentală `849ef3156aafe3db295fa202ce4fd5a30a980fbd`, conform capturii GitHub furnizate de utilizator. Aceasta nu înlocuiește evaluarea conversațiilor reale sau testele de integrare.
 
 ## Situația bugetului zero (verificare 2026-10-09)
 
@@ -35,7 +35,7 @@ Nicio îmbinare în producție fără validare documentată și acord final.
 - Verificarea de tip pentru contor și limită a fost întărită; există teste sintetice pentru valori booleene.
 - Nu există confirmare în această evaluare a unei limite de facturare zero impuse de furnizor.
 - Nu se activează AI extern în producție cât timp o cerere poate genera un cost facturabil.
-- Nu există jurnal CI confirmat pentru cel mai nou commit experimental; nu se pretinde validarea acestuia.
+- Există confirmarea vizuală a validării offline #20 pentru revizia `849ef3156aafe3db295fa202ce4fd5a30a980fbd`; verificările LIVE, integrarea și plafonul financiar rămân neconfirmate.
 
 ## Principiul deciziei
 
@@ -43,3 +43,9 @@ Dacă o probă critică eșuează, verdictul rămâne **NU SE ACTIVEAZĂ**.
 Un scor bun la întrebări publice nu compensează o breșă de confidențialitate.
 Perfecțiunea absolută a unui model generativ nu poate fi garantată; se
 urmărește un prag strict, reproductibil și transparent.
+
+## Verdict audit final 2026-10-09
+
+**OFFLINE: ADMIS pentru revizia testată în #20. PRODUCȚIE CU AI EXTERN: BLOCATĂ.**
+
+Blocaje verificabile: (1) cost zero facturabil neconfirmat la furnizor; (2) evaluare de limbă și dialog real incompletă; (3) dialog generativ multi-turn absent prin design (`history` refuzat); (4) lipsesc testele de staging și regresie a ambelor aplicații. Nu se modifică aplicațiile funcționale sau datele școlare în baza acestei evaluări.
