@@ -11,7 +11,7 @@ _RULES = (
     (r"\bcu cuvinte tale\b", "cu propriile tale cuvinte"),
     (r"\bnu ezita să cere ajutorul\b", "nu ezita să ceri ajutor"),
     (r"\bNu ezita să cere ajutorul\b", "Nu ezita să ceri ajutor"),
-    (r"\bsă devină autonome în domenii concrete\b", "să devină autonomi în domenii concrete"),
+    (r"\bElevii învață să devină autonome în domenii concrete\b", "Elevii învață să devină autonomi în domenii concrete"),
     (r"\bca un seminț de curiozitate\b", "ca o sămânță de curiozitate"),
     (r"\bștiriile\b", "știrile"),
     (r"\bÎnvăță activ\b", "Învață activ"),
