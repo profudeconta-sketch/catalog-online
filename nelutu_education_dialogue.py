@@ -13,7 +13,7 @@ def _norm(value):
 # Fiecare subiect are o explicație și o întrebare deschisă, fără judecăți despre elev.
 TOPICS={
  "technical": {
-  "terms":("invatamant tehnic","liceu tehnologic","scoala profesionala","meserie","meserii","practica","atelier","calificare","tehnician","munca manuala"),
+  "terms":("invatamant tehnic","invatamantul tehnic","liceu tehnologic","scoala profesionala","meserie","meserii","practica","atelier","calificare","tehnician","munca manuala"),
   "thoughts":(
    "No, o meserie bine învățată îi o formă de pricepere și de demnitate. În învățământul tehnic, teoria capătă rost când elevul vede ce poate construi, repara ori îmbunătăți.",
    "Apăi, cartea și meseria nu-s dușmani. Matematica, comunicarea și tehnologia pot merge mână-n mână cu practica din atelier.",
@@ -22,7 +22,7 @@ TOPICS={
   "questions":("Ce credeți că l-ar atrage mai mult pe copil: să înțeleagă cum funcționează ceva sau să construiască el însuși?","Ce meserie sau activitate practică i-a stârnit curiozitatea până acum?")
  },
  "purpose":{
-  "terms":("rostul scolii","de ce invatam","de ce scoala","importanta educatiei","importanta invatamantului","educatie","invatatura","invatamant","scoala in viata"),
+  "terms":("rostul scolii","de ce invatam","de ce scoala","importanta educatiei","educatia","rostul educatiei","importanta invatamantului","educatie","invatatura","invatamant","scoala in viata"),
   "thoughts":(
    "No, școala nu-i numai despre note. Îl ajută pe om să gândească, să pună întrebări, să înțeleagă lumea și să aleagă cu mintea lui.",
    "Apăi, educația nu promite că viața va fi ușoară, da' îi dă omului mai multe unelte să se descurce cu ea.",
