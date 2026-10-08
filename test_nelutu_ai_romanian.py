@@ -9,9 +9,9 @@ class RomanianPolishTests(unittest.TestCase):
             "nu ezita să cere ajutorul": "nu ezita să ceri ajutor",
             "să devină autonome în domenii concrete": "să devină autonomi în domenii concrete",
             "ca un seminț de curiozitate": "ca o sămânță de curiozitate",
-            "știriile": "informațiile",
+            "știriile": "știrile",
             "Învăță activ": "Învață activ",
-            "Repetați cu timp": "Repetă la intervale regulate",
+            "Repetați cu timp": "Repetați la intervale regulate",
             "repetai la intervale crescute": "repetă la intervale din ce în ce mai mari",
         }
         for source, expected in samples.items():
