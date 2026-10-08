@@ -1,5 +1,6 @@
 import unittest
 from nelutu_ai_learning import LearningNotebook
+from nelutu_ai_review_auth import ReviewIdentity, approve_with_authorization
 
 class LearningTests(unittest.TestCase):
     def test_pending_not_a_fact(self):
@@ -7,7 +8,7 @@ class LearningTests(unittest.TestCase):
         q = "De ce învățăm matematica?"
         self.assertTrue(notebook.propose(q, "Dezvoltă logica."))
         self.assertIsNone(notebook.recall_verified(q))
-        self.assertTrue(notebook.approve(q, reviewer="human_review"))
+        self.assertTrue(approve_with_authorization(notebook, q, identity=ReviewIdentity("human_review", True), authorize=lambda principal, permission: True))
         self.assertEqual(notebook.recall_verified(q), "Dezvoltă logica.")
 
     def test_reject_private_and_sensitive(self):
@@ -20,7 +21,7 @@ class LearningTests(unittest.TestCase):
         notebook = LearningNotebook()
         q = "De ce învățăm matematica?"
         notebook.propose(q, "Prima explicație.")
-        notebook.approve(q, reviewer="human_review")
+        approve_with_authorization(notebook, q, identity=ReviewIdentity("human_review", True), authorize=lambda principal, permission: True)
         notebook.propose(q, "Explicație corectată.")
         self.assertIsNone(notebook.recall_verified(q))
         notebook.retract(q)
@@ -30,7 +31,8 @@ class LearningTests(unittest.TestCase):
         notebook = LearningNotebook()
         q = "De ce învățăm matematica?"
         notebook.propose(q, "Explicație.")
-        self.assertFalse(notebook.approve(q, reviewer=""))
+        with self.assertRaises(PermissionError):
+            notebook.approve(q, reviewer="")
 
 if __name__ == "__main__":
     unittest.main()
