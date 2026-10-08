@@ -7,6 +7,7 @@ privacy review and explicit user consent before implementation.
 from __future__ import annotations
 from dataclasses import dataclass, field
 from nelutu_ai_privacy import approved_external_question
+from nelutu_ai_answer_guard import safe_memory_answer
 
 MAX_TURNS = 30
 
@@ -18,9 +19,7 @@ class NelutuMemory:
     def add(self, question: str, answer: str) -> bool:
         if not approved_external_question(question):
             return False
-        if not isinstance(answer, str) or not answer.strip():
-            return False
-        if len(answer) > 2200:
+        if not safe_memory_answer(answer):
             return False
         self.turns.append({"role": "user", "content": question})
         self.turns.append({"role": "assistant", "content": answer})
