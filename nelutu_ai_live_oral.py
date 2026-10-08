@@ -13,7 +13,7 @@ from nelutu_ai_privacy import approved_external_question
 QUESTIONS = (
     ("De ce învățăm matematica?", ("matematic", "gând", "logic", "problem", "calcul")),
     ("Ce rol are educația tehnică?", ("tehnic", "practic", "meseri", "abilit", "profes")),
-    ("De ce este importantă educația?", ("învăț", "cunoaș", "dezvolt", "educa", "viaț")),
+    ("Cum putem învăța mai eficient?", ("învăț", "repet", "exers", "plan", "metod")),
 )
 
 def main():
