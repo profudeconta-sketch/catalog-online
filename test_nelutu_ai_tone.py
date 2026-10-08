@@ -19,6 +19,15 @@ class ToneTests(unittest.TestCase):
     def test_loss_is_serious(self):
         self.assertFalse(choose_tone("Bunicul meu a murit.").humor_allowed)
 
+    def test_harassment_inflection_is_serious(self):
+        self.assertFalse(choose_tone("Sunt hărțuit la școală.").humor_allowed)
+
+    def test_distress_without_explicit_suicide_word_is_serious(self):
+        self.assertFalse(choose_tone("Nu mai vreau să trăiesc.").humor_allowed)
+
+    def test_threat_is_serious(self):
+        self.assertFalse(choose_tone("Am fost amenințat de colegi.").humor_allowed)
+
     def test_empty_does_not_crash(self):
         self.assertEqual(choose_tone(None).mode, "warm")
 
