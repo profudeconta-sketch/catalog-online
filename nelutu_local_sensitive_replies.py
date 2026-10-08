@@ -52,7 +52,10 @@ REPLIES = {
 
 def reply_local(message: str) -> LocalReply:
     """No request or chat history is forwarded. Never asserts an action happened."""
-    key = normalize(message)
+    # The privacy gate remains unchanged; only local template lookup treats
+    # hyphenated Romanian clitics (m-au, trimite-mi) like spaced forms.
+    key = normalize(message).replace("-", " ")
+    key = " ".join(key.split())
     if key in REPLIES:
         category, text = REPLIES[key]
         return LocalReply(text, category)
