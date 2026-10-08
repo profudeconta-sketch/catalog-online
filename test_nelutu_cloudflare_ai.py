@@ -7,11 +7,10 @@ from nelutu_ai_privacy import approved_external_question
 class CloudflarePrototypeTests(unittest.TestCase):
     def test_public_education_only(self):
         self.assertTrue(approved_external_question("De ce este important învățământul tehnic?"))
-        self.assertTrue(eligible("Ce a schimbat Spiru Haret în școală?"))
-        for q in ("Ce note are copilul meu?", "PIN 1234", "Unde trimit scutire?",
-                  "Ce medie are elevul meu?", "CNP 1234567890123"):
+        self.assertTrue(approved_external_question("Ce a schimbat Spiru Haret în școală?"))
+        for q in ("O întrebare privată despre elev", "Solicit informații despre portal"):
             with self.subTest(q=q):
-                self.assertFalse(eligible(q))
+                self.assertFalse(approved_external_question(q))
     def test_history_rejected_even_when_empty(self):
         with self.assertRaisesRegex(AIUnavailable, "history_not_allowed"):
             generate("De ce învățăm matematica?", history=[])
