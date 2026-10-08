@@ -35,6 +35,23 @@ class CloudflarePrototypeTests(unittest.TestCase):
         self.assertTrue(result.available)
         self.assertIn("meseria",result.text)
         self.assertIn(b"educa",seen[0][1])
+    def test_bounded_live_exam_token_budget(self):
+        seen=[]
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self,*args): return False
+            def read(self,n):
+                return json.dumps({"success":True,"result":{"response":"Un răspuns public complet."}}).encode()
+        def fake(request,timeout):
+            seen.append(json.loads(request.data))
+            return Response()
+        generate("Ce rol are educația tehnică?",account_id="abcdefgh1234",api_token="dummy",transport=fake,max_output_tokens=1600)
+        self.assertEqual(seen[0]["max_tokens"],1600)
+        self.assertEqual(len(seen[0]["messages"]),2)
+        for limit in (0,1601,True,"1600"):
+            with self.subTest(limit=limit):
+                with self.assertRaisesRegex(AIUnavailable,"invalid_token_limit"):
+                    generate("Ce rol are educația tehnică?",account_id="abcdefgh1234",api_token="dummy",transport=fake,max_output_tokens=limit)
     def test_contract(self):
         self.assertTrue(contract()["external_processing_when_enabled"])
         self.assertFalse(contract()["forwards_student_records"])
