@@ -3,6 +3,7 @@ from __future__ import annotations
 import re, unicodedata
 from nelutu_assistant import NelutuAnswer, answer_with_context as _base_answer
 from nelutu_education_dialogue import educational_reply
+from nelutu_pedagogy_library import lookup as pedagogy_lookup, clarify as pedagogy_clarify
 
 TUTORIAL_TOPIC="Tutorial complet — Portalul Părinților"
 TUTORIAL_TEXT="""# 🤠 No, io-s Neluțu. Hai să-ți arăt tăt sistemu’, cap-coadă.
@@ -362,8 +363,14 @@ def answer_parent(question,context=None):
     base=_base_answer(question,context)
     if base.intent != "fallback":
         return base
+    pedagogical=pedagogy_lookup(question)
+    if pedagogical is not None:
+        return pedagogical
     educational=educational_reply(question)
-    return educational if educational is not None else base
+    if educational is not None:
+        return educational
+    clarification=pedagogy_clarify(question)
+    return clarification if clarification is not None else base
 
 def contract():
     return {"writes_data":False,"uses_network":False,"external_ai":False,"changes_school_workflow":False}
