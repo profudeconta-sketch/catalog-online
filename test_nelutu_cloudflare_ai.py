@@ -74,6 +74,27 @@ class CloudflarePrototypeTests(unittest.TestCase):
         result=generate("Ce rol are educația tehnică?",account_id="abcdefgh1234",api_token="dummy",transport=fake)
         self.assertEqual(result.text,"Nu ezita să ceri ajutor.")
 
+    def test_unapproved_model_is_rejected_before_network(self):
+        for model in ("@cf/other/model", "@cf/../unsafe", "@cf/qwen/qwen3-30b-a3b-fp8?x=1"):
+            with self.subTest(model=model):
+                with self.assertRaisesRegex(AIUnavailable, "invalid_model"):
+                    generate("Ce rol are educația tehnică?", account_id="abcdefgh1234",
+                             api_token="dummy", model=model,
+                             transport=lambda *args, **kwargs: self.fail("network must not run"))
+
+    def test_malformed_provider_shapes_fail_closed(self):
+        for payload in ([], {"success":True,"result":[]},
+                        {"success":True,"result":{"response":"Răspuns", "choices":"wrong"}}):
+            class Response:
+                def __enter__(self): return self
+                def __exit__(self,*args): return False
+                def read(self,n): return json.dumps(payload).encode()
+            def fake(request,timeout): return Response()
+            with self.subTest(payload=payload):
+                with self.assertRaisesRegex(AIUnavailable, "invalid_response"):
+                    generate("Ce rol are educația tehnică?", account_id="abcdefgh1234",
+                             api_token="dummy", transport=fake)
+
     def test_contract(self):
         self.assertTrue(contract()["external_processing_when_enabled"])
         self.assertFalse(contract()["forwards_student_records"])
