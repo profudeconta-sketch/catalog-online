@@ -40,6 +40,14 @@ class EncryptedMemoryTests(unittest.TestCase):
         with self.assertRaises(MemoryStoreError):
             other.load(self.scope_a)
 
+    def test_reject_extra_fields_on_save(self):
+        memory = NelutuMemory()
+        memory.add("De ce învățăm matematica?", "Pentru logică.")
+        memory.turns[1]["extra_field"] = "unexpected"
+        with self.assertRaises(MemoryStoreError):
+            self.store.save(self.scope_a, memory, consent=True)
+        self.assertEqual(self.backend.items, {})
+
     def test_scope_validation(self):
         with self.assertRaises(MemoryStoreError):
             self.store.load("../school_catalog")
