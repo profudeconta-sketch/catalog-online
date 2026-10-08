@@ -104,5 +104,5 @@ def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=N
         raise AIUnavailable("provider_unavailable") from exc
 
 def contract():
-    return {"opt_in":True,"writes_student_data":False,"uses_paid_api":False,
+    return {"opt_in":True,"writes_student_data":False,"free_tier_only_not_guaranteed":True,"billing_must_be_disabled_or_capped":True,
             "external_processing_when_enabled":True,"forwards_student_records":False}
