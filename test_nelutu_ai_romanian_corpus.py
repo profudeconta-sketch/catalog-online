@@ -12,9 +12,9 @@ ERROR_CASES = (
     ("Te rog, nu ezita să cere ajutorul.", "Te rog, nu ezita să ceri ajutor."),
     ("Elevii învață să devină autonome în domenii concrete.", "Elevii învață să devină autonomi în domenii concrete."),
     ("Curiozitatea e ca un seminț de curiozitate.", "Curiozitatea e ca o sămânță de curiozitate."),
-    ("Am citit știriile.", "Am citit informațiile."),
+    ("Am citit știriile.", "Am citit știrile."),
     ("Învăță activ pentru examen.", "Învață activ pentru examen."),
-    ("Repetați cu timp.", "Repetă la intervale regulate."),
+    ("Repetați cu timp.", "Repetați la intervale regulate."),
     ("Încearcă metoda: repetai la intervale crescute.", "Încearcă metoda: repetă la intervale din ce în ce mai mari."),
 )
 
