@@ -61,7 +61,10 @@ def generate(question,*,account_id="",api_token="",model=DEFAULT_MODEL,history=N
             raise AIUnavailable("truncated_response")
         if not data.get("success",False) or not isinstance(answer,str) or not answer.strip():
             raise AIUnavailable("invalid_response")
-        return AIResult(polish_romanian(answer.strip()[:MAX_RESPONSE]),True)
+        # Never present a cut-off sentence as a complete educational answer.
+        if len(answer.strip()) > MAX_RESPONSE:
+            raise AIUnavailable("oversized_response")
+        return AIResult(polish_romanian(answer.strip()),True)
     except AIUnavailable:
         raise
     except (urllib.error.URLError,TimeoutError,OSError,ValueError,KeyError) as exc:
