@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from cryptography.fernet import Fernet, InvalidToken
 from nelutu_ai_memory import NelutuMemory
 from nelutu_ai_privacy import approved_external_question
+from nelutu_ai_answer_guard import safe_memory_answer
 
 class MemoryStoreError(Exception):
     pass
@@ -67,7 +68,7 @@ class EncryptedMemoryStore:
             if not approved_external_question(user.get("content", "")):
                 raise MemoryStoreError("private_question")
             answer = assistant.get("content")
-            if not isinstance(answer, str) or not answer.strip() or len(answer) > 2200:
+            if not safe_memory_answer(answer):
                 raise MemoryStoreError("invalid_answer")
         payload = json.dumps(memory.recent_local(60), ensure_ascii=False).encode("utf-8")
         self.backend.put(scope, self._cipher.encrypt(payload))
