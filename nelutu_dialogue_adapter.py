@@ -4,7 +4,7 @@ import re
 from nelutu_parent_guide import answer_parent
 from nelutu_local_dialogue import DialogueState, reply as local_reply, _norm
 from nelutu_education_dialogue import educational_reply
-from nelutu_privacy_guard import guard as privacy_guard, credential_warning, access_guidance
+from nelutu_privacy_guard import guard as privacy_guard, credential_warning, access_guidance, authority_guard
 
 def answer_parent_dialogue(question, context=None, state=None):
     """Prioritizează întotdeauna routerul portalului; continuitatea este limitată."""
@@ -17,7 +17,7 @@ def answer_parent_dialogue(question, context=None, state=None):
     # Limita de lungime nu poate fi ocolită de un intent al portalului.
     if isinstance(question, str) and len(question) > 1200:
         return safety, DialogueState()
-    privacy = credential_warning(question) or privacy_guard(question) or access_guidance(question)
+    privacy = credential_warning(question) or authority_guard(question) or privacy_guard(question) or access_guidance(question)
     if privacy is not None:
         return privacy, DialogueState()
     base = answer_parent(question, context)
