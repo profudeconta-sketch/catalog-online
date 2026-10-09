@@ -54,7 +54,7 @@ class PreviewUITests(unittest.TestCase):
                 app.text_input[0].set_value(question)
                 app.button(key="FormSubmitter:preview_nelutu_form-Întreabă-l pe Neluțu").click().run()
                 self.assertFalse(app.exception, str(list(app.exception)))
-            self.assertEqual(app.session_state["preview_nelutu_reply"].intent, "parent_guide_medical")
+            self.assertEqual(app.session_state["preview_nelutu_reply"].intent, "parent_flow_medical")
             self.assertEqual(app.session_state["preview_nelutu_state"].topic, "")
 
     def test_sensitive_message_resets_context(self):
