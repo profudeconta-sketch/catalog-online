@@ -5,6 +5,25 @@ from nelutu_assistant import NelutuAnswer
 from nelutu_local_dialogue import _norm
 
 
+def credential_warning(question):
+    q = _norm(question)
+    words = q.split()
+    for i, word in enumerate(words):
+        if word not in ("pin", "parola", "password"):
+            continue
+        following = words[i + 1:i + 5]
+        if any(part.isdigit() and len(part) >= 3 for part in following):
+            return NelutuAnswer(
+                "credential_privacy",
+                "Nu introduceți PIN-uri sau parole în conversație. Nu pot verifica "
+                "identitatea ori accesa situația școlară folosind date scrise aici. "
+                "Utilizați autentificarea din portalul oficial. Dacă ați transmis "
+                "date de acces reale, schimbați-le prin metoda autorizată.",
+                serious=True,
+            )
+    return None
+
+
 def guard(question):
     words = set(_norm(question).split())
     personal = bool(words.intersection({
