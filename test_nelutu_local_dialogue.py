@@ -19,6 +19,19 @@ class LocalDialogueTests(unittest.TestCase):
         self.assertEqual(answer.intent, "education_followup_purpose")
         self.assertEqual(state.topic, "purpose")
 
+    def test_math_subject_after_example(self):
+        _, state = reply("De ce învățăm la școală?")
+        _, state = reply("Dă-mi un exemplu concret.", state)
+        answer, state = reply("Matematică. Mai explică-mi.", state)
+        self.assertEqual(answer.intent, "education_followup_purpose")
+        self.assertIn("matematică", answer.text)
+        self.assertEqual(state.topic, "purpose")
+
+    def test_math_subject_without_context_does_not_invent(self):
+        answer, state = reply("Matematică. Mai explică-mi.")
+        self.assertIsNone(answer)
+        self.assertEqual(state.topic, "")
+
     def test_new_topic_replaces_previous(self):
         _, state = reply("De ce învățăm la școală?")
         result, state = reply("Ce meserie ar putea învăța?", state)
