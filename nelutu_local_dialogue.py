@@ -75,7 +75,7 @@ def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnsw
     if fresh is not None:
         topic = fresh.intent.removeprefix("education_")
         return fresh, DialogueState(topic, 1 if topic != state.topic else min(state.turns + 1, 20))
-    if state.topic in _FOLLOWUPS and (q in _FOLLOWUP_MARKERS or q.startswith("poti sa detaliezi") or q.startswith("mai explica")):
+    if state.topic in _FOLLOWUPS and (q in _FOLLOWUP_MARKERS or q.startswith("poti sa detaliezi") or q.startswith("mai explica") or q.startswith("da mi un exemplu ")):
         if state.turns >= 3:
             return NelutuAnswer("clarification", "No, ca să nu repet aceeași poveste, spuneți-mi ce aspect anume doriți să aprofundăm."), DialogueState(state.topic, state.turns)
         message = _FOLLOWUPS[state.topic] if state.turns <= 1 else _SECOND_FOLLOWUPS[state.topic]
