@@ -2,6 +2,7 @@
 from __future__ import annotations
 import re
 from nelutu_parent_guide import answer_parent
+from nelutu_medical_document_guidance import answer as medical_document_guidance
 from nelutu_local_dialogue import DialogueState, reply as local_reply, _norm
 from nelutu_education_dialogue import educational_reply
 from nelutu_privacy_guard import guard as privacy_guard, credential_warning, access_guidance, authority_guard, director_class_guidance, third_party_credential_guard
@@ -20,6 +21,9 @@ def answer_parent_dialogue(question, context=None, state=None):
     privacy = credential_warning(question) or authority_guard(question) or third_party_credential_guard(question) or privacy_guard(question) or access_guidance(question) or director_class_guidance(question)
     if privacy is not None:
         return privacy, DialogueState()
+    medical = medical_document_guidance(question)
+    if medical is not None:
+        return medical, DialogueState()
     base = answer_parent(question, context)
     # Privacy-sensitive requests require a dedicated pre-routing guard.
 
