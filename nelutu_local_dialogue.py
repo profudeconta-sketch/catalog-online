@@ -75,6 +75,15 @@ def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnsw
     if fresh is not None:
         topic = fresh.intent.removeprefix("education_")
         return fresh, DialogueState(topic, 1 if topic != state.topic else min(state.turns + 1, 20))
+    # Răspuns la disciplina cerută în cadrul temei educației, fără istoric de mesaje.
+    # Nu extindem această regulă la întrebări necunoscute despre elevi.
+    if state.topic == "purpose" and state.turns >= 1 and re.fullmatch(
+        r"(?:la )?matematica(?: mai explica(?: mi)?| explica(?: mi)?| da mi un exemplu)?", q
+    ):
+        return NelutuAnswer("education_followup_purpose",
+            "No, la matematică putem folosi procentele ca să verificăm o reducere: "
+            "dacă un obiect costă 100 de lei și reducerea este 20%, plătim 80 de lei. "
+            "Așe vedem cum ne ajută lecția la cumpărături. Vrei să încercăm și un buget simplu?"), DialogueState("purpose", min(state.turns + 1, 20))
     if state.topic in _FOLLOWUPS and (q in _FOLLOWUP_MARKERS or q.startswith("poti sa detaliezi") or q.startswith("mai explica") or q.startswith("da mi un exemplu ")):
         if state.turns >= 3:
             return NelutuAnswer("clarification", "No, ca să nu repet aceeași poveste, spuneți-mi ce aspect anume doriți să aprofundăm."), DialogueState(state.topic, state.turns)
