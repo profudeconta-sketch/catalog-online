@@ -17,6 +17,8 @@ def answer_parent_dialogue(question, context=None, state=None):
     if isinstance(question, str) and len(question) > 1200:
         return safety, DialogueState()
     base = answer_parent(question, context)
+    # Privacy-sensitive requests require a dedicated pre-routing guard.
+
     # Întrebările educaționale explicite pot fi mascate de clasificarea
     # prea largă «portal_component». Nu schimbăm însă ghidurile portalului.
     if base.intent == "portal_component":
