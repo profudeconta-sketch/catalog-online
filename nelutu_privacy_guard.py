@@ -24,6 +24,21 @@ def credential_warning(question):
     return None
 
 
+def access_guidance(question):
+    words = set(_norm(question).split())
+    if not words.intersection({"pin", "parola", "password"}):
+        return None
+    if words.intersection({"uitat", "pierdut", "recuperez", "recuperare"}):
+        return NelutuAnswer("access_forgotten",
+            "Pentru un PIN uitat, contactează dirigintele pentru procedura autorizată. "
+            "Nu trimite date de acces în conversație.", serious=True)
+    if words.intersection({"schimb", "schimba", "schimbare", "modific", "modifica"}):
+        return NelutuAnswer("access_change",
+            "Nu pot confirma existența unui buton de schimbare a PIN-ului în portal. "
+            "Contactează dirigintele pentru procedura autorizată.", serious=True)
+    return None
+
+
 def guard(question):
     words = set(_norm(question).split())
     personal = bool(words.intersection({
