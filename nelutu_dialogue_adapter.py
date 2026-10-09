@@ -1,12 +1,27 @@
 """Adaptor experimental pentru integrare ulterioară; nu modifică portalul activ."""
 from __future__ import annotations
+import re
 from nelutu_parent_guide import answer_parent
-from nelutu_local_dialogue import DialogueState, reply as local_reply, _norm, _FOLLOWUP_MARKERS
+from nelutu_local_dialogue import DialogueState, reply as local_reply, _norm
+from nelutu_education_dialogue import educational_reply
 
 def answer_parent_dialogue(question, context=None, state=None):
     """Prioritizează întotdeauna routerul portalului; continuitatea este limitată."""
     state = state if isinstance(state, DialogueState) else DialogueState()
     base = answer_parent(question, context)
+    # Întrebările educaționale explicite pot fi mascate de clasificarea
+    # prea largă «portal_component». Nu schimbăm însă ghidurile portalului.
+    if base.intent == "portal_component":
+        educational = educational_reply(question)
+        portal_terms = ("portal", "aplicatie", "buton", "document", "nota", "note",
+                        "absente", "invoire", "scutire", "mesaj", "notificare",
+                        "catalog", "trimite", "incarc", "cont", "parola")
+        normalized = _norm(question)
+        if educational is not None and not any(
+            re.search(r"(?<![a-z0-9])" + re.escape(t) + r"(?![a-z0-9])", normalized)
+            for t in portal_terms
+        ):
+            return educational, DialogueState(educational.intent.removeprefix("education_"), 1)
     # Orice răspuns de siguranță, portal, legal sau bazat pe date rămâne autoritar.
     if base.serious or base.intent not in ("fallback", "clarification"):
         # Un subiect educațional explicit poate actualiza tema, fără a înlocui
