@@ -50,6 +50,15 @@ class AdapterTests(unittest.TestCase):
         self.assertTrue(answer.serious)
         self.assertEqual(state.topic, "")
 
+    def test_director_class_question_has_grounded_guidance(self):
+        answer, state = answer_parent_dialogue(
+            "Cum poate directorul să consulte situația școlară a unei clase?"
+        )
+        self.assertEqual(answer.intent, "director_class_guidance")
+        self.assertIn("nu am identificat", answer.text)
+        self.assertTrue(answer.serious)
+        self.assertEqual(state.topic, "")
+
     def test_legitimate_director_question_not_blocked(self):
         answer, _ = answer_parent_dialogue(
             "Cum poate directorul consulta situatia clasei?"
