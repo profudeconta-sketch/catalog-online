@@ -78,6 +78,25 @@ class LocalDialogueTests(unittest.TestCase):
                 self.assertTrue(answer.serious)
                 self.assertEqual(state.topic, "")
 
+    def test_followups_progress_then_request_specifics(self):
+        _, state = reply("De ce învățăm la școală?")
+        first, state = reply("Dă-mi un exemplu", state)
+        second, state = reply("Mai explică", state)
+        third, state = reply("Continuă", state)
+        self.assertEqual(first.intent, "education_followup_purpose")
+        self.assertEqual(second.intent, "education_followup_purpose")
+        self.assertNotEqual(first.text, second.text)
+        self.assertEqual(third.intent, "clarification")
+        self.assertEqual(state.topic, "purpose")
+
+    def test_topic_change_resets_followup_progress(self):
+        _, state = reply("De ce învățăm la școală?")
+        _, state = reply("Continuă", state)
+        _, state = reply("Ce meserie ar putea învăța?", state)
+        answer, state = reply("Continuă", state)
+        self.assertEqual(answer.intent, "education_followup_technical")
+        self.assertEqual(state.turns, 2)
+
     def test_oversized_input(self):
         result, state = reply("x" * 1201)
         self.assertEqual(result.intent, "clarification")
