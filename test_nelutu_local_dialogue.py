@@ -27,6 +27,16 @@ class LocalDialogueTests(unittest.TestCase):
         self.assertIn("matematică", answer.text)
         self.assertEqual(state.topic, "purpose")
 
+    def test_other_subjects_keep_context(self):
+        for subject, keyword in (("Română", "contract"), ("Istorie", "sursele"), ("Fizică", "centura")):
+            with self.subTest(subject=subject):
+                _, state = reply("De ce învățăm la școală?")
+                _, state = reply("Dă-mi un exemplu concret.", state)
+                answer, state = reply(subject + ". Mai explică-mi.", state)
+                self.assertEqual(answer.intent, "education_followup_purpose")
+                self.assertIn(keyword, answer.text)
+                self.assertEqual(state.topic, "purpose")
+
     def test_math_subject_without_context_does_not_invent(self):
         answer, state = reply("Matematică. Mai explică-mi.")
         self.assertIsNone(answer)
