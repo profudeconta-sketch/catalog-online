@@ -6,7 +6,7 @@ from nelutu_local_dialogue import DialogueState
 class AdapterTests(unittest.TestCase):
     def test_portal_question_keeps_existing_answer(self):
         answer, state = answer_parent_dialogue("Cum trimit scutirea medicală?")
-        self.assertEqual(answer.intent, "parent_guide_medical")
+        self.assertEqual(answer.intent, "parent_flow_medical")
         self.assertEqual(state.topic, "")
 
     def test_educational_topic_then_followup(self):
@@ -29,7 +29,7 @@ class AdapterTests(unittest.TestCase):
         for question in ("De ce învățăm la școală?", "Dă-mi un exemplu concret.", "Istorie. Mai explică-mi."):
             _, state = answer_parent_dialogue(question, state=state)
         answer, state = answer_parent_dialogue("Cum trimit scutirea medicală?", state=state)
-        self.assertEqual(answer.intent, "parent_guide_medical")
+        self.assertEqual(answer.intent, "parent_flow_medical")
         self.assertEqual(state.topic, "")
 
     def test_medical_document_steps_include_sent_verification(self):
@@ -37,7 +37,7 @@ class AdapterTests(unittest.TestCase):
             "Am o scutire medicală pentru copilul meu și vreau să o trimit "
             "dirigintelui. Explică-mi pas cu pas cum verific dacă documentul a fost transmis."
         )
-        self.assertEqual(answer.intent, "parent_guide_medical_verified")
+        self.assertEqual(answer.intent, "parent_flow_medical")
         self.assertIn("Documente deja transmise dirigintelui", answer.text)
         self.assertIn("nu înseamnă transmitere", answer.text)
         self.assertEqual(state.topic, "")
@@ -140,7 +140,7 @@ class AdapterTests(unittest.TestCase):
     def test_unrelated_portal_request_clears_context(self):
         _, state = answer_parent_dialogue("De ce învățăm la școală?")
         answer, state = answer_parent_dialogue("Unde trimit scutirea?", state=state)
-        self.assertEqual(answer.intent, "parent_guide_medical")
+        self.assertEqual(answer.intent, "parent_flow_medical")
         self.assertEqual(state.topic, "")
 
 if __name__ == "__main__":
