@@ -48,7 +48,8 @@ def answer(question):
     # Nu interceptăm întrebări educaționale sau administrative fără legătură.
     portal = _has(q, "document", "act", "incarc", "trimit", "transmit",
                   "depun", "dosar", "scutir", "bursa", "motiv", "invoir",
-                  "instiint", "scoala", "confirm", "primit", "verific")
+                  "instiint", "scoala", "confirm", "primit", "verific",
+                  "dovada adresa", "identitate", "buletin", "nastere")
     if not portal:
         return None
 
