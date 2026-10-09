@@ -8,6 +8,11 @@ from nelutu_education_dialogue import educational_reply
 def answer_parent_dialogue(question, context=None, state=None):
     """Prioritizează întotdeauna routerul portalului; continuitatea este limitată."""
     state = state if isinstance(state, DialogueState) else DialogueState()
+    # Filtrul de risc al dialogului nou se execută înainte de rutarea portalului.
+    # Niciun răspuns neserios al routerului vechi nu poate masca o alertă detectată.
+    safety, _ = local_reply(question, DialogueState())
+    if safety is not None and safety.serious:
+        return safety, DialogueState()
     base = answer_parent(question, context)
     # Întrebările educaționale explicite pot fi mascate de clasificarea
     # prea largă «portal_component». Nu schimbăm însă ghidurile portalului.
