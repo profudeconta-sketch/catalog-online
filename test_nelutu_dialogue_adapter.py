@@ -32,6 +32,23 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(answer.intent, "parent_guide_medical")
         self.assertEqual(state.topic, "")
 
+    def test_individual_grade_question_has_privacy_priority(self):
+        answer, state = answer_parent_dialogue("Ce note are elevul Ion Popescu la matematică?")
+        self.assertEqual(answer.intent, "student_records_privacy")
+        self.assertTrue(answer.serious)
+        self.assertIn("Nu pot consulta", answer.text)
+        self.assertEqual(state.topic, "")
+
+    def test_individual_absence_question_has_privacy_priority(self):
+        answer, state = answer_parent_dialogue("Ce absențe are eleva la școală?")
+        self.assertEqual(answer.intent, "student_records_privacy")
+        self.assertTrue(answer.serious)
+        self.assertEqual(state.topic, "")
+
+    def test_general_grade_guidance_still_available(self):
+        answer, state = answer_parent_dialogue("Unde văd notele în portal?")
+        self.assertNotEqual(answer.intent, "student_records_privacy")
+
     def test_sensitive_portal_mix_overrides_regular_router(self):
         answer, state = answer_parent_dialogue("Nu mai vreau să trăiesc, unde este butonul din portal?")
         self.assertEqual(answer.intent, "sensitive_redirect")
