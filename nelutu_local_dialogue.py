@@ -32,6 +32,13 @@ _FOLLOWUPS = {
     "family": "No, ajută să pornim de la o observație concretă și să întrebăm ce sprijin ar fi util, fără să căutăm vinovați. Vreți să formulăm un mesaj respectuos către școală?",
     "future": "No, putem pune pe hârtie trei lucruri: ce îi place, ce deprinderi are și ce ar vrea să încerce. Apoi discutăm opțiunile, fără să hotărâm în locul lui. Cu ce începem?",
 }
+_SECOND_FOLLOWUPS = {
+    "technical": "Așe, un pas concret ar fi să încercăm o activitate scurtă de atelier și să observăm ce i-a plăcut. Nu putem alege meseria în locul copilului.",
+    "purpose": "De pildă, la cumpărături folosim matematica pentru rest și buget, iar la o știre folosim gândirea critică pentru a verifica informația.",
+    "motivation": "Putem stabili un obiectiv mic, verificabil, și să apreciem efortul. Dacă dificultatea persistă, o discuție cu profesorul poate clarifica sprijinul potrivit.",
+    "family": "Un mesaj util spune ce am observat, întreabă cum vede școala situația și propune un pas comun, fără acuzații.",
+    "future": "Putem compara două opțiuni după interese, deprinderi și oportunități de învățare, fără promisiuni despre rezultatul final.",
+}
 _FOLLOWUP_MARKERS = (
     "da", "sigur", "continua", "continuam", "spune mi mai mult",
     "explica", "detaliaza", "un exemplu", "da mi un exemplu",
@@ -67,9 +74,12 @@ def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnsw
     fresh = educational_reply(question)
     if fresh is not None:
         topic = fresh.intent.removeprefix("education_")
-        return fresh, DialogueState(topic, min(state.turns + 1, 20))
+        return fresh, DialogueState(topic, 1 if topic != state.topic else min(state.turns + 1, 20))
     if state.topic in _FOLLOWUPS and (q in _FOLLOWUP_MARKERS or q.startswith("poti sa detaliezi") or q.startswith("mai explica")):
-        return NelutuAnswer("education_followup_" + state.topic, _FOLLOWUPS[state.topic]), DialogueState(state.topic, min(state.turns + 1, 20))
+        if state.turns >= 3:
+            return NelutuAnswer("clarification", "No, ca să nu repet aceeași poveste, spuneți-mi ce aspect anume doriți să aprofundăm."), DialogueState(state.topic, state.turns)
+        message = _FOLLOWUPS[state.topic] if state.turns <= 1 else _SECOND_FOLLOWUPS[state.topic]
+        return NelutuAnswer("education_followup_" + state.topic, message), DialogueState(state.topic, min(state.turns + 1, 20))
     # Întrebările neînțelese nu primesc răspuns inventat pe baza temei vechi.
     known = library_lookup(question)
     if known is not None:
