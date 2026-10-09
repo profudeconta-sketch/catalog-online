@@ -55,6 +55,9 @@ def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnsw
     sensitive = ("ma loveste", "m a lovit", "ma bate", "violenta", "abuz",
                  "ma sinucid", "vreau sa mor", "imi fac rau", "ma ameninta",
                  "hartuit", "bullying", "agresat", "agresiune")
+    sensitive += ("ma hartuiesc", "ma hartuieste", "ma lovesc", "m au lovit",
+                  "vreau sa ma omor", "nu mai vreau sa traiesc", "ma ranesc",
+                  "imi este frica acasa", "sunt batut", "sunt batuta")
     if any(re.search(r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])", q) for term in sensitive):
         return NelutuAnswer("sensitive_redirect",
             "Îmi pare rău că treceți printr-o situație dificilă. Dacă există pericol imediat, "
@@ -65,7 +68,7 @@ def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnsw
     if fresh is not None:
         topic = fresh.intent.removeprefix("education_")
         return fresh, DialogueState(topic, min(state.turns + 1, 20))
-    if state.topic in _FOLLOWUPS and q in _FOLLOWUP_MARKERS:
+    if state.topic in _FOLLOWUPS and (q in _FOLLOWUP_MARKERS or q.startswith("poti sa detaliezi") or q.startswith("mai explica")):
         return NelutuAnswer("education_followup_" + state.topic, _FOLLOWUPS[state.topic]), DialogueState(state.topic, min(state.turns + 1, 20))
     # Întrebările neînțelese nu primesc răspuns inventat pe baza temei vechi.
     known = library_lookup(question)
