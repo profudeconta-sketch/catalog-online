@@ -15,6 +15,22 @@ from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_not
 from whatsapp_delivery import teacher_phone, whatsapp_link
 from nelutu_assistant import QUICK_TOPICS as _NELUTU_BASE_TOPICS
 from nelutu_parent_guide import TUTORIAL_TOPIC as NELUTU_TUTORIAL_TOPIC, TUTORIAL_TEXT as NELUTU_TUTORIAL_TEXT, answer_parent as nelutu_answer
+from nelutu_dialogue_adapter import answer_parent_dialogue as _nelutu_v2_answer
+from nelutu_local_dialogue import DialogueState as _NelutuDialogueState
+
+# Comutator de revenire imediată la Neluțu clasic, fără intervenții asupra datelor.
+_NELUTU_V2_ENABLED = os.environ.get("NELUTU_V2_ENABLED", "1") == "1"
+
+def _nelutu_answer_compat(question, context):
+    if not _NELUTU_V2_ENABLED:
+        return nelutu_answer(question, context)
+    previous = st.session_state.get("nelutu_v2_dialogue_state")
+    answer, next_state = _nelutu_v2_answer(
+        question, context=context,
+        state=previous if isinstance(previous, _NelutuDialogueState) else _NelutuDialogueState(),
+    )
+    st.session_state["nelutu_v2_dialogue_state"] = next_state
+    return answer
 NELUTU_QUICK_TOPICS = (NELUTU_TUTORIAL_TOPIC, *_NELUTU_BASE_TOPICS)
 from nelutu_mascot import render_nelutu_corner, render_nelutu_corner_nudge, render_nelutu_mascot
 from leave_pass_storage import (
@@ -578,7 +594,7 @@ else:
             if _nelutu_ask and _nelutu_current_prompt:
                 with st.spinner("No, amu lasă-mă o țâră să cuget..."):
                     st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
-                    st.session_state["nelutu_answered_reply"] = nelutu_answer(_nelutu_current_prompt, _nelutu_context)
+                    st.session_state["nelutu_answered_reply"] = _nelutu_answer_compat(_nelutu_current_prompt, _nelutu_context)
             _kept_prompt, _nelutu_reply = _nelutu_fresh_reply(
                 st.session_state.get("nelutu_answered_prompt"),
                 st.session_state.get("nelutu_answered_reply"),
