@@ -13,6 +13,9 @@ def answer_parent_dialogue(question, context=None, state=None):
     safety, _ = local_reply(question, DialogueState())
     if safety is not None and safety.serious:
         return safety, DialogueState()
+    # Limita de lungime nu poate fi ocolită de un intent al portalului.
+    if isinstance(question, str) and len(question) > 1200:
+        return safety, DialogueState()
     base = answer_parent(question, context)
     # Întrebările educaționale explicite pot fi mascate de clasificarea
     # prea largă «portal_component». Nu schimbăm însă ghidurile portalului.
