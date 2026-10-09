@@ -20,6 +20,24 @@ def authority_guard(question):
     return None
 
 
+def director_class_guidance(question):
+    words = set(_norm(question).split())
+    role = bool(words.intersection({"director", "directorul", "directoarea"}))
+    class_scope = bool(words.intersection({"clasa", "clasei", "clase", "claselor"}))
+    consult = bool(words.intersection({"consulta", "consulte", "vedea", "vede", "accesa", "verifica"}))
+    if not (role and class_scope and consult):
+        return None
+    return NelutuAnswer(
+        "director_class_guidance",
+        "În aplicațiile verificate nu am identificat o interfață dedicată "
+        "directorului pentru consultarea situației unei clase. "
+        "Catalogul profesorului include rapoarte școlare, însă accesul "
+        "și comunicarea lor trebuie stabilite prin procedurile autorizate "
+        "ale școlii. Nu pot acorda drepturi de acces din conversație.",
+        serious=True,
+    )
+
+
 def credential_warning(question):
     q = _norm(question)
     words = q.split()
