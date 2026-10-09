@@ -32,6 +32,16 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(answer.intent, "parent_guide_medical")
         self.assertEqual(state.topic, "")
 
+    def test_medical_document_steps_include_sent_verification(self):
+        answer, state = answer_parent_dialogue(
+            "Am o scutire medicală pentru copilul meu și vreau să o trimit "
+            "dirigintelui. Explică-mi pas cu pas cum verific dacă documentul a fost transmis."
+        )
+        self.assertEqual(answer.intent, "parent_guide_medical_verified")
+        self.assertIn("Documente deja transmise dirigintelui", answer.text)
+        self.assertIn("nu înseamnă transmitere", answer.text)
+        self.assertEqual(state.topic, "")
+
     def test_disclosed_pin_warns_without_echo(self):
         answer, state = answer_parent_dialogue(
             "Sunt părintele elevului Ion Popescu, numărul matricol 9999 și PIN 1234. Poți să-mi spui notele lui?"
