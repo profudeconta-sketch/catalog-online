@@ -9,7 +9,7 @@ import re
 import unicodedata
 
 from nelutu_assistant import NelutuAnswer
-from nelutu_education_dialogue import TOPICS, educational_reply
+from nelutu_education_dialogue import educational_reply
 from nelutu_pedagogy_library import lookup as library_lookup
 
 def _norm(value: str) -> str:
@@ -42,13 +42,24 @@ _RESET_MARKERS = ("schimbam subiectul", "alta tema", "alt subiect", "de la incep
 def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnswer | None, DialogueState]:
     """Răspuns general, local; numai tema este păstrată între mesaje."""
     state = state if isinstance(state, DialogueState) else DialogueState()
+    if not isinstance(question, str):
+        return None, DialogueState()
     q = _norm(question)
     if not q:
         return None, state
     if len(question) > 1200:
         return NelutuAnswer("clarification", "No, mesajul îi cam lung. Îl putem lua pe bucăți, fără nume sau date personale?"), DialogueState()
-    if any(marker in q for marker in _RESET_MARKERS):
+    if any(q == marker or q.startswith(marker + " ") for marker in _RESET_MARKERS):
         return NelutuAnswer("clarification", "Sigur. Despre ce temă nouă ați dori să vorbim?"), DialogueState()
+    # Mesajele sensibile nu sunt tratate drept conversație educațională obișnuită.
+    sensitive = ("ma loveste", "m a lovit", "ma bate", "violenta", "abuz",
+                 "ma sinucid", "vreau sa mor", "imi fac rau", "ma ameninta",
+                 "hartuit", "bullying", "agresat", "agresiune")
+    if any(re.search(r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])", q) for term in sensitive):
+        return NelutuAnswer("sensitive_redirect",
+            "Îmi pare rău că treceți printr-o situație dificilă. Dacă există pericol imediat, "
+            "apelați 112. Pentru sprijin în școală, discutați cu dirigintele sau consilierul școlar. "
+            "Nu este nevoie să-mi transmiteți nume ori alte date personale.", serious=True), DialogueState()
     # Detectarea unei teme noi are prioritate față de continuarea celei vechi.
     fresh = educational_reply(question)
     if fresh is not None:
