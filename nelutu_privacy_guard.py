@@ -5,6 +5,22 @@ from nelutu_assistant import NelutuAnswer
 from nelutu_local_dialogue import _norm
 
 
+def third_party_credential_guard(question):
+    words = set(_norm(question).split())
+    secrets = {"pin", "parola", "password", "pinul", "parola"}
+    demands = {"spune", "spui", "da", "dami", "arata", "dezvaluie", "furnizeaza", "comunica", "vreau"}
+    other_person = {"elevului", "elevul", "elevei", "eleva", "copilului", "copilul", "parintelui", "altcuiva"}
+    if words & secrets and words & demands and words & other_person:
+        return NelutuAnswer(
+            "third_party_credential_refusal",
+            "Nu pot comunica PIN-ul sau parola altei persoane, nici în situații urgente. "
+            "Părintele trebuie să folosească procedura autorizată de recuperare "
+            "a accesului, prin diriginte. Nu trimiteți date de autentificare aici.",
+            serious=True,
+        )
+    return None
+
+
 def authority_guard(question):
     words = set(_norm(question).split())
     roles = {"director", "directorul", "diriginte", "dirigintele", "administrator", "profesor"}
