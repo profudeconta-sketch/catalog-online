@@ -47,10 +47,6 @@ def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnsw
     q = _norm(question)
     if not q:
         return None, state
-    if len(question) > 1200:
-        return NelutuAnswer("clarification", "No, mesajul îi cam lung. Îl putem lua pe bucăți, fără nume sau date personale?"), DialogueState()
-    if any(q == marker or q.startswith(marker + " ") for marker in _RESET_MARKERS):
-        return NelutuAnswer("clarification", "Sigur. Despre ce temă nouă ați dori să vorbim?"), DialogueState()
     # Mesajele sensibile nu sunt tratate drept conversație educațională obișnuită.
     sensitive = ("ma loveste", "m a lovit", "ma bate", "violenta", "abuz",
                  "ma sinucid", "vreau sa mor", "imi fac rau", "ma ameninta",
@@ -63,6 +59,10 @@ def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnsw
             "Îmi pare rău că treceți printr-o situație dificilă. Dacă există pericol imediat, "
             "apelați 112. Pentru sprijin în școală, discutați cu dirigintele sau consilierul școlar. "
             "Nu este nevoie să-mi transmiteți nume ori alte date personale.", serious=True), DialogueState()
+    if len(question) > 1200:
+        return NelutuAnswer("clarification", "No, mesajul îi cam lung. Îl putem lua pe bucăți, fără nume sau date personale?"), DialogueState()
+    if any(q == marker or q.startswith(marker + " ") for marker in _RESET_MARKERS):
+        return NelutuAnswer("clarification", "Sigur. Despre ce temă nouă ați dori să vorbim?"), DialogueState()
     # Detectarea unei teme noi are prioritate față de continuarea celei vechi.
     fresh = educational_reply(question)
     if fresh is not None:
