@@ -5,6 +5,11 @@ nelutu_dialogue_preview.py
 """
 from __future__ import annotations
 import os
+
+# Verificare înainte de încărcarea interfeței: laboratorul nu pornește accidental.
+if os.environ.get("NELUTU_LOCAL_DIALOGUE_EXPERIMENTAL") != "1":
+    raise SystemExit("Laborator Neluțu dezactivat implicit. Setați explicit NELUTU_LOCAL_DIALOGUE_EXPERIMENTAL=1.")
+
 import streamlit as st
 from nelutu_dialogue_adapter import answer_parent_dialogue
 from nelutu_local_dialogue import DialogueState
@@ -12,10 +17,6 @@ from nelutu_local_dialogue import DialogueState
 st.set_page_config(page_title="Laborator Neluțu (experimental)", page_icon="🤠")
 st.title("🤠 Laborator Neluțu — doar pentru testare")
 st.warning("Prototip izolat. Nu introduceți nume, parole, documente sau date ale elevilor.")
-if os.environ.get("NELUTU_LOCAL_DIALOGUE_EXPERIMENTAL") != "1":
-    st.info("Laboratorul este dezactivat implicit. Activarea necesită setarea explicită a variabilei de mediu.")
-    st.stop()
-
 if "preview_nelutu_state" not in st.session_state:
     st.session_state["preview_nelutu_state"] = DialogueState()
 if "preview_nelutu_reply" not in st.session_state:
