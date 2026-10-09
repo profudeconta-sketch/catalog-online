@@ -16,6 +16,22 @@ class AdapterTests(unittest.TestCase):
         second, state = answer_parent_dialogue("Dă-mi un exemplu", state=state)
         self.assertEqual(second.intent, "education_followup_purpose")
 
+    def test_three_turn_math_dialogue_in_adapter(self):
+        state = DialogueState()
+        for question in ("De ce învățăm la școală?", "Dă-mi un exemplu concret.", "Matematică. Mai explică-mi."):
+            answer, state = answer_parent_dialogue(question, state=state)
+        self.assertEqual(answer.intent, "education_followup_purpose")
+        self.assertIn("matematică", answer.text)
+        self.assertEqual(state.topic, "purpose")
+
+    def test_portal_switch_after_subject_discussion(self):
+        state = DialogueState()
+        for question in ("De ce învățăm la școală?", "Dă-mi un exemplu concret.", "Istorie. Mai explică-mi."):
+            _, state = answer_parent_dialogue(question, state=state)
+        answer, state = answer_parent_dialogue("Cum trimit scutirea medicală?", state=state)
+        self.assertEqual(answer.intent, "parent_guide_medical")
+        self.assertEqual(state.topic, "")
+
     def test_sensitive_portal_mix_overrides_regular_router(self):
         answer, state = answer_parent_dialogue("Nu mai vreau să trăiesc, unde este butonul din portal?")
         self.assertEqual(answer.intent, "sensitive_redirect")
