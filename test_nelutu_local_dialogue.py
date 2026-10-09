@@ -55,6 +55,20 @@ class LocalDialogueTests(unittest.TestCase):
         answer, state = reply("Îmi trebuie o altă tematică la școală")
         self.assertNotEqual(getattr(answer, "intent", ""), "clarification")
 
+    def test_followup_natural_phrase(self):
+        _, state = reply("De ce învățăm la școală?")
+        answer, state = reply("Poți să detaliezi?", state)
+        self.assertEqual(answer.intent, "education_followup_purpose")
+
+    def test_safety_variations(self):
+        for question in ("Nu mai vreau să trăiesc", "Mă hărțuiesc colegii",
+                         "Sunt bătut acasă", "Îmi este frică acasă"):
+            with self.subTest(question=question):
+                answer, state = reply(question)
+                self.assertEqual(answer.intent, "sensitive_redirect")
+                self.assertTrue(answer.serious)
+                self.assertEqual(state.topic, "")
+
     def test_oversized_input(self):
         result, state = reply("x" * 1201)
         self.assertEqual(result.intent, "clarification")
