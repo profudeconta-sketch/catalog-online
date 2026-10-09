@@ -18,6 +18,10 @@ jobs:
         with:
           python-version: '3.11'
       - name: Compile Neluțu modules
-        run: python -m py_compile nelutu_assistant.py nelutu_parent_guide.py nelutu_education_dialogue.py nelutu_pedagogy_library.py nelutu_portal_faq.py nelutu_local_dialogue.py test_nelutu_local_dialogue.py nelutu_dialogue_adapter.py test_nelutu_dialogue_adapter.py nelutu_dialogue_preview.py test_nelutu_preview_isolation.py
+        run: python -m py_compile nelutu_assistant.py nelutu_parent_guide.py nelutu_education_dialogue.py nelutu_pedagogy_library.py nelutu_portal_faq.py nelutu_local_dialogue.py test_nelutu_local_dialogue.py nelutu_dialogue_adapter.py test_nelutu_dialogue_adapter.py nelutu_dialogue_preview.py test_nelutu_preview_isolation.py test_nelutu_preview_ui.py
       - name: Run offline unit tests
         run: python -m unittest -v test_nelutu_intents.py test_nelutu_education_dialogue.py test_nelutu_pedagogy.py test_nelutu_portal_faq.py test_nelutu_local_dialogue.py test_nelutu_dialogue_adapter.py test_nelutu_preview_isolation.py
+      - name: Install Streamlit for isolated UI tests
+        run: python -m pip install 'streamlit>=1.35,<2'
+      - name: Run Streamlit AppTest UI checks
+        run: python -m unittest -v test_nelutu_preview_ui.py
