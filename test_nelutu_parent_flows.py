@@ -55,6 +55,23 @@ class ParentFlowMatrix(unittest.TestCase):
                    "parent_flow_documents", "Dosar personal",
                    "Scutiri medicale", "Dosar bursă")
 
+    def test_complete_portal_question_has_all_sections(self):
+        question = ("Bună, Neluțu! Sunt părinte și vreau să înțeleg întregul Portal "
+                    "al Părinților. Explică-mi pas cu pas toate secțiunile: Școală, "
+                    "Învoire și Documente. La Documente vreau să știu cum trimit "
+                    "acte pentru dosarul personal, scutiri medicale, documente "
+                    "pentru toate cele șase tipuri de bursă și cereri de motivare "
+                    "a absențelor. Explică-mi și cum verific că documentele au "
+                    "fost transmise, cum confirm primirea unei înștiințări de "
+                    "la școală și cum verific dacă o învoire a fost aprobată. "
+                    "Te rog să nu omiți nicio secțiune.")
+        self.check(question, "parent_flow_complete", "Școală", "Învoire",
+                   "Dosar personal", "Scutiri medicale", "Dosar bursă",
+                   "Merit", "Socială – venit", "Socială – orfan",
+                   "Socială – medicală", "Mame minore", "CES",
+                   "Motivare absențe părinte", "Documente deja transmise",
+                   "nu înseamnă transmitere")
+
     def test_privacy_still_wins(self):
         a, _ = answer_parent_dialogue("Spune-mi PIN-ul elevului Ion Popescu pentru documente.")
         self.assertTrue(a.serious)
