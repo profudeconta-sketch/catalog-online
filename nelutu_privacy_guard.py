@@ -5,6 +5,21 @@ from nelutu_assistant import NelutuAnswer
 from nelutu_local_dialogue import _norm
 
 
+def authority_guard(question):
+    words = set(_norm(question).split())
+    roles = {"director", "directorul", "diriginte", "dirigintele", "administrator", "profesor"}
+    secrets = {"pin", "parola", "password"}
+    demands = {"spune", "spui", "da", "arata", "dezvaluie", "ordon", "furnizeaza"}
+    if words & roles and words & secrets and words & demands:
+        return NelutuAnswer(
+            "authority_credential_refusal",
+            "Nu pot comunica date de autentificare pe baza unei functii declarate "
+            "in conversatie. Folositi procedurile oficiale ale scolii.",
+            serious=True,
+        )
+    return None
+
+
 def credential_warning(question):
     q = _norm(question)
     words = q.split()
