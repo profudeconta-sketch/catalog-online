@@ -35,7 +35,7 @@ if st.session_state["preview_nelutu_reply"] is not None:
     answer = st.session_state["preview_nelutu_reply"]
     st.markdown("**Neluțu:**")
     st.markdown(answer.text)
-if st.button("Șterge contextul conversației"):
+if st.button("Șterge contextul conversației", key="preview_nelutu_reset"):
     st.session_state["preview_nelutu_state"] = DialogueState()
     st.session_state["preview_nelutu_reply"] = None
     st.rerun()
