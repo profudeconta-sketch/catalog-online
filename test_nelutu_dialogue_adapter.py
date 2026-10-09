@@ -22,6 +22,16 @@ class AdapterTests(unittest.TestCase):
         self.assertTrue(answer.serious)
         self.assertEqual(state.topic, "")
 
+    def test_oversize_portal_question_is_rejected(self):
+        answer, state = answer_parent_dialogue("Cum trimit scutirea? " + "x" * 1300)
+        self.assertEqual(answer.intent, "clarification")
+        self.assertEqual(state.topic, "")
+
+    def test_sensitive_oversize_still_has_priority(self):
+        answer, state = answer_parent_dialogue("Nu mai vreau să trăiesc " + "x" * 1300)
+        self.assertEqual(answer.intent, "sensitive_redirect")
+        self.assertEqual(state.topic, "")
+
     def test_unrelated_portal_request_clears_context(self):
         _, state = answer_parent_dialogue("De ce învățăm la școală?")
         answer, state = answer_parent_dialogue("Unde trimit scutirea?", state=state)
