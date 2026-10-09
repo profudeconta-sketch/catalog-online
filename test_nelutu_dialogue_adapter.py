@@ -16,6 +16,12 @@ class AdapterTests(unittest.TestCase):
         second, state = answer_parent_dialogue("Dă-mi un exemplu", state=state)
         self.assertEqual(second.intent, "education_followup_purpose")
 
+    def test_sensitive_portal_mix_overrides_regular_router(self):
+        answer, state = answer_parent_dialogue("Nu mai vreau să trăiesc, unde este butonul din portal?")
+        self.assertEqual(answer.intent, "sensitive_redirect")
+        self.assertTrue(answer.serious)
+        self.assertEqual(state.topic, "")
+
     def test_unrelated_portal_request_clears_context(self):
         _, state = answer_parent_dialogue("De ce învățăm la școală?")
         answer, state = answer_parent_dialogue("Unde trimit scutirea?", state=state)
