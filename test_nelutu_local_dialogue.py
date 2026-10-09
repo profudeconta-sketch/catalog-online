@@ -69,6 +69,15 @@ class LocalDialogueTests(unittest.TestCase):
                 self.assertTrue(answer.serious)
                 self.assertEqual(state.topic, "")
 
+    def test_safety_before_reset_or_size_limit(self):
+        for question in ("Schimbăm subiectul, dar nu mai vreau să trăiesc",
+                         "Nu mai vreau să trăiesc " + "x" * 1300):
+            with self.subTest(question=question[:45]):
+                answer, state = reply(question)
+                self.assertEqual(answer.intent, "sensitive_redirect")
+                self.assertTrue(answer.serious)
+                self.assertEqual(state.topic, "")
+
     def test_oversized_input(self):
         result, state = reply("x" * 1201)
         self.assertEqual(result.intent, "clarification")
