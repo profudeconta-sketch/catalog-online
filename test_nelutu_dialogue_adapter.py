@@ -42,6 +42,16 @@ class AdapterTests(unittest.TestCase):
         self.assertNotIn("1234", answer.text)
         self.assertEqual(state.topic, "")
 
+    def test_forgotten_pin_guidance(self):
+        answer, _ = answer_parent_dialogue("Am uitat PIN-ul pentru portalul părinților. Ce trebuie să fac?")
+        self.assertEqual(answer.intent, "access_forgotten")
+        self.assertIn("dirigintele", answer.text)
+
+    def test_password_change_guidance(self):
+        answer, _ = answer_parent_dialogue("Unde schimb parola în portal?")
+        self.assertEqual(answer.intent, "access_change")
+        self.assertIn("Nu pot confirma", answer.text)
+
     def test_password_help_is_not_blocked(self):
         answer, state = answer_parent_dialogue("Unde schimb parola în portal?")
         self.assertNotEqual(answer.intent, "credential_privacy")
