@@ -53,6 +53,55 @@ def answer(question):
     if not portal:
         return None
 
+    # Întrebările de ansamblu au prioritate față de orice subiect individual.
+    comprehensive = _has(q, "toate sectiunile", "intregul portal", "tot portalul",
+                         "ghid complet", "tutorial complet", "cap coada",
+                         "nu omite nicio sectiune", "toate functionalitatile")
+    multi_section = sum((
+        _has(q, "invoir", "bilet de voie"),
+        _has(q, "scutir", "medical"),
+        _has(q, "bursa", "burse"),
+        _has(q, "dosar personal", "acte"),
+        _has(q, "motivare", "absent"),
+        _has(q, "instiint", "scoala"),
+    )) >= 3 and _has(q, "explica", "prezinta", "pas cu pas", "vreau sa inteleg")
+    if comprehensive or multi_section:
+        msg = (PREFIX +
+               "**Portalul are trei secțiuni principale: 🔔 Școală, 🚪 Învoire și 📁 Documente.**\\n\\n"
+               "**1. 🔔 Școală:** alegi înștiințarea și apeși "
+               "**«📄 Deschide documentul și confirmă luarea la cunoștință»**. "
+               "Prima accesare se înregistrează cu data și ora și este vizibilă dirigintelui. "
+               "Notificarea WhatsApp nu înlocuiește confirmarea din portal.\\n\\n"
+               "**2. 🚪 Învoire:** soliciți plecarea numai pentru ziua curentă, "
+               "cu motiv și oră viitoare. Trimiți cererea și urmărești starea: "
+               "**În așteptare** nu înseamnă **Aprobată**. După aprobare apare "
+               "biletul de voie; dacă ora trece fără aprobare, solicitarea "
+               "poate expira și este considerată refuzată. Biletul nu motivează absențele.\\n\\n"
+               "**3. 📁 Documente → 👤 Dosar personal:** alegi tipul "
+               "(carte de identitate, dovadă adresă, certificat de naștere sau Diverse), "
+               "selectezi PDF/JPG/JPEG/PNG și apeși **📤 Salvează și trimite**.\\n\\n"
+               "**4. 📁 Documente → 🏥 Scutiri medicale:** alegi tipul, "
+               "încarci documentul și apeși **📤 Salvează și trimite**.\\n\\n"
+               "**5. 📁 Documente → 🎓 Dosar bursă:** alegi una dintre cele șase "
+               "secțiuni: **Merit, Socială – venit, Socială – orfan, "
+               "Socială – medicală, Mame minore, CES**. Alegi tipul actului "
+               "(de exemplu: " + BURSA_DOCUMENTE + "), încarci fișierul și "
+               "apeși **📤 Salvează și trimite**. Depunerea actelor nu "
+               "înseamnă aprobarea bursei.\\n\\n"
+               "**6. 📁 Documente → 📝 Motivare absențe părinte:** alegi "
+               "părintele, data și numărul de ore, verifici plafonul disponibil. "
+               "Previzualizarea PDF nu transmite cererea. Numai **📨 Generează, "
+               "salvează și trimite**, urmat de confirmarea portalului, "
+               "înregistrează cererea ca depusă.\\n\\n"
+               "**7. Verificarea transmiterii:** la documentele încărcate, "
+               "simpla alegere a fișierului **nu înseamnă transmitere**. "
+               "Aștepți mesajul «Documentul a fost salvat și înregistrat. "
+               "Transmiterea a fost confirmată». Apoi intri la **📁 Documente "
+               "→ Documente deja transmise dirigintelui**, selectezi "
+               "documentul și îl poți descărca. Învoirea se verifică separat "
+               "după starea solicitării; înștiințările după confirmarea accesării.")
+        return NelutuAnswer("parent_flow_complete", msg + END)
+
     if _has(q, "invoir", "bilet de voie", "plece mai devreme", "pleaca mai devreme"):
         msg = (PREFIX + "deschizi **🚪 Învoire**, completezi solicitarea "
                "pentru **ziua curentă**, alegi motivul și o oră viitoare, "
