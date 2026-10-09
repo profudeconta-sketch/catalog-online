@@ -1,5 +1,6 @@
 """Teste de compatibilitate ale adaptorului, fără Streamlit și fără date reale."""
 import unittest
+from test_nelutu_parent_flows import ParentFlowMatrix
 from nelutu_dialogue_adapter import answer_parent_dialogue
 from nelutu_local_dialogue import DialogueState
 
