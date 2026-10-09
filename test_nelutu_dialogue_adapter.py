@@ -25,6 +25,30 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("matematică", answer.text)
         self.assertEqual(state.topic, "purpose")
 
+    def test_29_natural_math_answer_followup(self):
+        first, state = answer_parent_dialogue("De ce învățăm la școală?")
+        self.assertEqual(state.topic, "purpose")
+        answer, state = answer_parent_dialogue(
+            "Matematica, pentru că m-a învățat să calculez și să gândesc logic. Poți să-mi dai un exemplu concret?",
+            state=state,
+        )
+        self.assertEqual(answer.intent, "education_followup_purpose")
+        self.assertIn("100 de lei", answer.text)
+        self.assertNotIn("ceață", answer.text)
+        self.assertEqual(state.topic, "purpose")
+
+    def test_29_portal_request_still_overrides_education_context(self):
+        _, state = answer_parent_dialogue("De ce învățăm la școală?")
+        answer, state = answer_parent_dialogue("Cum trimit scutirea medicală?", state=state)
+        self.assertEqual(answer.intent, "parent_flow_medical")
+        self.assertEqual(state.topic, "")
+
+    def test_29_sensitive_request_still_overrides_education_context(self):
+        _, state = answer_parent_dialogue("De ce învățăm la școală?")
+        answer, state = answer_parent_dialogue("Nu mai vreau să trăiesc", state=state)
+        self.assertTrue(answer.serious)
+        self.assertEqual(state.topic, "")
+
     def test_portal_switch_after_subject_discussion(self):
         state = DialogueState()
         for question in ("De ce învățăm la școală?", "Dă-mi un exemplu concret.", "Istorie. Mai explică-mi."):

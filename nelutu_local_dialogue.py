@@ -91,6 +91,16 @@ def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnsw
         }
         subject = re.sub(r"^(?:la |despre )", "", q)
         subject = re.sub(r"(?: mai explica(?: mi)?| explica(?: mi)?| da mi un exemplu| mai detaliaza)$", "", subject)
+        # Recunoastem si fraze complete despre disciplina, nu doar numele izolat.
+        requested_example = any(marker in q for marker in (
+            "exemplu", "explica", "detalia", "arata", "cum folos", "la ce ajuta"
+        ))
+        mentioned = next((
+            name for name in sorted(subject_examples, key=len, reverse=True)
+            if re.search(r"(?<![a-z0-9])" + re.escape(name) + r"(?![a-z0-9])", q)
+        ), None)
+        if mentioned is not None and requested_example:
+            subject = mentioned
         if subject in subject_examples:
             return NelutuAnswer("education_followup_purpose",
                 "No, uite un exemplu concret. 🤠 " + subject_examples[subject] +

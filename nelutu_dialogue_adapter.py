@@ -24,6 +24,12 @@ def answer_parent_dialogue(question, context=None, state=None):
     flow = parent_flow_guidance(question)
     if flow is not None:
         return flow, DialogueState()
+    # Continuarile educationale deja stabilite au prioritate fata de fallback-ul
+    # vechi; fluxurile portalului si filtrele de confidentialitate raman primele.
+    if state.topic == "purpose":
+        local_followup, next_state = local_reply(question, state)
+        if local_followup is not None and local_followup.intent.startswith("education_followup_"):
+            return local_followup, next_state
     base = answer_parent(question, context)
     # Privacy-sensitive requests require a dedicated pre-routing guard.
 
