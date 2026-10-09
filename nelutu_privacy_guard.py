@@ -9,7 +9,7 @@ def guard(question):
     words = set(_norm(question).split())
     personal = bool(words.intersection({
         "elevul", "eleva", "elevului", "elevei", "copilului",
-        "fiul", "fiica", "copilul"
+        "fiul", "fiica", "copilul", "baiatul", "fata"
     }))
     records = bool(words.intersection({
         "nota", "note", "notele", "media", "medie", "mediile",
