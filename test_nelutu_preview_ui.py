@@ -22,7 +22,7 @@ class PreviewUITests(unittest.TestCase):
             app.button(key="FormSubmitter:preview_nelutu_form-Întreabă-l pe Neluțu").click().run()
             self.assertFalse(app.exception, str(list(app.exception)))
             self.assertEqual(app.session_state["preview_nelutu_reply"].intent, "education_followup_purpose")
-            app.button(key="Șterge contextul conversației").click().run()
+            app.button(key="preview_nelutu_reset").click().run()
             self.assertFalse(app.exception, str(list(app.exception)))
             self.assertEqual(app.session_state["preview_nelutu_state"].topic, "")
             self.assertIsNone(app.session_state["preview_nelutu_reply"])
