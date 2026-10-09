@@ -1,6 +1,5 @@
 """Probe izolate, fără apeluri externe sau date reale."""
 import unittest
-from unittest.mock import patch
 
 from nelutu_local_dialogue import DialogueState, reply, contract
 
@@ -40,6 +39,21 @@ class LocalDialogueTests(unittest.TestCase):
         self.assertFalse(c["reads_student_records"])
         self.assertFalse(c["stores_message_history"])
         self.assertFalse(c["generative_ai"])
+
+    def test_sensitive_question_overrides_education(self):
+        answer, state = reply("Copilul mă amenință și nu vrea să învețe")
+        self.assertEqual(answer.intent, "sensitive_redirect")
+        self.assertTrue(answer.serious)
+        self.assertEqual(state.topic, "")
+
+    def test_non_string_fails_closed(self):
+        answer, state = reply(None)
+        self.assertIsNone(answer)
+        self.assertEqual(state.topic, "")
+
+    def test_reset_not_substring(self):
+        answer, state = reply("Îmi trebuie o altă tematică la școală")
+        self.assertNotEqual(getattr(answer, "intent", ""), "clarification")
 
     def test_oversized_input(self):
         result, state = reply("x" * 1201)
