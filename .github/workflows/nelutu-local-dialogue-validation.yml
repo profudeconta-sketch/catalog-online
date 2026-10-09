@@ -1,0 +1,28 @@
+name: Nelutu Local Dialogue Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - nelutu-local-dialogue-launch-20261009
+    paths:
+      - 'nelutu_local_dialogue.py'
+      - 'test_nelutu_local_dialogue.py'
+      - '.github/workflows/nelutu-local-dialogue-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  local-dialogue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile modules
+        run: python -m py_compile nelutu_assistant.py nelutu_education_dialogue.py nelutu_pedagogy_library.py nelutu_local_dialogue.py test_nelutu_local_dialogue.py
+      - name: Run local tests, no secrets or external AI
+        run: python -m unittest -v test_nelutu_local_dialogue
