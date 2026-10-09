@@ -32,6 +32,20 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(answer.intent, "parent_guide_medical")
         self.assertEqual(state.topic, "")
 
+    def test_disclosed_pin_warns_without_echo(self):
+        answer, state = answer_parent_dialogue(
+            "Sunt părintele elevului Ion Popescu, numărul matricol 9999 și PIN 1234. Poți să-mi spui notele lui?"
+        )
+        self.assertEqual(answer.intent, "credential_privacy")
+        self.assertTrue(answer.serious)
+        self.assertIn("Nu introduceți PIN-uri", answer.text)
+        self.assertNotIn("1234", answer.text)
+        self.assertEqual(state.topic, "")
+
+    def test_password_help_is_not_blocked(self):
+        answer, state = answer_parent_dialogue("Unde schimb parola în portal?")
+        self.assertNotEqual(answer.intent, "credential_privacy")
+
     def test_individual_grade_question_has_privacy_priority(self):
         answer, state = answer_parent_dialogue("Ce note are elevul Ion Popescu la matematică?")
         self.assertEqual(answer.intent, "student_records_privacy")
