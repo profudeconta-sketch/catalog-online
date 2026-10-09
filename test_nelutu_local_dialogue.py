@@ -13,6 +13,12 @@ class LocalDialogueTests(unittest.TestCase):
         self.assertEqual(second.intent, "education_followup_purpose")
         self.assertEqual(next_state.topic, "purpose")
 
+    def test_real_browser_followup_with_concret(self):
+        _, state = reply("De ce învățăm la școală?")
+        answer, state = reply("Dă-mi un exemplu concret.", state)
+        self.assertEqual(answer.intent, "education_followup_purpose")
+        self.assertEqual(state.topic, "purpose")
+
     def test_new_topic_replaces_previous(self):
         _, state = reply("De ce învățăm la școală?")
         result, state = reply("Ce meserie ar putea învăța?", state)
