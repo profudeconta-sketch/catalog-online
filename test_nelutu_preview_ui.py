@@ -47,6 +47,19 @@ class PreviewUITests(unittest.TestCase):
                 self.assertFalse(app.exception, str(list(app.exception)))
             self.assertEqual(app.session_state["preview_nelutu_reply"].intent, "education_followup_purpose")
 
+    def test_29_exact_real_portal_conversation(self):
+        with patch.dict(os.environ, {"NELUTU_LOCAL_DIALOGUE_EXPERIMENTAL": "1"}):
+            app = self.make_app()
+            for question in (
+                "De ce învățăm la școală?",
+                "Matematica, pentru că m-a învățat să calculez și să gândesc logic. Poți să-mi dai un exemplu concret?",
+            ):
+                app.text_input[0].set_value(question)
+                app.button(key="FormSubmitter:preview_nelutu_form-Întreabă-l pe Neluțu").click().run()
+                self.assertFalse(app.exception, str(list(app.exception)))
+            self.assertEqual(app.session_state["preview_nelutu_reply"].intent, "education_followup_purpose")
+            self.assertIn("100 de lei", app.session_state["preview_nelutu_reply"].text)
+
     def test_portal_question_resets_educational_topic(self):
         with patch.dict(os.environ, {"NELUTU_LOCAL_DIALOGUE_EXPERIMENTAL": "1"}):
             app = self.make_app()
