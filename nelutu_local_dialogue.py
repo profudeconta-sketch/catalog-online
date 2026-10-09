@@ -77,13 +77,24 @@ def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnsw
         return fresh, DialogueState(topic, 1 if topic != state.topic else min(state.turns + 1, 20))
     # Răspuns la disciplina cerută în cadrul temei educației, fără istoric de mesaje.
     # Nu extindem această regulă la întrebări necunoscute despre elevi.
-    if state.topic == "purpose" and state.turns >= 1 and re.fullmatch(
-        r"(?:la )?matematica(?: mai explica(?: mi)?| explica(?: mi)?| da mi un exemplu)?", q
-    ):
-        return NelutuAnswer("education_followup_purpose",
-            "No, la matematică putem folosi procentele ca să verificăm o reducere: "
-            "dacă un obiect costă 100 de lei și reducerea este 20%, plătim 80 de lei. "
-            "Așe vedem cum ne ajută lecția la cumpărături. Vrei să încercăm și un buget simplu?"), DialogueState("purpose", min(state.turns + 1, 20))
+    # Exemple sigure pentru discipline menționate ca răspuns la întrebarea lui Neluțu.
+    # Se potrivesc doar răspunsurile scurte despre disciplină, nu întrebările despre elevi.
+    if state.topic == "purpose" and state.turns >= 1:
+        subject_examples = {
+            "matematica": "La matematică, un preț de 100 de lei redus cu 20% ajunge la 80 de lei. Așe verificăm o ofertă.",
+            "romana": "La limba română, exersăm să citim atent un contract și să scriem un mesaj clar și respectuos.",
+            "limba romana": "La limba română, exersăm să citim atent un contract și să scriem un mesaj clar și respectuos.",
+            "istorie": "La istorie, comparăm sursele și învățăm să verificăm afirmațiile înainte să le credem.",
+            "fizica": "La fizică, înțelegem de ce centura de siguranță contează când un vehicul frânează brusc.",
+            "engleza": "La engleză, putem înțelege instrucțiuni, conversații și informații utile într-o călătorie.",
+            "chimie": "La chimie, învățăm de ce nu amestecăm produse de curățenie fără să citim etichetele."
+        }
+        subject = re.sub(r"^(?:la |despre )", "", q)
+        subject = re.sub(r"(?: mai explica(?: mi)?| explica(?: mi)?| da mi un exemplu| mai detaliaza)$", "", subject)
+        if subject in subject_examples:
+            return NelutuAnswer("education_followup_purpose",
+                "No, uite un exemplu concret. 🤠 " + subject_examples[subject] +
+                " Vrei să explorăm și o altă situație practică?"), DialogueState("purpose", min(state.turns + 1, 20))
     if state.topic in _FOLLOWUPS and (q in _FOLLOWUP_MARKERS or q.startswith("poti sa detaliezi") or q.startswith("mai explica") or q.startswith("da mi un exemplu ")):
         if state.turns >= 3:
             return NelutuAnswer("clarification", "No, ca să nu repet aceeași poveste, spuneți-mi ce aspect anume doriți să aprofundăm."), DialogueState(state.topic, state.turns)
