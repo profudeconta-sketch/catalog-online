@@ -19,7 +19,7 @@ def _school_topic(question):
         return NelutuAnswer("education_accounting", "No, la Bazele contabilității învățăm despre bunuri, datorii, capitaluri, venituri și cheltuieli, documente justificative și înregistrarea operațiunilor unei firme. Pe scurt, cum urmărim corect activitatea economică.")
     if ("turist" in q or "hotel" in words) and ({"structuri", "primire", "facem", "invatam"} & words):
         return NelutuAnswer("education_tourism", "No, la Structuri de primire turistică învățăm despre hoteluri, pensiuni, clasificare, servicii, rezervări și primirea oaspeților. Ospitalitatea bună se învață, nu-i numai un zâmbet la recepție!")
-    if "fizica" in words or "fizicii" in words:
+    # Educația fizică (sportul) nu este disciplina Fizică.\n    if ({"educatie", "educatia"} & words and {"fizica", "fizice"} & words) or "sport" in words:\n        return None  # Biblioteca disciplinelor oferă explicația despre mișcare și sănătate.\n    if "fizica" in words or "fizicii" in words:
         return NelutuAnswer("education_physics", "No, fizica explică mișcarea, forțele, energia, căldura și electricitatea. De aceea pricepem cum frânează un vehicul, de ce ne protejează centura și cum funcționează aparatele.")
     if "chimie" in words or "chimia" in words or "chimiei" in words:
         return NelutuAnswer("education_chemistry", "No, chimia ne ajută să înțelegem substanțele și transformările lor: gătitul, curățenia, apa, medicamentele și protejarea mediului. Învățăm și cum să folosim produsele în siguranță.")
