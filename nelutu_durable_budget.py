@@ -21,7 +21,11 @@ class DurableBudget:
             raise ValueError("An absolute, dedicated database path is required")
         if type(limit) is not int or limit < 1:
             raise ValueError("A positive integer limit is required")
-        self.path = str(Path(path).resolve())
+        requested = Path(path)
+        # Refuse symbolic links to avoid writing quota data into unrelated storage.
+        if requested.is_symlink() or requested.parent.is_symlink():
+            raise ValueError("Symbolic links are not allowed for quota storage")
+        self.path = str(requested.resolve())
         self.limit = limit
 
     def _connect(self):
