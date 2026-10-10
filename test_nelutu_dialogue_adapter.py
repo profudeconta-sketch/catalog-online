@@ -690,7 +690,8 @@ class FixedTransportStage23Tests(unittest.TestCase):
         from urllib.error import HTTPError
         from nelutu_gemini_fixed_transport import send_fixed_exchange
         opener = Mock(side_effect=HTTPError("https://example.invalid", 429, "quota", {}, None))
-        exchange = (("user", "Salut!"),)
+        from nelutu_gemini_fixed_paraphrase import PARAPHRASE_EXCHANGE
+        exchange = PARAPHRASE_EXCHANGE
         for confirmed in (False, True):
             result = send_fixed_exchange(
                 exchange, api_key="dummy", enabled=True,
@@ -698,6 +699,29 @@ class FixedTransportStage23Tests(unittest.TestCase):
             )
             self.assertIsNone(result)
         self.assertEqual(opener.call_count, 1)
+
+
+    def test_stage28_rejects_unapproved_content_before_network(self):
+        from unittest.mock import Mock
+        from nelutu_gemini_fixed_transport import send_fixed_exchange, is_approved_fixed_exchange
+        from nelutu_gemini_fixed_paraphrase import PARAPHRASE_EXCHANGE
+        opener = Mock()
+        self.assertTrue(is_approved_fixed_exchange(PARAPHRASE_EXCHANGE))
+        blocked = (
+            (("user", "Salut!"),),
+            PARAPHRASE_EXCHANGE + (("user", "Date reale"),),
+            (("user", "Date reale"),) + PARAPHRASE_EXCHANGE,
+            list(PARAPHRASE_EXCHANGE),
+            (),
+        )
+        for exchange in blocked:
+            with self.subTest(exchange=repr(exchange)[:60]):
+                self.assertFalse(is_approved_fixed_exchange(exchange))
+                self.assertIsNone(send_fixed_exchange(
+                    exchange, api_key="dummy", enabled=True,
+                    confirmed=True, temperature=0.4, opener=opener,
+                ))
+        opener.assert_not_called()
 
 
 if __name__ == "__main__":
