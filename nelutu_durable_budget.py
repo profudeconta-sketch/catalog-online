@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 MAX_DURABLE_ATTEMPTS = 12
@@ -31,7 +32,7 @@ class DurableBudget:
     def reserve(self) -> bool:
         """Reserve exactly one attempt before the network call."""
         try:
-            with self._connect() as db:
+            with closing(self._connect()) as db:
                 db.execute("BEGIN IMMEDIATE")
                 db.execute(
                     "CREATE TABLE IF NOT EXISTS gemini_budget "
@@ -51,7 +52,7 @@ class DurableBudget:
     def remaining(self) -> int:
         """Return zero if storage cannot be verified."""
         try:
-            with self._connect() as db:
+            with closing(self._connect()) as db:
                 row = db.execute(
                     "SELECT used FROM gemini_budget WHERE id=1"
                 ).fetchone()
