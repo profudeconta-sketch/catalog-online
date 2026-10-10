@@ -359,17 +359,31 @@ tone_examples = (
 tone_choice = st.selectbox("Situația fictivă", range(3), format_func=lambda i: tone_examples[i][0])
 tone_prompt = tone_examples[tone_choice][1]
 st.code(tone_prompt, language=None)
-tone_consent = st.checkbox("Confirm transmiterea exclusivă a întrebării afișate către Gemini.", key="tone_consent")
-if st.button("Testează tonul", disabled=not tone_consent):
+# Stage 19: cap actual Stage 18 calls per Streamlit session, with no reset button.
+from nelutu_demo_budget import DemoBudget
+if "nelutu_live_tone_budget" not in st.session_state:
+    st.session_state["nelutu_live_tone_budget"] = DemoBudget()
+live_tone_budget = st.session_state["nelutu_live_tone_budget"]
+st.caption("Protecție locală pentru acest test: cel mult trei încercări Gemini pe sesiune, inclusiv cele eșuate.")
+st.write("Încercări Gemini disponibile în testul de ton:", live_tone_budget.remaining())
+tone_consent = st.checkbox(
+    "Confirm transmiterea exclusivă a întrebării afișate către Gemini.",
+    key="tone_consent_" + str(tone_choice),
+)
+if st.button("Testează tonul", disabled=not tone_consent or not live_tone_budget.allowed()):
     try:
         tone_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
     except (FileNotFoundError, KeyError, AttributeError):
         tone_key = None
-    if tone_key:
+    if not tone_key:
+        st.error("Cheia de test lipsește.")
+    elif live_tone_budget.consume():
         answer = generate(tone_prompt, api_key=tone_key, enabled=True, public_text_confirmed=tone_consent)
         st.write(answer if answer else "Serviciul nu a răspuns; nu se reîncearcă automat.")
     else:
-        st.error("Cheia de test lipsește.")
+        st.warning("Limita locală a fost atinsă.")
+if not live_tone_budget.allowed():
+    st.warning("Testul Gemini de ton este blocat pentru această sesiune după trei încercări.")
 
 st.divider()
 st.subheader("Etapa 19: buget local de apeluri — demonstrație fără Gemini")
