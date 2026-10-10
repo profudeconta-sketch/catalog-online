@@ -117,5 +117,42 @@ class Stage31IntegrationBoundaryTests(unittest.TestCase):
         self.assertEqual(sum(results), 3)
 
 
+class Stage36OutboundBoundaryTests(unittest.TestCase):
+    """Offline checks of all approved single-message scenarios."""
+
+    def test_only_nine_exact_public_prompts_are_allowed(self):
+        import ast
+        from pathlib import Path
+        from nelutu_gemini_demo import DEMO_PROMPTS
+        tree = ast.parse(Path(__file__).with_name("nelutu_gemini_preview.py").read_text(encoding="utf-8"))
+        assignments = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id in ("style_prompt", "tone_examples"):
+                        assignments[target.id] = ast.literal_eval(node.value)
+        approved = DEMO_PROMPTS + (assignments["style_prompt"],) + tuple(
+            message for _, message in assignments["tone_examples"]
+        )
+        self.assertEqual(len(approved), 9)
+        self.assertEqual(len(set(approved)), 9)
+        for message in approved:
+            with self.subTest(message=message):
+                self.assertTrue(gemini.is_approved_demo_message(message))
+                self.assertFalse(gemini.is_approved_demo_message(message + " "))
+        for message in ("Salut, Neluțu!", "Numele unui elev", "Bună ziua!"):
+            self.assertFalse(gemini.is_approved_demo_message(message))
+
+    def test_unapproved_messages_are_rejected_before_network(self):
+        with patch.object(gemini.request, "urlopen") as opener:
+            self.assertIsNone(gemini.generate(
+                "Bună ziua!", api_key="dummy", enabled=True,
+                public_text_confirmed=True))
+            self.assertEqual(gemini.diagnose_status(
+                "Bună ziua!", api_key="dummy", enabled=True,
+                public_text_confirmed=True), "blocked")
+            opener.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
