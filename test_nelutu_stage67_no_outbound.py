@@ -39,8 +39,8 @@ class NoOutboundOnDenialTests(unittest.TestCase):
                 self.assertEqual(sent, [])
                 self.assertEqual(session.used, 0)
                 self.assertEqual(instance.remaining(), 12)
-                self.assertEqual(durable.remaining(), 0)
                 self.assertFalse(Path(durable.path).exists())
+                self.assertEqual(durable.remaining(), 0)
 
 
 if __name__ == "__main__":
