@@ -5,6 +5,7 @@ from nelutu_parent_guide import answer_parent
 from nelutu_parent_flows import answer as parent_flow_guidance
 from nelutu_local_dialogue import DialogueState, reply as local_reply, _norm
 from nelutu_education_dialogue import educational_reply
+from nelutu_subject_importance import subject_reply
 from nelutu_privacy_guard import guard as privacy_guard, credential_warning, access_guidance, authority_guard, director_class_guidance, third_party_credential_guard
 
 def _school_topic(question):
@@ -67,6 +68,9 @@ def answer_parent_dialogue(question, context=None, state=None):
             return local_followup, next_state
     if state.topic == "social_wait" and social is not None and social.intent == "smalltalk_followup":
         return social, social_state
+    subject = subject_reply(question)
+    if subject is not None:
+        return subject, DialogueState()
     base = answer_parent(question, context)
     # Privacy-sensitive requests require a dedicated pre-routing guard.
 

@@ -226,5 +226,25 @@ class FriendlyGreetingTests(unittest.TestCase):
         answer, _ = answer_parent_dialogue("cum trimit cererea de motivare a absentelor?")
         self.assertEqual(answer.intent, "parent_flow_excuse")
 
+class SubjectImportanceTests(unittest.TestCase):
+    def test_subjects_and_modules(self):
+        examples = {
+            "la ce foloseste biologia": "subject_biologia",
+            "de ce invatam geografie": "subject_geografia",
+            "la ce ajuta matematica": "subject_matematica",
+            "care este importanta modulului M2": "subject_m2",
+            "la ce foloseste M4": "subject_m4",
+            "de ce facem instruire practica": "subject_m5",
+            "la ce ajuta M6": "subject_m6",
+        }
+        for question, intent in examples.items():
+            with self.subTest(question=question):
+                answer, _ = answer_parent_dialogue(question)
+                self.assertEqual(answer.intent, intent)
+
+    def test_unrelated_portal_question_unchanged(self):
+        answer, _ = answer_parent_dialogue("cum trimit cererea de motivare a absentelor?")
+        self.assertEqual(answer.intent, "parent_flow_excuse")
+
 if __name__ == "__main__":
     unittest.main()
