@@ -10,8 +10,9 @@ from pathlib import Path
 from nelutu_durable_budget import DurableBudget
 
 
-def _reserve_in_process(path):
-    return DurableBudget(path, limit=12).reserve()
+def _reserve_in_process(spec):
+    path, limit = spec
+    return DurableBudget(path, limit=limit).reserve()
 
 
 class DurableBudgetTests(unittest.TestCase):
@@ -46,7 +47,7 @@ class DurableBudgetTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / "quota.sqlite3")
             with multiprocessing.get_context("spawn").Pool(processes=4) as pool:
-                results = pool.map(_reserve_in_process, [path] * 24)
+                results = pool.map(_reserve_in_process, [(path, 12)] * 24)
             self.assertEqual(sum(results), 12)
             self.assertEqual(DurableBudget(path).remaining(), 0)
 
@@ -55,7 +56,7 @@ class DurableBudgetTests(unittest.TestCase):
             path = str(Path(directory) / "quota.sqlite3")
             self.assertTrue(DurableBudget(path, limit=2).reserve())
             with multiprocessing.get_context("spawn").Pool(processes=1) as pool:
-                self.assertTrue(pool.apply(_reserve_in_process, (path,)))
+                self.assertTrue(pool.apply(_reserve_in_process, ((path, 2),)))
                 self.assertFalse(pool.apply(_reserve_in_process, (path,)))
             self.assertFalse(DurableBudget(path, limit=2).reserve())
 
