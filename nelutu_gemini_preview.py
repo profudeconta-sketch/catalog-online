@@ -11,7 +11,22 @@ from nelutu_gemini_demo import DEMO_PROMPTS, demo_prompt
 from nelutu_gemini_optional import diagnose_status
 
 st.set_page_config(page_title="Neluțu — test Gemini izolat", page_icon="🤠")
+from nelutu_demo_budget import DemoBudget
+if "nelutu_shared_gemini_budget" not in st.session_state:
+    st.session_state["nelutu_shared_gemini_budget"] = DemoBudget()
+shared_budget = st.session_state["nelutu_shared_gemini_budget"]
+
+def reserve_gemini_attempt() -> bool:
+    """Reserve a test attempt before any possible network request."""
+    if shared_budget.consume():
+        return True
+    st.warning("Limita comună de trei încercări Gemini a fost atinsă.")
+    return False
+
+
 st.title("🤠 Neluțu — test Gemini izolat")
+st.caption("Buget comun pentru toate testele Gemini: maximum 3 încercări per sesiune, inclusiv diagnosticul. Încercările sunt rezervate înaintea verificării cheii; nu există reîncercare automată.")
+st.write("Încercări Gemini rămase:", shared_budget.remaining())
 st.info(
     "Această pagină este doar pentru testare. Nu este conectată la catalog, "
     "portalul părinților sau documentele școlare."
@@ -26,7 +41,7 @@ selection = st.selectbox("Alege o întrebare demonstrativă", list(range(len(DEM
                          format_func=lambda index: DEMO_PROMPTS[index])
 st.code(DEMO_PROMPTS[selection], language=None)
 confirmed = st.checkbox("Confirm că sunt de acord să transmit această întrebare demonstrativă către Google.")
-if st.button("Testează Gemini", disabled=not confirmed):
+if st.button("Testează Gemini", disabled=not confirmed) and reserve_gemini_attempt():
     try:
         key = st.secrets.get("NELUTU_GEMINI_API_KEY")
     except (FileNotFoundError, KeyError, AttributeError):
@@ -41,7 +56,7 @@ if st.button("Testează Gemini", disabled=not confirmed):
         else:
             st.info("Gemini nu a răspuns. Poți verifica separat categoria erorii mai jos.")
 
-if st.button("Diagnostic sigur (un apel separat)", disabled=not confirmed):
+if st.button("Diagnostic sigur (un apel separat)", disabled=not confirmed) and reserve_gemini_attempt():
     try:
         key = st.secrets.get("NELUTU_GEMINI_API_KEY")
     except (FileNotFoundError, KeyError, AttributeError):
@@ -61,7 +76,7 @@ context_confirmed = st.checkbox(
     "Confirm transmiterea celor trei replici demonstrative către Google.",
     key="fixed_context_consent",
 )
-if st.button("Testează memoria demonstrativă", disabled=not context_confirmed):
+if st.button("Testează memoria demonstrativă", disabled=not context_confirmed) and reserve_gemini_attempt():
     from nelutu_gemini_fixed_context import fixed_context_test
     try:
         context_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
@@ -88,7 +103,7 @@ multi_confirmed = st.checkbox(
     "Confirm transmiterea celor cinci replici demonstrative către Google.",
     key="fixed_multiturn_consent",
 )
-if st.button("Testează dialogul extins", disabled=not multi_confirmed):
+if st.button("Testează dialogul extins", disabled=not multi_confirmed) and reserve_gemini_attempt():
     try:
         multi_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
     except (FileNotFoundError, KeyError, AttributeError):
@@ -114,7 +129,7 @@ paraphrase_confirmed = st.checkbox(
     "Confirm transmiterea celor trei replici fictive către Google.",
     key="fixed_paraphrase_consent",
 )
-if st.button("Testează reformularea", disabled=not paraphrase_confirmed):
+if st.button("Testează reformularea", disabled=not paraphrase_confirmed) and reserve_gemini_attempt():
     try:
         paraphrase_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
     except (FileNotFoundError, KeyError, AttributeError):
@@ -137,7 +152,7 @@ for role, message in TOPIC_RETURN_EXCHANGE:
     st.write(("Întrebare: " if role == "user" else "Răspuns demonstrativ: ") + message)
 st.caption("Sunt trimise doar replicile fictive afișate.")
 topic_consent = st.checkbox("Confirm transmiterea replicilor fictive către Google.", key="topic_return_consent")
-if st.button("Testează revenirea la subiect", disabled=not topic_consent):
+if st.button("Testează revenirea la subiect", disabled=not topic_consent) and reserve_gemini_attempt():
     try:
         topic_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
     except (FileNotFoundError, KeyError, AttributeError):
@@ -307,7 +322,7 @@ stage16_consent = st.checkbox(
     "Etapa 16: confirm transmiterea exclusivă a replicilor fictive afișate către Google Gemini.",
     key="nelutu_stage16_consent",
 )
-if st.button("Etapa 16 — testează răspunsul contextual Gemini", disabled=not stage16_consent):
+if st.button("Etapa 16 — testează răspunsul contextual Gemini", disabled=not stage16_consent) and reserve_gemini_attempt():
     try:
         stage16_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
     except (FileNotFoundError, KeyError, AttributeError):
@@ -333,7 +348,7 @@ from nelutu_gemini_optional import generate
 style_prompt = "Salut, Neluțu! Am sâmbăta liberă și vreau să ies la plimbare, dar parcă mă trage canapeaua înapoi. Dă-mi o idee practică și o glumă discretă, cu umor ardelenesc firesc, fără regionalisme forțate."
 st.code(style_prompt, language=None)
 style_consent = st.checkbox("Etapa 17: sunt de acord să trimit numai întrebarea fictivă afișată către Gemini.", key="nelutu_stage17_consent")
-if st.button("Etapa 17 — verifică naturalitatea răspunsului", disabled=not style_consent):
+if st.button("Etapa 17 — verifică naturalitatea răspunsului", disabled=not style_consent) and reserve_gemini_attempt():
     try:
         style_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
     except (FileNotFoundError, KeyError, AttributeError):
@@ -359,31 +374,25 @@ tone_examples = (
 tone_choice = st.selectbox("Situația fictivă", range(3), format_func=lambda i: tone_examples[i][0])
 tone_prompt = tone_examples[tone_choice][1]
 st.code(tone_prompt, language=None)
-# Stage 19: cap actual Stage 18 calls per Streamlit session, with no reset button.
-from nelutu_demo_budget import DemoBudget
-if "nelutu_live_tone_budget" not in st.session_state:
-    st.session_state["nelutu_live_tone_budget"] = DemoBudget()
-live_tone_budget = st.session_state["nelutu_live_tone_budget"]
-st.caption("Protecție locală pentru acest test: cel mult trei încercări Gemini pe sesiune, inclusiv cele eșuate.")
+# Stage 19: all provider test buttons share one session budget.
+st.caption("Toate testele Gemini folosesc împreună cel mult trei încercări în această sesiune.")
 tone_consent = st.checkbox(
     "Confirm transmiterea exclusivă a întrebării afișate către Gemini.",
     key="tone_consent_" + str(tone_choice),
 )
-if st.button("Testează tonul", disabled=not tone_consent or not live_tone_budget.allowed()):
+if st.button("Testează tonul", disabled=not tone_consent or not shared_budget.allowed()) and reserve_gemini_attempt():
     try:
         tone_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
     except (FileNotFoundError, KeyError, AttributeError):
         tone_key = None
     if not tone_key:
         st.error("Cheia de test lipsește.")
-    elif live_tone_budget.consume():
+    else:
         answer = generate(tone_prompt, api_key=tone_key, enabled=True, public_text_confirmed=tone_consent)
         st.write(answer if answer else "Serviciul nu a răspuns; nu se reîncearcă automat.")
-    else:
-        st.warning("Limita locală a fost atinsă.")
-st.write("Încercări Gemini disponibile în testul de ton:", live_tone_budget.remaining())
-if not live_tone_budget.allowed():
-    st.warning("Testul Gemini de ton este blocat pentru această sesiune după trei încercări.")
+st.write("Încercări Gemini disponibile în testul de ton:", shared_budget.remaining())
+if not shared_budget.allowed():
+    st.warning("Toate testele Gemini sunt blocate pentru această sesiune după trei încercări.")
 
 st.divider()
 st.subheader("Etapa 19: buget local de apeluri — demonstrație fără Gemini")
