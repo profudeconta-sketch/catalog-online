@@ -884,10 +884,22 @@ def calculate_lunar_subject_absences(file_path):
                 row_dict["TOTAL ANUAL GENERAL CLASĂ"] = tot_year_nem + tot_year_mot
                 sub_rows.append(row_dict)
                 
+        # Subtotal informativ pentru modulele M1-M6, fara dublare in totalul clasei.
+        module_rows = [row for row in sub_rows if row["Categorie"] == "Module Tehnologice"]
+        if len(module_rows) == len(MODULE_TH):
+            tech_tot = {
+                "Categorie": "Module Tehnologice",
+                "Disciplină / Modul": "TOTAL ABSENȚE DISCIPLINE TEHNOLOGICE",
+            }
+            for key in module_rows[0]:
+                if key not in ("Categorie", "Disciplină / Modul"):
+                    tech_tot[key] = sum(row[key] for row in module_rows)
+            sub_rows.append(tech_tot)
+
         class_tot = {"Categorie": "TOTAL CLASĂ", "Disciplină / Modul": "TOTAL GENERAL CLASĂ"}
         for k in sub_rows[0].keys():
             if k not in ["Categorie", "Disciplină / Modul"]:
-                class_tot[k] = sum(r[k] for r in sub_rows)
+                class_tot[k] = sum(r[k] for r in sub_rows if r["Disciplină / Modul"] != "TOTAL ABSENȚE DISCIPLINE TEHNOLOGICE")
         sub_rows.append(class_tot)
         wb.close()
     except Exception:
