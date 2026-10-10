@@ -57,7 +57,7 @@ class DurableBudgetTests(unittest.TestCase):
             self.assertTrue(DurableBudget(path, limit=2).reserve())
             with multiprocessing.get_context("spawn").Pool(processes=1) as pool:
                 self.assertTrue(pool.apply(_reserve_in_process, ((path, 2),)))
-                self.assertFalse(pool.apply(_reserve_in_process, (path,)))
+                self.assertFalse(pool.apply(_reserve_in_process, ((path, 2),)))
             self.assertFalse(DurableBudget(path, limit=2).reserve())
 
     def test_preview_opt_in_and_fail_closed_wiring(self):
