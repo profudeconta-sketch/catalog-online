@@ -37,6 +37,14 @@ class DurableBudgetTests(unittest.TestCase):
             self.assertEqual(sum(results), 12)
             self.assertFalse(DurableBudget(path).reserve())
 
+    def test_preview_opt_in_and_fail_closed_wiring(self):
+        source = Path(__file__).with_name("nelutu_gemini_preview.py").read_text(encoding="utf-8")
+        self.assertIn('st.secrets.get("NELUTU_DURABLE_BUDGET_ENABLED", False) is True', source)
+        self.assertIn('st.secrets.get("NELUTU_DURABLE_BUDGET_PATH", "")', source)
+        self.assertIn("if durable_budget is None or not shared_budget.allowed()", source)
+        self.assertIn("if not durable_budget.reserve():", source)
+        self.assertLess(source.index("if not durable_budget.reserve():"), source.index("if budget_gate.reserve(shared_budget):"))
+
     def test_missing_directory_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / "not-created" / "quota.sqlite3")
