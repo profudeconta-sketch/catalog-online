@@ -413,3 +413,18 @@ if st.button("Etapa 19 — resetează simularea"):
     stage19_budget.reset()
     st.info("Contorul demonstrativ a fost resetat.")
 st.caption("Simularea are un contor separat. Butoanele Gemini folosesc acum bugetul comun pe sesiune; acesta NU este o limită globală și poate fi reinițializat printr-o sesiune nouă.")
+
+st.divider()
+st.subheader("Etapa 20: rezistență la erori — simulare fără Gemini")
+st.caption("Situațiile de mai jos sunt simulate local. Nu se folosește cheia API, nu se trimite niciun mesaj și nu se consumă cota Gemini.")
+stage20_cases = {
+    "Cotă gratuită epuizată (429)": "Serviciul a atins limita de utilizare. Încercați mai târziu; nu se face reîncercare automată.",
+    "Serviciu indisponibil (503)": "Gemini este temporar indisponibil. Datele demonstrative rămân neschimbate.",
+    "Cheie invalidă sau acces refuzat (403)": "Conexiunea nu este autorizată. Cheia nu se afișează.",
+    "Eroare de rețea / timp expirat": "Conexiunea a eșuat. Nu se retrimite automat solicitarea.",
+    "Răspuns gol sau invalid": "Nu am primit un răspuns utilizabil. Nu inventăm un rezultat.",
+}
+stage20_case = st.selectbox("Alege o eroare fictivă", list(stage20_cases), key="nelutu_stage20_case")
+if st.button("Etapa 20 — simulează eroarea local"):
+    st.warning(stage20_cases[stage20_case])
+    st.info("Simulare încheiată fără apel extern; contorul Gemini nu a fost consumat.")
