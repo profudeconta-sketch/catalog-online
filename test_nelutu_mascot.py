@@ -95,9 +95,10 @@ class NelutuMascotTests(unittest.TestCase):
         fresh = ns["_nelutu_fresh_reply"]
         reply = object()
         self.assertEqual(fresh("A", reply, "A"), ("A", reply))
-        self.assertEqual(fresh("A", reply, "B"), (None, None))
-        self.assertEqual(fresh("A", reply, ""), (None, None))
+        self.assertEqual(fresh("A", reply, "B"), ("A", reply))
+        self.assertEqual(fresh("A", reply, ""), ("A", reply))
         self.assertEqual(fresh(None, None, "B"), (None, None))
+        self.assertEqual(fresh("A", None, ""), (None, None))
 
     def test_unknown_state_falls_back_to_idle(self):
         html=render_nelutu_mascot("oare-ce-o-fi")
