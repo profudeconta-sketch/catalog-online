@@ -1,0 +1,28 @@
+name: Nelutu isolated integration gate tests
+
+on:
+  pull_request:
+    paths:
+      - 'nelutu_integration_gate.py'
+      - 'test_nelutu_integration_gate.py'
+      - 'nelutu_gemini_optional.py'
+      - 'nelutu_gemini_demo.py'
+      - '.github/workflows/nelutu-integration-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile authorization boundary
+        run: python -m py_compile nelutu_integration_gate.py test_nelutu_integration_gate.py
+      - name: Test authorization boundary
+        run: python -m unittest -v test_nelutu_integration_gate.py
