@@ -67,7 +67,6 @@ def run() -> bool:
                 cur.execute(sql.SQL("SELECT used FROM {} WHERE id = 1").format(identifier))
                 used = cur.fetchone()[0]
         passed = used == LIMIT and sum(results) == LIMIT
-        print("PASS" if passed else "FAIL", "successful reservations:", sum(results), "stored:", used)
     finally:
         cleanup_ok = False
         try:
@@ -79,6 +78,7 @@ def run() -> bool:
             print("WARNING: cleanup failed; remove isolated test table manually")
         if not cleanup_ok:
             raise RuntimeError("Isolated test table cleanup could not be verified") from None
+    print("PASS" if passed else "FAIL", "successful reservations:", sum(results), "stored:", used)
     return passed
 
 
