@@ -645,5 +645,31 @@ class GeminiOfflineFailureMatrixTests(unittest.TestCase):
                     self.assertEqual(opener.call_count, 1)
 
 
+class InstanceGeminiBudgetTests(unittest.TestCase):
+    def test_shared_instance_budget_is_thread_safe(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from nelutu_instance_budget import InstanceBudget, MAX_INSTANCE_ATTEMPTS
+        budget = InstanceBudget()
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            accepted = list(pool.map(lambda _: budget.consume(), range(100)))
+        self.assertEqual(sum(accepted), MAX_INSTANCE_ATTEMPTS)
+        self.assertEqual(budget.remaining(), 0)
+        self.assertFalse(budget.allowed())
+        self.assertFalse(budget.consume())
+
+    def test_all_external_buttons_require_both_budgets(self):
+        from pathlib import Path
+        source = Path(__file__).with_name("nelutu_gemini_preview.py").read_text(encoding="utf-8")
+        lines = [line for line in source.splitlines()
+                 if line.startswith('if st.button(') and 'reserve_gemini_attempt()' in line]
+        self.assertEqual(len(lines), 9)
+        for line in lines:
+            with self.subTest(line=line):
+                self.assertIn("not shared_budget.allowed()", line)
+                self.assertIn("not instance_budget.allowed()", line)
+        self.assertIn("@st.cache_resource", source)
+        self.assertIn("if not instance_budget.consume():", source)
+
+
 if __name__ == "__main__":
     unittest.main()
