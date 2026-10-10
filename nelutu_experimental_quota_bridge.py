@@ -39,4 +39,8 @@ def reserve_experimental_attempt(config: ExperimentalQuotaConfig) -> bool:
         return False
     if not config.dedicated_postgres_dsn.startswith(("postgresql://", "postgres://")):
         return False
-    return PostgreSQLBudget(config.dedicated_postgres_dsn, limit=config.limit).reserve()
+    try:
+        return PostgreSQLBudget(config.dedicated_postgres_dsn, limit=config.limit).reserve()
+    except Exception:
+        # Never leak connection details; a configuration error denies Gemini.
+        return False
