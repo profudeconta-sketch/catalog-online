@@ -11,10 +11,10 @@ import re
 import unicodedata
 from urllib import request, error
 
-MODEL = "gemini-2.5-flash-lite"
+MODEL = "gemini-3.5-flash-lite"
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent"
 MAX_CHARS = 600
-TIMEOUT = 8
+TIMEOUT = 15
 
 SYSTEM = (
     "Ești Neluțu-al-nost, asistent virtual ardelenesc, prietenos și cu umor discret. "
