@@ -325,5 +325,25 @@ class LocalConversationPrivacyTests(unittest.TestCase):
                 enabled=True, public_text_confirmed=True))
             opener.assert_not_called()
 
+
+class GeminiDemoBoundaryTests(unittest.TestCase):
+    def test_demo_requires_opt_in_and_valid_index(self):
+        from unittest.mock import patch
+        import nelutu_gemini_demo as demo
+        with patch.object(demo, "generate") as generator:
+            self.assertIsNone(demo.demo_prompt(0))
+            self.assertIsNone(demo.demo_prompt(0, enabled=True))
+            self.assertIsNone(demo.demo_prompt(-1, enabled=True, confirmed=True))
+            self.assertIsNone(demo.demo_prompt(True, enabled=True, confirmed=True))
+            generator.assert_not_called()
+
+    def test_demo_uses_fixed_text_not_user_input(self):
+        from unittest.mock import patch
+        import nelutu_gemini_demo as demo
+        with patch.object(demo, "generate", return_value="No, bună ziua!") as generator:
+            self.assertEqual(demo.demo_prompt(0, enabled=True, confirmed=True), "No, bună ziua!")
+            self.assertEqual(generator.call_args.args[0], demo.DEMO_PROMPTS[0])
+            self.assertTrue(generator.call_args.kwargs["public_text_confirmed"])
+
 if __name__ == "__main__":
     unittest.main()
