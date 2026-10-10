@@ -36,3 +36,19 @@ Data: 2026-10-10. Ramura: `feature/nelutu-gemini-safe-foundation`, draft PR #112
 ## Criteriul de închidere
 
 Fundamentul experimental poate fi declarat **finalizat pentru testele offline**, dar proiectul complet Neluțu 2.0 **nu este gata de lansare** până la verificarea infrastructurii, a confidențialității și a UI-ului live. Nu se inventează dovezi sau un verdict pozitiv pentru producție.
+
+
+## Etapa 69 — verificare de lansare după regresiile PostgreSQL/Neon
+
+Commitul `ba51d3038a05c9c746b0b3101ad76b72e874e77a` are opt fluxuri GitHub Actions finalizate cu succes. Acest rezultat demonstrează numai comportamentele testate automat, nu validarea infrastructurii de producție.
+
+### Dovezi încă obligatorii pentru GO de producție
+
+- Test end-to-end într-un mediu Streamlit separat, cu date exclusiv fictive, pe desktop și mobil, inclusiv revenirea la Neluțu local
+- Confirmarea persistenței și a cotei comune între instanțe după restart și întreruperi, fără conectare la fișierele școlare
+- Verificarea termenilor, limitelor și costurilor furnizorului, cu mecanism verificabil pentru cost zero
+- Evaluare de confidențialitate și autorizare explicită a oricărei transmiteri externe; implicit fără date școlare
+- Plan de rollback testat și verificare că funcționalitățile profesorilor/părinților rămân identice
+- Aprobare explicită, separată, pentru schimbarea exactă propusă în producție
+
+**Verdict Etapa 69:** GO pentru baza experimentală offline; **NO-GO pentru merge, conectare Gemini sau lansare** până la completarea tuturor dovezilor externe. PR #112 rămâne Draft. Niciun rezultat CI nu poate substitui aprobarea de producție.
