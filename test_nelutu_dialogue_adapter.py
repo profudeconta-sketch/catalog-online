@@ -399,5 +399,31 @@ class GeminiSecretNonDisclosureTests(unittest.TestCase):
                 api_key="dummy", enabled=True, public_text_confirmed=True))
             opener.assert_not_called()
 
+
+class FixedContextPrivacyTests(unittest.TestCase):
+    def test_requires_explicit_consent(self):
+        from unittest.mock import patch
+        import nelutu_gemini_fixed_context as context
+        with patch.object(context.request, "urlopen") as opener:
+            self.assertIsNone(context.fixed_context_test(api_key="dummy", enabled=True))
+            self.assertIsNone(context.fixed_context_test(api_key="dummy", confirmed=True))
+            self.assertIsNone(context.fixed_context_test(enabled=True, confirmed=True))
+            opener.assert_not_called()
+
+    def test_only_fixed_public_transcript_sent(self):
+        from unittest.mock import patch
+        import json
+        import nelutu_gemini_fixed_context as context
+        class Reply:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{"candidates":[{"content":{"parts":[{"text":"Conteaza respectul."}]}}]}'
+        with patch.object(context.request, "urlopen", return_value=Reply()) as opener:
+            self.assertEqual(context.fixed_context_test(
+                api_key="dummy", enabled=True, confirmed=True), "Conteaza respectul.")
+            request_payload = json.loads(opener.call_args.args[0].data)
+            self.assertEqual(len(request_payload["contents"]), 3)
+            self.assertEqual(request_payload["contents"][2]["parts"][0]["text"], context.FOLLOW_UP)
+
 if __name__ == "__main__":
     unittest.main()
