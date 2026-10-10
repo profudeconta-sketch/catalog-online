@@ -77,6 +77,7 @@ class AdapterTests(unittest.TestCase):
             self.assertFalse(budget.reserve())
             self.assertEqual(budget.remaining(), 0)
         self.assertTrue(connection.transaction_entered)
+        self.assertFalse(any(sql.startswith(('CREATE', 'INSERT', 'DROP', 'ALTER')) for sql, _ in cursor.calls))
         updates = [(sql, params) for sql, params in cursor.calls if sql.startswith("UPDATE")]
         self.assertEqual(len(updates), 3)
         self.assertTrue(all("used < %s RETURNING used" in sql for sql, _ in updates))
