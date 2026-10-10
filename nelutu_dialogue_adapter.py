@@ -54,15 +54,15 @@ def answer_parent_dialogue(question, context=None, state=None):
         rule = _school_topic(question)
         if rule is not None and rule.intent == 'absences_40':
             return rule, DialogueState()
-    subject = subject_reply(question)
-    if subject is not None:
-        return subject, DialogueState()
     flow = parent_flow_guidance(question)
     if flow is not None and (flow.intent != 'parent_flow_school' or not _school_topic(question)) :
         return flow, DialogueState()
     school = _school_topic(question)
     if school is not None:
         return school, DialogueState()
+    subject = subject_reply(question)
+    if subject is not None:
+        return subject, DialogueState()
     # Continuarile educationale deja stabilite au prioritate fata de fallback-ul
     # vechi; fluxurile portalului si filtrele de confidentialitate raman primele.
     if state.topic == "purpose":
