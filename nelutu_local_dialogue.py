@@ -86,8 +86,8 @@ def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnsw
         "multumesc": "Cu drag! 🤠 No, să fie cu folos!",
         "mersi": "Cu mare drag! 🤠",
     }
-    social_q = re.sub(r"^(?:(?:no|apai|pai|ma|hei)\\s+)+", "", q)
-    social_q = re.sub(r"\\s+(?:nelutu|nelutule|astazi|azi)$", "", social_q)
+    social_q = re.sub(r"^(?:(?:no|apai|pai|ma|hei)\s+)+", "", q)
+    social_q = re.sub(r"\s+(?:nelutu|nelutule|astazi|azi)$", "", social_q)
     if social_q in social:
         return NelutuAnswer("smalltalk", social[social_q]), DialogueState("social_wait", 1) if social_q in ("ce mai faci", "cum esti") else DialogueState()
     if state.topic == "social_wait":
