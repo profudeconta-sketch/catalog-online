@@ -517,5 +517,18 @@ class FixedTopicReturnBoundaryTests(unittest.TestCase):
                 list(demo.TOPIC_RETURN_EXCHANGE),
             )
 
+
+class LocalMemoryEvictionTests(unittest.TestCase):
+    def test_evict_oldest_and_reset_only_one_buffer(self):
+        from nelutu_conversation_local import LocalConversation
+        first, second = LocalConversation(), LocalConversation()
+        for number in range(1, 7):
+            self.assertTrue(first.append("user", "Replica %d" % number))
+        self.assertEqual(first.snapshot(), tuple(("user", "Replica %d" % n) for n in range(3, 7)))
+        self.assertTrue(second.append("user", "Mesaj independent"))
+        first.clear()
+        self.assertEqual(first.snapshot(), ())
+        self.assertEqual(second.snapshot(), (("user", "Mesaj independent"),))
+
 if __name__ == "__main__":
     unittest.main()
