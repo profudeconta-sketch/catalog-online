@@ -45,9 +45,8 @@ from leave_pass_storage import (
 )
 
 def _nelutu_fresh_reply(answered_prompt, answered_reply, current_prompt):
-    """Returnează răspunsul doar cât timp aparține exact promptului curent."""
-    current = (current_prompt or "").strip()
-    if not current or answered_prompt != current:
+    """Păstrează ultimul răspuns după golirea automată a câmpului de întrebare."""
+    if not answered_prompt or answered_reply is None:
         return None, None
     return answered_prompt, answered_reply
 
@@ -583,7 +582,7 @@ else:
                 {"keywords": ("portal", "cum folosesc portalul"), "answer": "Ești autentificat în Portalul Părinților; pot explica orice zonă vizibilă aici, fără să modific date."}
             ]}
             # Formularul trimite întrebarea direct la Enter, fără al doilea clic.
-            with st.form(key="nelutu_question_form", clear_on_submit=False):
+            with st.form(key="nelutu_question_form", clear_on_submit=True):
                 _nelutu_question = st.text_input(
                     "No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",
                     placeholder="Scrie-i lu’ Neluțu și apasă Enter...",
