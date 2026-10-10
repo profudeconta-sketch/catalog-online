@@ -295,5 +295,35 @@ class GeminiIsolationRegressionTests(unittest.TestCase):
                                                api_key="dummy", enabled=True))
             opener.assert_not_called()
 
+
+class LocalConversationPrivacyTests(unittest.TestCase):
+    def test_local_history_is_bounded_and_isolated(self):
+        from nelutu_conversation_local import LocalConversation
+        first, second = LocalConversation(), LocalConversation()
+        for _ in range(10):
+            self.assertTrue(first.append("user", "Ce mai faci?"))
+        self.assertEqual(len(first.snapshot()), 4)
+        self.assertEqual(second.snapshot(), ())
+        self.assertNotIn("Ce mai faci", repr(first))
+
+    def test_sensitive_message_clears_local_context(self):
+        from nelutu_conversation_local import LocalConversation
+        chat = LocalConversation()
+        self.assertTrue(chat.append("user", "Buna dimineata"))
+        self.assertFalse(chat.append("user", "Notele elevului"))
+        self.assertEqual(chat.snapshot(), ())
+
+    def test_history_cannot_be_sent_to_provider(self):
+        from unittest.mock import patch
+        from nelutu_conversation_local import LocalConversation
+        import nelutu_gemini_optional as gemini
+        chat = LocalConversation()
+        chat.append("user", "Buna dimineata")
+        with patch.object(gemini.request, "urlopen") as opener:
+            self.assertIsNone(gemini.generate(
+                "Ce mai faci?", chat.snapshot(), api_key="dummy",
+                enabled=True, public_text_confirmed=True))
+            opener.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()
