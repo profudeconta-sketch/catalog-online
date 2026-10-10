@@ -202,3 +202,43 @@ if st.button("Resetează ambele memorii demonstrative"):
 st.write("Memoria A:", demo_a.snapshot())
 st.write("Memoria B:", demo_b.snapshot())
 st.caption("Aceasta testează separarea obiectelor în aceeași sesiune, nu izolarea între utilizatori reali.")
+
+st.divider()
+st.subheader("Etapa 13: limita de patru replici și resetarea independentă")
+st.caption("Demonstrație locală cu replici prestabilite; nu sunt apeluri către Gemini.")
+if "nelutu_stage13_primary" not in st.session_state:
+    st.session_state["nelutu_stage13_primary"] = LocalConversation()
+if "nelutu_stage13_secondary" not in st.session_state:
+    st.session_state["nelutu_stage13_secondary"] = LocalConversation()
+if "nelutu_stage13_index" not in st.session_state:
+    st.session_state["nelutu_stage13_index"] = 0
+stage13_a = st.session_state["nelutu_stage13_primary"]
+stage13_b = st.session_state["nelutu_stage13_secondary"]
+stage13_messages = (
+    ("user", "Replica 1: pregătesc o carte."),
+    ("model", "Replica 2: o poți pune pe masă."),
+    ("user", "Replica 3: mâine merg la bibliotecă."),
+    ("model", "Replica 4: verifică programul."),
+    ("user", "Replica 5: nu uita cartea."),
+    ("model", "Replica 6: pune-o lângă geantă."),
+)
+if st.button("Adaugă următoarea replică în memoria A (maxim 6)"):
+    i = st.session_state["nelutu_stage13_index"]
+    if i < len(stage13_messages):
+        role, message = stage13_messages[i]
+        if stage13_a.append(role, message):
+            st.session_state["nelutu_stage13_index"] = i + 1
+        else:
+            st.error("Replica fictivă a fost respinsă.")
+    else:
+        st.info("Toate cele șase replici au fost adăugate.")
+if st.button("Adaugă un mesaj fix în memoria B"):
+    stage13_b.append("user", "Memoria B rămâne independentă.")
+if st.button("Resetează numai memoria A"):
+    stage13_a.clear()
+    st.session_state["nelutu_stage13_index"] = 0
+if st.button("Resetează numai memoria B"):
+    stage13_b.clear()
+st.write("Memoria A (maxim patru replici):", stage13_a.snapshot())
+st.write("Memoria B:", stage13_b.snapshot())
+st.caption("După șase adăugări în A, trebuie să rămână numai replicile 3–6. Resetarea A nu trebuie să modifice B.")
