@@ -27,12 +27,16 @@ def run_demo_pipeline(message: str, *, explicitly_enabled: bool, confirmed: bool
     )
     if not decision.allowed:
         return PipelineResult(decision.reason)
-    if not session_budget.allowed() or not instance_gate.instance.allowed():
-        return PipelineResult("session_or_instance_limit")
-    if not durable_budget.reserve():
-        return PipelineResult("durable_quota_unavailable")
-    if not instance_gate.reserve(session_budget):
-        return PipelineResult("session_or_instance_limit")
+    try:
+        if not session_budget.allowed() or not instance_gate.instance.allowed():
+            return PipelineResult("session_or_instance_limit")
+        if not durable_budget.reserve():
+            return PipelineResult("durable_quota_unavailable")
+        if not instance_gate.reserve(session_budget):
+            return PipelineResult("session_or_instance_limit")
+    except Exception:
+        # A failing quota backend must never result in a provider request.
+        return PipelineResult("quota_gate_error")
     try:
         answer = sender(message)
     except Exception:
