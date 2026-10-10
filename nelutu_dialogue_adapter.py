@@ -7,6 +7,25 @@ from nelutu_local_dialogue import DialogueState, reply as local_reply, _norm
 from nelutu_education_dialogue import educational_reply
 from nelutu_privacy_guard import guard as privacy_guard, credential_warning, access_guidance, authority_guard, director_class_guidance, third_party_credential_guard
 
+def _school_topic(question):
+    """Explicit school subjects; keep privacy and safety routing first."""
+    q = _norm(question)
+    words = set(q.split())
+    from nelutu_assistant import NelutuAnswer
+    if "40" in words and ({"absente", "absenta", "ore"} & words):
+        return NelutuAnswer("absences_40", "No, regula celor 40 de ore se referă la limita anuală de absențe care pot fi motivate la cererea scrisă a părintelui sau a elevului major, în condițiile ROFUIP și fără depășirea a 20% din orele unei discipline. Nu este o permisiune de a lipsi și nici o motivare automată. Pentru aplicarea concretă se verifică cererea și regulile școlii.")
+    if "contabil" in q and ("baz" in q or "contabilitatii" in words):
+        return NelutuAnswer("education_accounting", "No, la Bazele contabilității învățăm despre bunuri, datorii, capitaluri, venituri și cheltuieli, documente justificative și înregistrarea operațiunilor unei firme. Pe scurt, cum urmărim corect activitatea economică.")
+    if ("turist" in q or "hotel" in words) and ({"structuri", "primire", "facem", "invatam"} & words):
+        return NelutuAnswer("education_tourism", "No, la Structuri de primire turistică învățăm despre hoteluri, pensiuni, clasificare, servicii, rezervări și primirea oaspeților. Ospitalitatea bună se învață, nu-i numai un zâmbet la recepție!")
+    if "fizica" in words or "fizicii" in words:
+        return NelutuAnswer("education_physics", "No, fizica explică mișcarea, forțele, energia, căldura și electricitatea. De aceea pricepem cum frânează un vehicul, de ce ne protejează centura și cum funcționează aparatele.")
+    if "chimie" in words or "chimia" in words or "chimiei" in words:
+        return NelutuAnswer("education_chemistry", "No, chimia ne ajută să înțelegem substanțele și transformările lor: gătitul, curățenia, apa, medicamentele și protejarea mediului. Învățăm și cum să folosim produsele în siguranță.")
+    if ("scoala" in words or "scolii" in words or "invatatura" in words) and ({"rost", "buna", "bun", "atata", "folos", "trebuie"} & words):
+        return NelutuAnswer("education_purpose", "No, școala nu-i numai pentru note. Ne învață să gândim, să punem întrebări, să lucrăm cu alții și să deprindem o meserie. Nu folosim fiecare formulă zilnic, dar felul în care învățăm să rezolvăm probleme ne rămâne!")
+    return None
+
 def answer_parent_dialogue(question, context=None, state=None):
     """Prioritizează întotdeauna routerul portalului; continuitatea este limitată."""
     state = state if isinstance(state, DialogueState) else DialogueState()
@@ -21,6 +40,9 @@ def answer_parent_dialogue(question, context=None, state=None):
     privacy = credential_warning(question) or authority_guard(question) or third_party_credential_guard(question) or privacy_guard(question) or access_guidance(question) or director_class_guidance(question)
     if privacy is not None:
         return privacy, DialogueState()
+    school = _school_topic(question)
+    if school is not None:
+        return school, DialogueState()
     flow = parent_flow_guidance(question)
     if flow is not None:
         return flow, DialogueState()
