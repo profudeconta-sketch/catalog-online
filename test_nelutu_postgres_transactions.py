@@ -24,12 +24,12 @@ class Cursor:
         self.calls.append((sql, params))
         if self.fail_at and self.fail_at in sql:
             raise RuntimeError("simulated database failure")
-        if sql.startswith("UPDATE"):
+        if sql.startswith("UPDATE "):
             limit = params[0]
             self.result = (self.used + 1,) if self.used < limit else None
             if self.result:
                 self.used += 1
-        elif sql.startswith("SELECT"):
+        elif sql.startswith("SELECT "):
             self.result = (self.used,)
 
     def fetchone(self):
@@ -76,11 +76,12 @@ class AdapterTests(unittest.TestCase):
             self.assertTrue(budget.reserve())
             self.assertFalse(budget.reserve())
             self.assertEqual(budget.remaining(), 0)
+        self.assertTrue(any("FROM public.nelutu_gemini_budget" in sql for sql, _ in cursor.calls))
         self.assertTrue(connection.transaction_entered)
         self.assertFalse(any(sql.startswith(('CREATE', 'INSERT', 'DROP', 'ALTER')) for sql, _ in cursor.calls))
         updates = [(sql, params) for sql, params in cursor.calls if sql.startswith("UPDATE")]
         self.assertEqual(len(updates), 3)
-        self.assertTrue(all("used < %s RETURNING used" in sql for sql, _ in updates))
+        self.assertTrue(all("UPDATE public.nelutu_gemini_budget SET used" in sql and "used < %s RETURNING used" in sql for sql, _ in updates))
         self.assertTrue(all(params == (2,) for _, params in updates))
 
     def test_failed_transaction_denies_reservation(self):
