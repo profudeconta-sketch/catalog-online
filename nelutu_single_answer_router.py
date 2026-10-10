@@ -28,7 +28,7 @@ def route_single_answer(question: str, *, local_answer: Callable[[str], str],
         local = local_answer(question)
     except Exception:
         return RoutedAnswer("Neluțu nu poate răspunde momentan. Încearcă din nou mai târziu.", "local", "local_error")
-    if not isinstance(local, str) or not local.strip() or not local.isprintable() and any(ch not in "\n\t" and not ch.isprintable() for ch in local):
+    if not isinstance(local, str) or not local.strip() or any(not (ch.isprintable() or ch in "\n\t") for ch in local):
         return RoutedAnswer("Neluțu nu poate răspunde momentan. Încearcă din nou mai târziu.", "local", "local_invalid")
     try:
         result = handle_optional_demo(
