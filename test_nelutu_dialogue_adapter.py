@@ -270,6 +270,13 @@ class GeminiIsolationRegressionTests(unittest.TestCase):
             self.assertIsNone(gemini.generate("Ce mai faci?", api_key="dummy"))
             opener.assert_not_called()
 
+    def test_no_external_call_without_explicit_confirmation(self):
+        from unittest.mock import patch
+        import nelutu_gemini_optional as gemini
+        with patch.object(gemini.request, "urlopen") as opener:
+            self.assertIsNone(gemini.generate("Ce mai faci?", api_key="dummy", enabled=True, public_text_confirmed=True))
+            opener.assert_not_called()
+
     def test_private_questions_never_reach_gemini(self):
         from unittest.mock import patch
         import nelutu_gemini_optional as gemini
