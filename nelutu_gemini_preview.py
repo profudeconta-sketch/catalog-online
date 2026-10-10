@@ -12,28 +12,28 @@ from nelutu_gemini_optional import diagnose_status
 
 st.set_page_config(page_title="Neluțu — test Gemini izolat", page_icon="🤠")
 from nelutu_demo_budget import DemoBudget
-from nelutu_instance_budget import InstanceBudget
+from nelutu_instance_budget import InstanceBudget, SharedBudgetGate
 
 @st.cache_resource
 def get_instance_budget() -> InstanceBudget:
     return InstanceBudget()
 
 instance_budget = get_instance_budget()
+
+@st.cache_resource
+def get_budget_gate() -> SharedBudgetGate:
+    return SharedBudgetGate(get_instance_budget())
+
+budget_gate = get_budget_gate()
 if "nelutu_shared_gemini_budget" not in st.session_state:
     st.session_state["nelutu_shared_gemini_budget"] = DemoBudget()
 shared_budget = st.session_state["nelutu_shared_gemini_budget"]
 
 def reserve_gemini_attempt() -> bool:
     """Reserve a test attempt before any possible network request."""
-    if not shared_budget.allowed():
-        st.warning("Limita sesiunii de trei încercări Gemini a fost atinsă.")
-        return False
-    if not instance_budget.consume():
-        st.warning("Limita comună a instanței de test a fost atinsă.")
-        return False
-    if shared_budget.consume():
+    if budget_gate.reserve(shared_budget):
         return True
-    st.warning("Limita sesiunii de trei încercări Gemini a fost atinsă.")
+    st.warning("Limita sesiunii sau a instanței de test a fost atinsă.")
     return False
 
 
