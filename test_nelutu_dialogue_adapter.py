@@ -211,6 +211,13 @@ class FriendlyGreetingTests(unittest.TestCase):
                 answer, _ = answer_parent_dialogue(question)
                 self.assertEqual(answer.intent, "smalltalk")
 
+    def test_conversation_followup(self):
+        _, state = answer_parent_dialogue("No, ce mai faci astăzi?")
+        self.assertEqual(state.topic, "social_wait")
+        answer, state = answer_parent_dialogue("Sunt cam obosit.", state=state)
+        self.assertEqual(answer.intent, "smalltalk_followup")
+        self.assertEqual(state.topic, "")
+
     def test_unknown_stays_unknown(self):
         answer, _ = answer_parent_dialogue("blorpf xyzzy 92817")
         self.assertEqual(answer.intent, "clarification")
