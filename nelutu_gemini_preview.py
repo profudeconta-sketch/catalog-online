@@ -103,3 +103,29 @@ if st.button("Testează dialogul extins", disabled=not multi_confirmed):
             st.write(multi_answer)
         else:
             st.info("Testul extins nu a primit un răspuns utilizabil.")
+
+st.divider()
+st.subheader("Test: reformulare și referință la mijlocul listei")
+from nelutu_gemini_fixed_paraphrase import PARAPHRASE_EXCHANGE, fixed_paraphrase_test
+for role, message in PARAPHRASE_EXCHANGE:
+    st.write(("Întrebare: " if role == "user" else "Răspuns demonstrativ: ") + message)
+st.caption("Se transmit doar cele trei replici fictive afișate.")
+paraphrase_confirmed = st.checkbox(
+    "Confirm transmiterea celor trei replici fictive către Google.",
+    key="fixed_paraphrase_consent",
+)
+if st.button("Testează reformularea", disabled=not paraphrase_confirmed):
+    try:
+        paraphrase_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
+    except (FileNotFoundError, KeyError, AttributeError):
+        paraphrase_key = None
+    if not paraphrase_key:
+        st.error("Cheia de test nu este configurată.")
+    else:
+        with st.spinner("Neluțu urmărește referințele..."):
+            paraphrase_answer = fixed_paraphrase_test(
+                api_key=paraphrase_key, enabled=True, confirmed=paraphrase_confirmed)
+        if paraphrase_answer:
+            st.write(paraphrase_answer)
+        else:
+            st.info("Testul de reformulare nu a primit un răspuns utilizabil.")
