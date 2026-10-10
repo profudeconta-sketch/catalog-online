@@ -274,7 +274,7 @@ class GeminiIsolationRegressionTests(unittest.TestCase):
         from unittest.mock import patch
         import nelutu_gemini_optional as gemini
         with patch.object(gemini.request, "urlopen") as opener:
-            self.assertIsNone(gemini.generate("Ce mai faci?", api_key="dummy", enabled=True, public_text_confirmed=True))
+            self.assertIsNone(gemini.generate("Ce mai faci?", api_key="dummy", enabled=True))
             opener.assert_not_called()
 
     def test_private_questions_never_reach_gemini(self):
