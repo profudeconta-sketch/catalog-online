@@ -39,4 +39,7 @@ def run_demo_pipeline(message: str, *, explicitly_enabled: bool, confirmed: bool
         return PipelineResult("provider_error")
     if not isinstance(answer, str) or not answer.strip():
         return PipelineResult("provider_unavailable")
-    return PipelineResult("ok", answer[:1500])
+    clean_answer = answer.strip()[:1500].strip()
+    if not clean_answer or not clean_answer.isprintable():
+        return PipelineResult("provider_unavailable")
+    return PipelineResult("ok", clean_answer)
