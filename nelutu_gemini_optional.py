@@ -77,11 +77,6 @@ def generate(message: str, history: tuple[tuple[str, str], ...] = (), *,
     # Until history has a separate explicit consent UI, forbid sending it.
     if history:
         return None
-    if len(history) > MAX_HISTORY or any(
-        role not in ("user", "model") or not is_public_general_chat(text)
-        for role, text in history
-    ):
-        return None
     contents = [
         {"role": role, "parts": [{"text": text}]}
         for role, text in history
