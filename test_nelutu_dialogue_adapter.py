@@ -481,5 +481,35 @@ class FixedParaphraseBoundaryTests(unittest.TestCase):
                 list(demo.PARAPHRASE_EXCHANGE),
             )
 
+
+class FixedTopicReturnBoundaryTests(unittest.TestCase):
+    def test_topic_return_requires_consent(self):
+        from unittest.mock import patch
+        import nelutu_gemini_fixed_topic_return as demo
+        with patch.object(demo.request, "urlopen") as opener:
+            self.assertIsNone(demo.fixed_topic_return_test(api_key="dummy", enabled=True))
+            self.assertIsNone(demo.fixed_topic_return_test(api_key="dummy", confirmed=True))
+            self.assertIsNone(demo.fixed_topic_return_test(enabled=True, confirmed=True))
+            opener.assert_not_called()
+
+    def test_topic_return_sends_only_fixed_messages(self):
+        import json
+        from unittest.mock import patch
+        import nelutu_gemini_fixed_topic_return as demo
+        class Reply:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{"candidates":[{"content":{"parts":[{"text":"Un trandafir."}]}}]}'
+        with patch.object(demo.request, "urlopen", return_value=Reply()) as opener:
+            self.assertEqual(
+                demo.fixed_topic_return_test(api_key="dummy", enabled=True, confirmed=True),
+                "Un trandafir.",
+            )
+            payload = json.loads(opener.call_args.args[0].data)
+            self.assertEqual(
+                [(item["role"], item["parts"][0]["text"]) for item in payload["contents"]],
+                list(demo.TOPIC_RETURN_EXCHANGE),
+            )
+
 if __name__ == "__main__":
     unittest.main()
