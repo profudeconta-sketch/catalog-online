@@ -81,8 +81,8 @@ class Stage31IntegrationBoundaryTests(unittest.TestCase):
         source = Path(__file__).with_name("nelutu_gemini_preview.py").read_text(encoding="utf-8")
         self.assertEqual(source.count("and reserve_gemini_attempt():"), 9)
         self.assertGreaterEqual(source.count("disabled=not "), 9)
-        self.assertIn("instance_budget.consume()", source)
-        self.assertIn("shared_budget.consume()", source)
+        self.assertIn("budget_gate.reserve(shared_budget)", source)
+        self.assertIn("SharedBudgetGate", source)
 
     def test_fixed_transport_requires_approved_transcript(self):
         from unittest.mock import Mock
@@ -94,6 +94,27 @@ class Stage31IntegrationBoundaryTests(unittest.TestCase):
             temperature=0.4, opener=opener,
         ))
         opener.assert_not_called()
+
+    def test_stage34_gate_enforces_limits(self):
+        from nelutu_instance_budget import InstanceBudget, SharedBudgetGate
+        from nelutu_demo_budget import DemoBudget
+        instance = InstanceBudget()
+        gate = SharedBudgetGate(instance)
+        sessions = [DemoBudget() for _ in range(8)]
+        results = [gate.reserve(sessions[i % 8]) for i in range(30)]
+        self.assertEqual(sum(results), 12)
+        self.assertEqual(instance.remaining(), 0)
+        self.assertTrue(all(s.used <= 3 for s in sessions))
+
+    def test_stage34_concurrent_reservations(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from nelutu_instance_budget import InstanceBudget, SharedBudgetGate
+        from nelutu_demo_budget import DemoBudget
+        gate = SharedBudgetGate(InstanceBudget())
+        session = DemoBudget()
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            results = list(executor.map(lambda _: gate.reserve(session), range(40)))
+        self.assertEqual(sum(results), 3)
 
 
 if __name__ == "__main__":
