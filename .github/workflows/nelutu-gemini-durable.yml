@@ -1,0 +1,27 @@
+name: Nelutu Gemini durable quota tests
+
+on:
+  pull_request:
+    paths:
+      - 'nelutu_durable_budget.py'
+      - 'test_nelutu_durable_budget.py'
+      - 'nelutu_gemini_preview.py'
+      - '.github/workflows/nelutu-gemini-durable.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  durable-quota:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile durable quota module and tests
+        run: python -m py_compile nelutu_durable_budget.py test_nelutu_durable_budget.py
+      - name: Run isolated persistent quota tests
+        run: python -m unittest -v test_nelutu_durable_budget.py
