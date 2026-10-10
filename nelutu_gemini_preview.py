@@ -325,3 +325,26 @@ if st.button("Etapa 16 — testează răspunsul contextual Gemini", disabled=not
         else:
             st.warning("Serviciul nu a returnat un răspuns. Nu se face retrimitere automată.")
 st.caption("Verifică dacă răspunsul identifică trandafirul și ziua de sâmbătă, fără a confunda subiectul intermediar.")
+
+st.divider()
+st.subheader("Etapa 17: evaluarea exprimării ardelenești naturale")
+st.caption("Test fix, cu acord explicit. Se transmite doar întrebarea demonstrativă, fără memoria locală.")
+from nelutu_gemini_optional import generate
+style_prompt = "Salut, Neluțu! Am sâmbăta liberă și vreau să ies la plimbare, dar parcă mă trage canapeaua înapoi. Dă-mi o idee practică și o glumă discretă, cu umor ardelenesc firesc, fără regionalisme forțate."
+st.code(style_prompt, language=None)
+style_consent = st.checkbox("Etapa 17: sunt de acord să trimit numai întrebarea fictivă afișată către Gemini.", key="nelutu_stage17_consent")
+if st.button("Etapa 17 — verifică naturalitatea răspunsului", disabled=not style_consent):
+    try:
+        style_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
+    except (FileNotFoundError, KeyError, AttributeError):
+        style_key = None
+    if not style_key:
+        st.error("Lipsește cheia Gemini din Secrets.")
+    else:
+        with st.spinner("Neluțu pregătește un răspuns..."):
+            style_answer = generate(style_prompt, api_key=style_key, enabled=True, public_text_confirmed=style_consent)
+        if style_answer:
+            st.write(style_answer)
+        else:
+            st.warning("Nu am primit răspuns. Nu se reîncearcă automat.")
+st.caption("Evaluează: o idee utilă, glumă discretă, exprimare naturală, fără regionalisme inventate.")
