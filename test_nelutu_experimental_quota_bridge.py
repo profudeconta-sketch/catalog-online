@@ -48,6 +48,15 @@ class QuotaBridgeTests(unittest.TestCase):
             db.assert_called_once_with("postgresql://example", limit=12)
             db.return_value.reserve.assert_called_once_with()
 
+    def test_adapter_construction_failure_denies_without_leaking(self):
+        config = ExperimentalQuotaConfig(enabled=True,
+            dedicated_postgres_dsn="postgresql://secret-should-not-appear",
+            provider_costs_approved=True, privacy_approved=True,
+            persistence_verified=True)
+        with patch("nelutu_experimental_quota_bridge.PostgreSQLBudget",
+                   side_effect=RuntimeError("sensitive connection details")):
+            self.assertFalse(reserve_experimental_attempt(config))
+
     def test_database_denial_preserved(self):
         config = ExperimentalQuotaConfig(enabled=True,
             dedicated_postgres_dsn="postgresql://example",
