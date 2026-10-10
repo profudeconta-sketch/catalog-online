@@ -348,3 +348,25 @@ if st.button("Etapa 17 — verifică naturalitatea răspunsului", disabled=not s
         else:
             st.warning("Nu am primit răspuns. Nu se reîncearcă automat.")
 st.caption("Evaluează: o idee utilă, glumă discretă, exprimare naturală, fără regionalisme inventate.")
+
+st.divider()
+st.subheader("Etapa 18: adaptarea tonului")
+tone_examples = (
+    ("Relaxat", "Salut, Neluțu! Propune o activitate relaxantă pentru o după-amiază liberă, cu umor discret."),
+    ("Serios", "Cum pot discuta calm și respectuos cu un prieten după o neînțelegere? Răspunde fără glume."),
+    ("Tehnic", "Explică precis diferența dintre RAM și SSD, în câteva propoziții, fără glume."),
+)
+tone_choice = st.selectbox("Situația fictivă", range(3), format_func=lambda i: tone_examples[i][0])
+tone_prompt = tone_examples[tone_choice][1]
+st.code(tone_prompt, language=None)
+tone_consent = st.checkbox("Confirm transmiterea exclusivă a întrebării afișate către Gemini.", key="tone_consent")
+if st.button("Testează tonul", disabled=not tone_consent):
+    try:
+        tone_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
+    except (FileNotFoundError, KeyError, AttributeError):
+        tone_key = None
+    if tone_key:
+        answer = generate(tone_prompt, api_key=tone_key, enabled=True, public_text_confirmed=tone_consent)
+        st.write(answer if answer else "Serviciul nu a răspuns; nu se reîncearcă automat.")
+    else:
+        st.error("Cheia de test lipsește.")
