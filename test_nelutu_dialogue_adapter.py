@@ -590,5 +590,60 @@ class SharedGeminiBudgetWiringTests(unittest.TestCase):
         self.assertIn('st.session_state["nelutu_shared_gemini_budget"]', source)
 
 
+class GeminiOfflineFailureMatrixTests(unittest.TestCase):
+    """Stage 20: simulated failures, with no real provider traffic."""
+
+    def test_failure_categories_do_not_expose_secret_or_retry(self):
+        from unittest.mock import patch
+        from urllib.error import HTTPError, URLError
+        import io
+        import nelutu_gemini_optional as gemini
+        key = "STAGE20_PRIVATE_KEY_DO_NOT_PRINT"
+        scenarios = (
+            (HTTPError(gemini.ENDPOINT, 429, "quota " + key, {}, io.BytesIO(b"secret")), "http_429"),
+            (HTTPError(gemini.ENDPOINT, 503, "offline " + key, {}, None), "http_503"),
+            (HTTPError(gemini.ENDPOINT, 403, "denied " + key, {}, None), "http_403"),
+            (URLError("network " + key), "network_error"),
+            (TimeoutError("timeout " + key), "network_error"),
+        )
+        for failure, expected in scenarios:
+            with self.subTest(category=expected):
+                with patch.object(gemini.request, "urlopen", side_effect=failure) as opener:
+                    status = gemini.diagnose_status(
+                        "Salut, Neluțu!", api_key=key, enabled=True,
+                        public_text_confirmed=True,
+                    )
+                    self.assertEqual(status, expected)
+                    self.assertNotIn(key, status)
+                    self.assertEqual(opener.call_count, 1)
+                with patch.object(gemini.request, "urlopen", side_effect=failure) as opener:
+                    answer = gemini.generate(
+                        "Salut, Neluțu!", api_key=key, enabled=True,
+                        public_text_confirmed=True,
+                    )
+                    self.assertIsNone(answer)
+                    self.assertEqual(opener.call_count, 1)
+
+    def test_malformed_or_empty_reply_is_handled_safely(self):
+        from unittest.mock import patch
+        import io
+        import nelutu_gemini_optional as gemini
+
+        class Reply:
+            def __init__(self, raw): self.raw = raw
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return self.raw
+
+        for raw in (b"not-json", b"{}", b'{"candidates":[]}',
+                    b'{"candidates":[{"content":{"parts":[]}}]}'):
+            with self.subTest(reply=raw):
+                with patch.object(gemini.request, "urlopen", return_value=Reply(raw)) as opener:
+                    self.assertIsNone(gemini.generate(
+                        "Salut, Neluțu!", api_key="dummy", enabled=True,
+                        public_text_confirmed=True))
+                    self.assertEqual(opener.call_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
