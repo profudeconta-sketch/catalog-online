@@ -14,7 +14,6 @@ from urllib import request, error
 MODEL = "gemini-2.5-flash-lite"
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent"
 MAX_CHARS = 600
-MAX_HISTORY = 4
 TIMEOUT = 8
 
 SYSTEM = (
@@ -64,8 +63,8 @@ def generate(message: str, history: tuple[tuple[str, str], ...] = (), *,
              public_text_confirmed: bool = False) -> str | None:
     """Return None on blocked, unavailable or failed service; never raise to UI.
 
-    History is in-memory only and must already be restricted to public general
-    conversation. Neither secrets nor request contents are logged.
+    History is forbidden for external requests at this stage. Neither secrets
+    nor request contents are logged.
     """
     # Explicit per-request consent is required even for apparently public text.
     # The caller must show the actual outbound message before confirmation.
@@ -77,11 +76,7 @@ def generate(message: str, history: tuple[tuple[str, str], ...] = (), *,
     # Until history has a separate explicit consent UI, forbid sending it.
     if history:
         return None
-    contents = [
-        {"role": role, "parts": [{"text": text}]}
-        for role, text in history
-    ]
-    contents.append({"role": "user", "parts": [{"text": message}]})
+    contents = [{"role": "user", "parts": [{"text": message}]}]
     payload = json.dumps({
         "systemInstruction": {"parts": [{"text": SYSTEM}]},
         "contents": contents,
