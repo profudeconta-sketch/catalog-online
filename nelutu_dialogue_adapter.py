@@ -5,6 +5,7 @@ from nelutu_parent_guide import answer_parent
 from nelutu_parent_flows import answer as parent_flow_guidance
 from nelutu_local_dialogue import DialogueState, reply as local_reply, _norm
 from nelutu_education_dialogue import educational_reply
+from nelutu_subject_importance import subject_reply
 from nelutu_privacy_guard import guard as privacy_guard, credential_warning, access_guidance, authority_guard, director_class_guidance, third_party_credential_guard
 
 def _school_topic(question):
@@ -53,6 +54,9 @@ def answer_parent_dialogue(question, context=None, state=None):
         rule = _school_topic(question)
         if rule is not None and rule.intent == 'absences_40':
             return rule, DialogueState()
+    subject = subject_reply(question)
+    if subject is not None:
+        return subject, DialogueState()
     flow = parent_flow_guidance(question)
     if flow is not None and (flow.intent != 'parent_flow_school' or not _school_topic(question)) :
         return flow, DialogueState()
