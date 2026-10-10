@@ -242,6 +242,21 @@ class SubjectImportanceTests(unittest.TestCase):
                 answer, _ = answer_parent_dialogue(question)
                 self.assertEqual(answer.intent, intent)
 
+    def test_physical_education_is_not_physics(self):
+        examples = (
+            "La ce foloseste educatia fizica?",
+            "De ce facem educatie fizica?",
+            "Ce importanta are educația fizică?",
+            "La ce ajuta sportul?",
+        )
+        for question in examples:
+            with self.subTest(question=question):
+                answer, _ = answer_parent_dialogue(question)
+                self.assertEqual(answer.intent, "subject_sport")
+                self.assertIn("sănătatea", answer.text)
+        physics, _ = answer_parent_dialogue("De ce facem fizica?")
+        self.assertEqual(physics.intent, "education_physics")
+
     def test_unrelated_portal_question_unchanged(self):
         answer, _ = answer_parent_dialogue("cum trimit cererea de motivare a absentelor?")
         self.assertEqual(answer.intent, "parent_flow_excuse")
