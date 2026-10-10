@@ -345,5 +345,17 @@ class GeminiDemoBoundaryTests(unittest.TestCase):
             self.assertEqual(generator.call_args.args[0], demo.DEMO_PROMPTS[0])
             self.assertTrue(generator.call_args.kwargs["public_text_confirmed"])
 
+
+class GeminiPreviewStaticTests(unittest.TestCase):
+    def test_preview_does_not_import_catalog_or_parent_app(self):
+        from pathlib import Path
+        code = Path(__file__).with_name("nelutu_gemini_preview.py").read_text(encoding="utf-8")
+        self.assertNotIn("import app_parinti", code)
+        self.assertNotIn("import app_web_catalog", code)
+        self.assertNotIn("gestiune_elevi.json", code)
+        self.assertNotIn("catalog_scolar_", code)
+        self.assertIn("st.checkbox", code)
+        self.assertIn("disabled=not confirmed", code)
+
 if __name__ == "__main__":
     unittest.main()
