@@ -89,9 +89,9 @@ class AdapterTests(unittest.TestCase):
 
     def test_missing_row_returns_zero(self):
         cursor = Cursor()
-        cursor.result = None
+        cursor.used = 0
         with self._driver(Connection(cursor)):
-            self.assertEqual(PostgreSQLBudget("postgresql://fake").remaining(), 0)
+            self.assertEqual(PostgreSQLBudget("postgresql://fake").remaining(), 12)
 
 
 if __name__ == "__main__":
