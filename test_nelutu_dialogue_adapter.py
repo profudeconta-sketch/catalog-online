@@ -203,5 +203,21 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(answer.intent, "parent_flow_medical")
         self.assertEqual(state.topic, "")
 
+
+class FriendlyGreetingTests(unittest.TestCase):
+    def test_greetings(self):
+        for question in ("No, ce mai faci astăzi?", "Bună dimineața!", "Bună ziua!", "Bună seara!", "Salut!", "Salutare!", "Servus!", "Mersi!"):
+            with self.subTest(question=question):
+                answer, _ = answer_parent_dialogue(question)
+                self.assertEqual(answer.intent, "smalltalk")
+
+    def test_unknown_stays_unknown(self):
+        answer, _ = answer_parent_dialogue("blorpf xyzzy 92817")
+        self.assertEqual(answer.intent, "clarification")
+
+    def test_portal_guidance_preserved(self):
+        answer, _ = answer_parent_dialogue("cum trimit cererea de motivare a absentelor?")
+        self.assertEqual(answer.intent, "parent_flow_excuse")
+
 if __name__ == "__main__":
     unittest.main()
