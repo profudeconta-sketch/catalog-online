@@ -72,7 +72,7 @@ def generate(message: str, history: tuple[tuple[str, str], ...] = (), *,
     if not enabled or not public_text_confirmed or not is_public_general_chat(message):
         return None
     key = api_key or os.environ.get("NELUTU_GEMINI_API_KEY")
-    if not key:
+    if not isinstance(key, str) or not key.strip():
         return None
     # Until history has a separate explicit consent UI, forbid sending it.
     if history:
@@ -98,5 +98,5 @@ def generate(message: str, history: tuple[tuple[str, str], ...] = (), *,
         answer = "".join(part.get("text", "") for part in parts).strip()
         return answer[:1500] or None
     except (error.HTTPError, error.URLError, TimeoutError, OSError,
-            ValueError, KeyError, IndexError, TypeError):
+            ValueError, KeyError, IndexError, TypeError, UnicodeError):
         return None
