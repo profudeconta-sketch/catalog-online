@@ -1,5 +1,6 @@
 """Stage 39 offline tests for a persistent Gemini quota prototype."""
 import os
+import multiprocessing
 import sqlite3
 import tempfile
 import unittest
@@ -7,6 +8,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from nelutu_durable_budget import DurableBudget
+
+
+def _reserve_in_process(path):
+    return DurableBudget(path, limit=12).reserve()
 
 
 class DurableBudgetTests(unittest.TestCase):
@@ -36,6 +41,23 @@ class DurableBudgetTests(unittest.TestCase):
                     lambda _: DurableBudget(path, limit=12).reserve(), range(48)))
             self.assertEqual(sum(results), 12)
             self.assertFalse(DurableBudget(path).reserve())
+
+    def test_parallel_processes_share_one_atomic_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "quota.sqlite3")
+            with multiprocessing.get_context("spawn").Pool(processes=4) as pool:
+                results = pool.map(_reserve_in_process, [path] * 24)
+            self.assertEqual(sum(results), 12)
+            self.assertEqual(DurableBudget(path).remaining(), 0)
+
+    def test_new_process_sees_previous_reservations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "quota.sqlite3")
+            self.assertTrue(DurableBudget(path, limit=2).reserve())
+            with multiprocessing.get_context("spawn").Pool(processes=1) as pool:
+                self.assertTrue(pool.apply(_reserve_in_process, (path,)))
+                self.assertFalse(pool.apply(_reserve_in_process, (path,)))
+            self.assertFalse(DurableBudget(path, limit=2).reserve())
 
     def test_preview_opt_in_and_fail_closed_wiring(self):
         source = Path(__file__).with_name("nelutu_gemini_preview.py").read_text(encoding="utf-8")
