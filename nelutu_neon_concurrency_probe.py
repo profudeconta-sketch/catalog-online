@@ -68,14 +68,18 @@ def run() -> bool:
                 used = cur.fetchone()[0]
         passed = used == LIMIT and sum(results) == LIMIT
         print("PASS" if passed else "FAIL", "successful reservations:", sum(results), "stored:", used)
-        return passed
     finally:
+        cleanup_ok = False
         try:
             with psycopg.connect(dsn, connect_timeout=5) as conn:
                 with conn.cursor() as cur:
                     cur.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(identifier))
+            cleanup_ok = True
         except Exception:
             print("WARNING: cleanup failed; remove isolated test table manually")
+        if not cleanup_ok:
+            raise RuntimeError("Isolated test table cleanup could not be verified") from None
+    return passed
 
 
 if __name__ == "__main__":
