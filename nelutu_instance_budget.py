@@ -26,3 +26,22 @@ class InstanceBudget:
                 return False
             self._used += 1
             return True
+
+
+class SharedBudgetGate:
+    """Reserve session and instance quotas together, never refund provider attempts.
+
+    This is only a process-local test gate; it does not survive restarts.
+    """
+
+    def __init__(self, instance: InstanceBudget) -> None:
+        self.instance = instance
+        self._lock = Lock()
+
+    def reserve(self, session_budget) -> bool:
+        with self._lock:
+            if not session_budget.allowed():
+                return False
+            if not self.instance.consume():
+                return False
+            return session_budget.consume()
