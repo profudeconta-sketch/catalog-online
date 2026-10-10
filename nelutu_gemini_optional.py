@@ -58,6 +58,35 @@ def is_public_general_chat(message: str) -> bool:
     return True
 
 
+def diagnose_status(message: str, *, api_key: str | None = None,
+                    enabled: bool = False, public_text_confirmed: bool = False) -> str:
+    """Safe diagnostic: only a fixed category, never key or server error body."""
+    if not enabled or not public_text_confirmed or not is_public_general_chat(message):
+        return "blocked"
+    key = api_key or os.environ.get("NELUTU_GEMINI_API_KEY")
+    if not isinstance(key, str) or not key.strip():
+        return "missing_key"
+    payload = json.dumps({
+        "systemInstruction": {"parts": [{"text": SYSTEM}]},
+        "contents": [{"role": "user", "parts": [{"text": message}]}],
+        "generationConfig": {"maxOutputTokens": 240, "temperature": 0.6},
+    }).encode("utf-8")
+    req = request.Request(ENDPOINT, data=payload, method="POST",
+                          headers={"Content-Type": "application/json", "x-goog-api-key": key})
+    try:
+        with request.urlopen(req, timeout=TIMEOUT) as response:
+            result = json.load(response)
+        parts = result["candidates"][0]["content"]["parts"]
+        return "ok" if any(isinstance(part.get("text"), str) and part["text"].strip()
+                           for part in parts) else "empty_response"
+    except error.HTTPError as exc:
+        return "http_" + str(exc.code) if exc.code in (400, 401, 403, 404, 408, 429, 500, 503, 504) else "http_error"
+    except (error.URLError, TimeoutError, OSError):
+        return "network_error"
+    except (ValueError, KeyError, IndexError, TypeError, UnicodeError):
+        return "invalid_response"
+
+
 def generate(message: str, history: tuple[tuple[str, str], ...] = (), *,
              api_key: str | None = None, enabled: bool = False,
              public_text_confirmed: bool = False) -> str | None:
