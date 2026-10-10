@@ -1,0 +1,24 @@
+name: Nelutu experimental quota bridge tests
+
+on:
+  pull_request:
+    paths:
+      - 'nelutu_experimental_quota_bridge.py'
+      - 'test_nelutu_experimental_quota_bridge.py'
+      - '.github/workflows/nelutu-experimental-quota-bridge.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quota-bridge-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile nelutu_experimental_quota_bridge.py test_nelutu_experimental_quota_bridge.py
+      - run: python -m unittest -v test_nelutu_experimental_quota_bridge.py
