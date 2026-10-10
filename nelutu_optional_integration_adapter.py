@@ -22,6 +22,10 @@ def handle_optional_demo(message: str, *, settings: AdapterSettings,
                          durable_budget, session_budget, instance_gate,
                          sender: Callable[[str], str | None]) -> PipelineResult:
     """Disabled by default; no external action when any deployment gate is off."""
+    if type(settings) is not AdapterSettings:
+        return PipelineResult("invalid_settings")
+    if type(settings.enabled) is not bool or type(settings.privacy_approved) is not bool or type(settings.infrastructure_verified) is not bool:
+        return PipelineResult("invalid_settings")
     if not settings.enabled:
         return PipelineResult("integration_disabled")
     if not settings.privacy_approved:
