@@ -44,6 +44,9 @@ shared_budget = st.session_state["nelutu_shared_gemini_budget"]
 
 def reserve_gemini_attempt() -> bool:
     """Reserve a test attempt before any possible network request."""
+    if not durable_mode or durable_budget is None:
+        st.warning("Testele Gemini reale sunt blocate până la configurarea cotei persistente.")
+        return False
     if durable_mode:
         if durable_budget is None or not shared_budget.allowed() or not instance_budget.allowed():
             st.warning("Bugetul persistent sau limita sesiunii nu permite testul.")
