@@ -295,3 +295,33 @@ if st.button("Etapa 15 — șterge contextul"):
 st.write("Memoria disponibilă:", stage15_memory.snapshot())
 st.write("Răspuns bazat pe dovezi:", answer_from_local_context(stage15_memory, stage15_question))
 st.caption("După memorare: trandafir. După patru replici suplimentare: informație indisponibilă, nu răspuns inventat.")
+
+st.divider()
+st.subheader("Etapa 16: dialog Gemini cu replici fictive, controlat")
+st.caption("Numai textul prestabilit afișat mai jos poate fi trimis; nu este transmisă memoria sesiunii.")
+from nelutu_gemini_fixed_topic_return import TOPIC_RETURN_EXCHANGE, fixed_topic_return_test
+st.write("Scenariul public prestabilit:")
+for role, message in TOPIC_RETURN_EXCHANGE:
+    st.write(("Utilizator: " if role == "user" else "Neluțu (replică fictivă): ") + message)
+stage16_consent = st.checkbox(
+    "Etapa 16: confirm transmiterea exclusivă a replicilor fictive afișate către Google Gemini.",
+    key="nelutu_stage16_consent",
+)
+if st.button("Etapa 16 — testează răspunsul contextual Gemini", disabled=not stage16_consent):
+    try:
+        stage16_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
+    except (FileNotFoundError, KeyError, AttributeError):
+        stage16_key = None
+    if not stage16_key:
+        st.error("Lipsește cheia Gemini din Secrets pentru aplicația izolată.")
+    else:
+        with st.spinner("Gemini răspunde la scenariul fictiv..."):
+            stage16_answer = fixed_topic_return_test(
+                api_key=stage16_key, enabled=True, confirmed=stage16_consent
+            )
+        if stage16_answer:
+            st.success("Răspuns primit.")
+            st.write(stage16_answer)
+        else:
+            st.warning("Serviciul nu a returnat un răspuns. Nu se face retrimitere automată.")
+st.caption("Verifică dacă răspunsul identifică trandafirul și ziua de sâmbătă, fără a confunda subiectul intermediar.")
