@@ -430,6 +430,26 @@ if st.button("Etapa 19 — resetează simularea"):
 st.caption("Simularea are un contor separat. Butoanele Gemini folosesc acum bugetul comun pe sesiune; acesta NU este o limită globală și poate fi reinițializat printr-o sesiune nouă.")
 
 st.divider()
+st.subheader("Etapa 22: verificare locală a limitelor — fără Gemini")
+st.caption("Acest test nu consumă nici bugetul real al sesiunii, nici bugetul comun al instanței.")
+from nelutu_instance_budget import InstanceBudget
+if "nelutu_stage22_session_demo" not in st.session_state:
+    st.session_state["nelutu_stage22_session_demo"] = DemoBudget()
+if "nelutu_stage22_instance_demo" not in st.session_state:
+    st.session_state["nelutu_stage22_instance_demo"] = InstanceBudget()
+stage22_session_demo = st.session_state["nelutu_stage22_session_demo"]
+stage22_instance_demo = st.session_state["nelutu_stage22_instance_demo"]
+st.write("Încercări fictive rămase în sesiune:", stage22_session_demo.remaining())
+st.write("Încercări fictive rămase în instanța demonstrativă:", stage22_instance_demo.remaining())
+if st.button("Etapa 22 — simulează o încercare", disabled=not stage22_session_demo.allowed() or not stage22_instance_demo.allowed()):
+    if stage22_instance_demo.consume() and stage22_session_demo.consume():
+        st.success("Încercare fictivă înregistrată. Niciun apel Gemini.")
+if st.button("Etapa 22 — simulează sesiune nouă"):
+    st.session_state["nelutu_stage22_session_demo"] = DemoBudget()
+    st.info("Numai contorul fictiv de sesiune a fost reinițializat; contorul fictiv comun a rămas neschimbat.")
+st.caption("Simulare locală: nu verifică persistența între reporniri sau servere.")
+
+st.divider()
 st.subheader("Etapa 20: rezistență la erori — simulare fără Gemini")
 st.caption("Situațiile de mai jos sunt simulate local. Nu se folosește cheia API, nu se trimite niciun mesaj și nu se consumă cota Gemini.")
 stage20_cases = {
