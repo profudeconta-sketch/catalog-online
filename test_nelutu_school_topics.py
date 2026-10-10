@@ -7,6 +7,11 @@ class SchoolTopicTests(unittest.TestCase):
         cases = {
             "la ce-i buna atata scoala?": "education_purpose",
             "La ce e bună atâta școală?": "education_purpose",
+            "la cei buna atata scoala": "education_purpose",
+            "dc trebe sa mergem la scoala": "education_purpose",
+            "da ce folos are scoala asta": "education_purpose",
+            "pt ce mai invata copilu": "education_purpose",
+            "no da la ce ne trebe atata carte": "education_purpose",
             "De ce facem Fizica?": "education_physics",
             "de ce facem fizica": "education_physics",
             "De ce facem Chimie?": "education_chemistry",
