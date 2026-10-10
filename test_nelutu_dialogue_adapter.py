@@ -544,5 +544,27 @@ class OfflineContextRecallTests(unittest.TestCase):
         memory.clear()
         self.assertIn("Nu am", answer_from_local_context(memory, question))
 
+class DemoBudgetTests(unittest.TestCase):
+    def test_budget_blocks_fourth_attempt(self):
+        from nelutu_demo_budget import DemoBudget
+        budget = DemoBudget()
+        self.assertEqual(budget.remaining(), 3)
+        for expected in (2, 1, 0):
+            self.assertTrue(budget.consume())
+            self.assertEqual(budget.remaining(), expected)
+        self.assertFalse(budget.consume())
+        self.assertFalse(budget.allowed())
+        self.assertEqual(budget.used, 3)
+
+    def test_independent_sessions_and_reset(self):
+        from nelutu_demo_budget import DemoBudget
+        first, second = DemoBudget(), DemoBudget()
+        self.assertTrue(first.consume())
+        self.assertEqual(second.remaining(), 3)
+        first.reset()
+        self.assertEqual(first.remaining(), 3)
+        self.assertEqual(second.remaining(), 3)
+
+
 if __name__ == "__main__":
     unittest.main()
