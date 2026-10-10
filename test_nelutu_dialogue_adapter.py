@@ -4,6 +4,13 @@ from test_nelutu_parent_flows import ParentFlowMatrix
 from nelutu_dialogue_adapter import answer_parent_dialogue
 from nelutu_local_dialogue import DialogueState
 
+class ClarificationTextTests(unittest.TestCase):
+    def test_unrecognized_question_uses_exact_text(self):
+        question = "blorpf xyzzy 92817"
+        answer, state = answer_parent_dialogue(question)
+        self.assertEqual(answer.intent, "clarification")
+        self.assertEqual(answer.text, "No io n-am priceput nimic din ce vrei să mă întrebi. Reformulează, te rog, că nu vreau să vorbesc prostii! 🤠")
+
 class SchoolLanguageTests(unittest.TestCase):
     def test_colloquial_school_questions(self):
         examples = {
