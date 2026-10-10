@@ -5,6 +5,7 @@ on:
     paths:
       - 'nelutu_durable_budget.py'
       - 'test_nelutu_durable_budget.py'
+      - 'test_nelutu_storage_safety.py'
       - 'nelutu_gemini_preview.py'
       - '.github/workflows/nelutu-gemini-durable.yml'
   workflow_dispatch:
@@ -22,6 +23,6 @@ jobs:
         with:
           python-version: '3.11'
       - name: Compile durable quota module and tests
-        run: python -m py_compile nelutu_durable_budget.py test_nelutu_durable_budget.py
+        run: python -m py_compile nelutu_durable_budget.py test_nelutu_durable_budget.py test_nelutu_storage_safety.py
       - name: Run isolated persistent quota tests
-        run: python -m unittest -v test_nelutu_durable_budget.py
+        run: python -m unittest -v test_nelutu_durable_budget.py test_nelutu_storage_safety.py
