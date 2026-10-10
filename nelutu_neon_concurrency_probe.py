@@ -4,7 +4,8 @@ Run ONLY after reviewing the zero-cost free-tier and using a dedicated TEST
 database role/connection via NELUTU_TEST_DATABASE_URL environment variable.
 Never paste the DSN in chat, logs, or GitHub. No Gemini calls are made.
 
-The test uses a uniquely named table and drops it in finally. It never reads,
+The test uses a uniquely named table inside nelutu_test_concurenta and
+attempts to drop it in finally. This role needs CREATE only in that schema. It never reads,
 writes, resets, or drops nelutu_gemini_budget.
 """
 from __future__ import annotations
@@ -31,7 +32,7 @@ def run() -> bool:
         return False
 
     name = "nelutu_concurrency_test_" + secrets.token_hex(8)
-    identifier = sql.Identifier(name)
+    identifier = sql.Identifier("nelutu_test_concurenta", name)
     try:
         with psycopg.connect(dsn, connect_timeout=5) as conn:
             with conn.cursor() as cur:
@@ -46,7 +47,7 @@ def run() -> bool:
                         ).format(identifier), (LIMIT,))
                         return cur.fetchone() is not None
             except Exception:
-                return False
+                raise RuntimeError("Reservation failed; test is inconclusive") from None
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:
             results = list(pool.map(reserve, range(WORKERS)))
         with psycopg.connect(dsn, connect_timeout=5) as conn:
