@@ -11,7 +11,7 @@ MAX_ATTEMPTS = 12
 
 
 class PostgreSQLBudget:
-    """Atomic, fail-closed quota; no automatic refunds or resets."""
+    """Atomic, fail-closed quota; no automatic refunds or resets.\n\n    Provision the table and singleton row separately; runtime needs only\n    SELECT and UPDATE permissions on the budget table."""
 
     def __init__(self, dsn: str, limit: int = MAX_ATTEMPTS):
         if not isinstance(dsn, str) or not dsn.strip():
@@ -28,15 +28,6 @@ class PostgreSQLBudget:
             with psycopg.connect(self._dsn, connect_timeout=5) as conn:
                 with conn.transaction():
                     with conn.cursor() as cur:
-                        cur.execute(
-                            "CREATE TABLE IF NOT EXISTS nelutu_gemini_budget "
-                            "(id integer PRIMARY KEY CHECK (id = 1), "
-                            "used integer NOT NULL CHECK (used >= 0))"
-                        )
-                        cur.execute(
-                            "INSERT INTO nelutu_gemini_budget (id, used) VALUES (1, 0) "
-                            "ON CONFLICT (id) DO NOTHING"
-                        )
                         cur.execute(
                             "UPDATE nelutu_gemini_budget SET used = used + 1 "
                             "WHERE id = 1 AND used < %s RETURNING used",
