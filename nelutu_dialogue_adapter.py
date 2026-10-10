@@ -42,6 +42,13 @@ def answer_parent_dialogue(question, context=None, state=None):
     privacy = credential_warning(question) or authority_guard(question) or third_party_credential_guard(question) or privacy_guard(question) or access_guidance(question) or director_class_guidance(question)
     if privacy is not None:
         return privacy, DialogueState()
+    # Întrebările explicite despre plafonul de 40 de ore primesc întâi
+    # explicația regulii, nu instrucțiunile generale pentru formular.
+    normalized = _norm(question)
+    if '40' in normalized.split() and any(term in normalized.split() for term in ('absente', 'absenta', 'ore')):
+        rule = _school_topic(question)
+        if rule is not None and rule.intent == 'absences_40':
+            return rule, DialogueState()
     flow = parent_flow_guidance(question)
     if flow is not None and (flow.intent != 'parent_flow_school' or not _school_topic(question)) :
         return flow, DialogueState()
