@@ -24,9 +24,12 @@ def route_single_answer(question: str, *, local_answer: Callable[[str], str],
                         sender: Callable[[str], str | None]) -> RoutedAnswer:
     """Use one existing response surface; safely fall back to local on any block."""
     # The local fallback is calculated independently and never sent to the provider.
-    local = local_answer(question)
+    try:
+        local = local_answer(question)
+    except Exception:
+        return RoutedAnswer("Neluțu nu poate răspunde momentan. Încearcă din nou mai târziu.", "local", "local_error")
     if not isinstance(local, str):
-        local = ""
+        return RoutedAnswer("Neluțu nu poate răspunde momentan. Încearcă din nou mai târziu.", "local", "local_invalid")
     result = handle_optional_demo(
         question, settings=settings, confirmed=confirmed,
         provider_key_present=provider_key_present,
