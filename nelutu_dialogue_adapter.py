@@ -43,7 +43,7 @@ def answer_parent_dialogue(question, context=None, state=None):
     if privacy is not None:
         return privacy, DialogueState()
     flow = parent_flow_guidance(question)
-    if flow is not None and flow.intent != 'parent_flow_school':
+    if flow is not None and (flow.intent != 'parent_flow_school' or not _school_topic(question)) :
         return flow, DialogueState()
     school = _school_topic(question)
     if school is not None:
