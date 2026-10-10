@@ -89,6 +89,22 @@ class AdapterTests(unittest.TestCase):
         with self._driver(Connection(cursor)):
             self.assertFalse(PostgreSQLBudget("postgresql://fake").reserve())
 
+    def test_connection_failure_denies_and_reports_zero(self):
+        with patch.dict(sys.modules, {"psycopg": types.SimpleNamespace(
+            connect=lambda *args, **kwargs: (_ for _ in ()).throw(
+                ConnectionError("simulated network outage"))
+        )}):
+            budget = PostgreSQLBudget("postgresql://fake")
+            self.assertFalse(budget.reserve())
+            self.assertEqual(budget.remaining(), 0)
+
+    def test_commit_failure_denies_reservation(self):
+        class CommitFails(Connection):
+            def __exit__(self, exc_type, exc, tb):
+                raise ConnectionError("simulated connection loss during commit")
+        with self._driver(CommitFails(Cursor())):
+            self.assertFalse(PostgreSQLBudget("postgresql://fake").reserve())
+
     def test_failed_read_reports_zero_remaining(self):
         cursor = Cursor(fail_at="SELECT")
         with self._driver(Connection(cursor)):
