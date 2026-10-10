@@ -530,5 +530,19 @@ class LocalMemoryEvictionTests(unittest.TestCase):
         self.assertEqual(first.snapshot(), ())
         self.assertEqual(second.snapshot(), (("user", "Mesaj independent"),))
 
+
+class OfflineContextRecallTests(unittest.TestCase):
+    def test_context_recall_and_reset(self):
+        from nelutu_conversation_local import LocalConversation
+        from nelutu_context_offline import FICTIONAL_SCRIPT, answer_from_local_context
+        memory = LocalConversation()
+        question = "Ce plantă am spus că plantez sâmbătă?"
+        self.assertIn("Nu am", answer_from_local_context(memory, question))
+        for role, message in FICTIONAL_SCRIPT:
+            self.assertTrue(memory.append(role, message))
+        self.assertIn("trandafir", answer_from_local_context(memory, question))
+        memory.clear()
+        self.assertIn("Nu am", answer_from_local_context(memory, question))
+
 if __name__ == "__main__":
     unittest.main()
