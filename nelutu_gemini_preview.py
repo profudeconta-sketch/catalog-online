@@ -365,7 +365,6 @@ if "nelutu_live_tone_budget" not in st.session_state:
     st.session_state["nelutu_live_tone_budget"] = DemoBudget()
 live_tone_budget = st.session_state["nelutu_live_tone_budget"]
 st.caption("Protecție locală pentru acest test: cel mult trei încercări Gemini pe sesiune, inclusiv cele eșuate.")
-st.write("Încercări Gemini disponibile în testul de ton:", live_tone_budget.remaining())
 tone_consent = st.checkbox(
     "Confirm transmiterea exclusivă a întrebării afișate către Gemini.",
     key="tone_consent_" + str(tone_choice),
@@ -382,6 +381,7 @@ if st.button("Testează tonul", disabled=not tone_consent or not live_tone_budge
         st.write(answer if answer else "Serviciul nu a răspuns; nu se reîncearcă automat.")
     else:
         st.warning("Limita locală a fost atinsă.")
+st.write("Încercări Gemini disponibile în testul de ton:", live_tone_budget.remaining())
 if not live_tone_budget.allowed():
     st.warning("Testul Gemini de ton este blocat pentru această sesiune după trei încercări.")
 
