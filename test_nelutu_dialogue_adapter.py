@@ -425,5 +425,34 @@ class FixedContextPrivacyTests(unittest.TestCase):
             self.assertEqual(len(request_payload["contents"]), 3)
             self.assertEqual(request_payload["contents"][2]["parts"][0]["text"], context.FOLLOW_UP)
 
+
+class FixedMultiturnBoundaryTests(unittest.TestCase):
+    def test_consent_required_for_five_turn_test(self):
+        from unittest.mock import patch
+        import nelutu_gemini_fixed_multiturn as demo
+        with patch.object(demo.request, "urlopen") as opener:
+            self.assertIsNone(demo.fixed_multiturn_test(api_key="dummy", enabled=True))
+            self.assertIsNone(demo.fixed_multiturn_test(api_key="dummy", confirmed=True))
+            self.assertIsNone(demo.fixed_multiturn_test(enabled=True, confirmed=True))
+            opener.assert_not_called()
+
+    def test_outbound_contains_only_five_fixed_replicas(self):
+        from unittest.mock import patch
+        import json
+        import nelutu_gemini_fixed_multiturn as demo
+        class Reply:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{"candidates":[{"content":{"parts":[{"text":"Pune cheile in acelasi loc."}]}}]}'
+        with patch.object(demo.request, "urlopen", return_value=Reply()) as opener:
+            result = demo.fixed_multiturn_test(
+                api_key="dummy", enabled=True, confirmed=True)
+            self.assertEqual(result, "Pune cheile in acelasi loc.")
+            payload = json.loads(opener.call_args.args[0].data)
+            self.assertEqual(
+                [(x["role"], x["parts"][0]["text"]) for x in payload["contents"]],
+                list(demo.FIXED_EXCHANGE),
+            )
+
 if __name__ == "__main__":
     unittest.main()
