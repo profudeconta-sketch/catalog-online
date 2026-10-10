@@ -2847,6 +2847,56 @@ with tab5:
                 except Exception as ex:
                     st.error(f"Eroare Excel Absențe Lunare Discipline: {ex}")
 
+            # Raport separat pentru o singura luna a anului scolar configurat.
+            st.markdown("#### 📅 Raport absențe pentru o lună selectată")
+            month_options = {name.split(" ")[0]: (code, int(name.split(" ")[1])) for code, name in MONTH_DEFS}
+            col_month, col_year = st.columns(2)
+            with col_month:
+                selected_month_name = st.selectbox("Selectează luna", list(month_options), key="abs_disc_month")
+            with col_year:
+                selected_report_year = st.selectbox(
+                    "Selectează anul",
+                    sorted({year for _, year in month_options.values()}),
+                    key="abs_disc_year",
+                )
+            selected_code, expected_year = month_options[selected_month_name]
+            valid_month_year = selected_report_year == expected_year
+            if not valid_month_year:
+                st.info("Luna și anul selectate nu aparțin anului școlar configurat. Selectează o combinație validă.")
+            if st.button("📊 Generează raport absențe lunar", key="generate_abs_disc_single_month", disabled=not valid_month_year):
+                if valid_month_year:
+                    try:
+                        monthly_rows = calculate_lunar_subject_absences(selected_file)
+                        month_label = f"{selected_month_name} {selected_report_year}"
+                        monthly_columns = [
+                            "Categorie", "Disciplină / Modul",
+                            f"{month_label} - Nemotivate Clasă",
+                            f"{month_label} - Motivate Clasă",
+                            f"{month_label} - Total Clasă",
+                        ]
+                        if monthly_rows:
+                            report_rows = [{key: row[key] for key in monthly_columns} for row in monthly_rows]
+                            st.session_state["abs_disc_monthly_download"] = (
+                                generate_excel_bytes(report_rows, sheet_name="Absente Discipline Lunar"),
+                                f"Absente_Discipline_{selected_month_name}_{selected_report_year}_IX_TH.xlsx",
+                                selected_month_name,
+                                selected_report_year,
+                            )
+                        else:
+                            st.error("Raportul nu a putut fi calculat. Nu a fost generat niciun fișier.")
+                    except Exception as ex:
+                        st.error(f"Eroare la generarea raportului lunar: {ex}")
+            if "abs_disc_monthly_download" in st.session_state:
+                monthly_bytes, monthly_filename, generated_month, generated_year = st.session_state["abs_disc_monthly_download"]
+                if valid_month_year and (generated_month, generated_year) == (selected_month_name, selected_report_year):
+                    st.download_button(
+                        "⬇️ Descarcă raportul lunar (.xlsx)",
+                        data=monthly_bytes,
+                        file_name=monthly_filename,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                    )
+
             st.subheader("📊 Centralizator Absențe pe Discipline și Module")
             st.caption("Generează raportul sintetic al absențelor defalcat pe fiecare disciplină în parte cu totalurile la nivel de clasă.")
             
