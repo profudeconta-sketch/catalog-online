@@ -2879,20 +2879,23 @@ with tab5:
                             st.session_state["abs_disc_monthly_download"] = (
                                 generate_excel_bytes(report_rows, sheet_name="Absente Discipline Lunar"),
                                 f"Absente_Discipline_{selected_month_name}_{selected_report_year}_IX_TH.xlsx",
+                                selected_month_name,
+                                selected_report_year,
                             )
                         else:
                             st.error("Raportul nu a putut fi calculat. Nu a fost generat niciun fișier.")
                     except Exception as ex:
                         st.error(f"Eroare la generarea raportului lunar: {ex}")
             if "abs_disc_monthly_download" in st.session_state:
-                monthly_bytes, monthly_filename = st.session_state["abs_disc_monthly_download"]
-                st.download_button(
-                    "⬇️ Descarcă raportul lunar (.xlsx)",
-                    data=monthly_bytes,
-                    file_name=monthly_filename,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                )
+                monthly_bytes, monthly_filename, generated_month, generated_year = st.session_state["abs_disc_monthly_download"]
+                if valid_month_year and (generated_month, generated_year) == (selected_month_name, selected_report_year):
+                    st.download_button(
+                        "⬇️ Descarcă raportul lunar (.xlsx)",
+                        data=monthly_bytes,
+                        file_name=monthly_filename,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                    )
 
             st.subheader("📊 Centralizator Absențe pe Discipline și Module")
             st.caption("Generează raportul sintetic al absențelor defalcat pe fiecare disciplină în parte cu totalurile la nivel de clasă.")
