@@ -57,5 +57,44 @@ class GeminiOptionalTests(unittest.TestCase):
             self.assertEqual(payload["contents"][-1]["parts"][0]["text"], "Și eu sunt bine.")
 
 
+class Stage31IntegrationBoundaryTests(unittest.TestCase):
+    """Static fail-safe checks for the isolated demo, with no provider calls."""
+
+    def test_preview_has_no_school_application_imports(self):
+        import ast
+        from pathlib import Path
+        source = Path(__file__).with_name("nelutu_gemini_preview.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        imports = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imports.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imports.append(node.module)
+        forbidden = ("app_web_catalog", "app_parinti", "document_storage",
+                     "leave_pass_storage", "parent_excuse_pdf")
+        for name in imports:
+            self.assertNotIn(name.split(".")[0], forbidden)
+
+    def test_all_preview_network_buttons_reserve_budget(self):
+        from pathlib import Path
+        source = Path(__file__).with_name("nelutu_gemini_preview.py").read_text(encoding="utf-8")
+        self.assertEqual(source.count("and reserve_gemini_attempt():"), 9)
+        self.assertEqual(source.count("disabled=not "), 9)
+        self.assertIn("instance_budget.consume()", source)
+        self.assertIn("shared_budget.consume()", source)
+
+    def test_fixed_transport_requires_approved_transcript(self):
+        from unittest.mock import Mock
+        from nelutu_gemini_fixed_transport import send_fixed_exchange
+        opener = Mock()
+        self.assertIsNone(send_fixed_exchange(
+            (("user", "Date despre elev"),),
+            api_key="dummy", enabled=True, confirmed=True,
+            temperature=0.4, opener=opener,
+        ))
+        opener.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
