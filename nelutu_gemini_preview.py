@@ -129,3 +129,26 @@ if st.button("Testează reformularea", disabled=not paraphrase_confirmed):
             st.write(paraphrase_answer)
         else:
             st.info("Testul de reformulare nu a primit un răspuns utilizabil.")
+
+st.divider()
+st.subheader("Test 9: revenirea la un subiect anterior")
+from nelutu_gemini_fixed_topic_return import TOPIC_RETURN_EXCHANGE, fixed_topic_return_test
+for role, message in TOPIC_RETURN_EXCHANGE:
+    st.write(("Întrebare: " if role == "user" else "Răspuns demonstrativ: ") + message)
+st.caption("Sunt trimise doar replicile fictive afișate.")
+topic_consent = st.checkbox("Confirm transmiterea replicilor fictive către Google.", key="topic_return_consent")
+if st.button("Testează revenirea la subiect", disabled=not topic_consent):
+    try:
+        topic_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
+    except (FileNotFoundError, KeyError, AttributeError):
+        topic_key = None
+    if not topic_key:
+        st.error("Cheia de test nu este configurată.")
+    else:
+        with st.spinner("Se verifică revenirea la subiect..."):
+            topic_answer = fixed_topic_return_test(
+                api_key=topic_key, enabled=True, confirmed=topic_consent)
+        if topic_answer:
+            st.write(topic_answer)
+        else:
+            st.info("Testul 9 nu a primit un răspuns utilizabil.")
