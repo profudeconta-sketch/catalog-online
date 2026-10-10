@@ -152,3 +152,30 @@ if st.button("Testează revenirea la subiect", disabled=not topic_consent):
             st.write(topic_answer)
         else:
             st.info("Testul 9 nu a primit un răspuns utilizabil.")
+
+st.divider()
+st.subheader("Etapa 11: memorie temporară locală, fără Gemini")
+from nelutu_conversation_local import LocalConversation
+if "nelutu_offline_memory" not in st.session_state:
+    st.session_state["nelutu_offline_memory"] = LocalConversation()
+local_memory = st.session_state["nelutu_offline_memory"]
+st.caption("Folosim numai replici fictive prestabilite. Memoria este locală sesiunii și nu se transmite către Google.")
+offline_replies = (
+    ("user", "Sâmbătă vreau să plantez un trandafir."),
+    ("model", "No, pregătește locul și udă planta."),
+    ("user", "Între timp, spune-mi ceva despre curcubeu."),
+    ("model", "Curcubeul apare când lumina interacționează cu picăturile de apă."),
+)
+if st.button("Adaugă următoarea replică fictivă"):
+    next_index = st.session_state.get("nelutu_offline_next", 0)
+    role, message = offline_replies[next_index % len(offline_replies)]
+    if local_memory.append(role, message):
+        st.session_state["nelutu_offline_next"] = next_index + 1
+    else:
+        st.error("Replica a fost respinsă de filtrul local.")
+if st.button("Șterge memoria locală"):
+    local_memory.clear()
+    st.session_state["nelutu_offline_next"] = 0
+st.write("Replici păstrate în această sesiune:", len(local_memory.snapshot()))
+for role, message in local_memory.snapshot():
+    st.write(("Utilizator: " if role == "user" else "Neluțu (fictiv): ") + message)
