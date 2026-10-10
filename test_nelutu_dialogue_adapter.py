@@ -261,5 +261,32 @@ class SubjectImportanceTests(unittest.TestCase):
         answer, _ = answer_parent_dialogue("cum trimit cererea de motivare a absentelor?")
         self.assertEqual(answer.intent, "parent_flow_excuse")
 
+
+class GeminiIsolationRegressionTests(unittest.TestCase):
+    def test_gemini_off_by_default_and_no_external_call(self):
+        from unittest.mock import patch
+        import nelutu_gemini_optional as gemini
+        with patch.object(gemini.request, "urlopen") as opener:
+            self.assertIsNone(gemini.generate("Ce mai faci?", api_key="dummy"))
+            opener.assert_not_called()
+
+    def test_private_questions_never_reach_gemini(self):
+        from unittest.mock import patch
+        import nelutu_gemini_optional as gemini
+        with patch.object(gemini.request, "urlopen") as opener:
+            for question in ("Ce note are elevul?", "Telefon 0742123456",
+                             "PIN 123456", "Am un diagnostic medical"):
+                with self.subTest(question=question):
+                    self.assertIsNone(gemini.generate(question, api_key="dummy", enabled=True))
+            opener.assert_not_called()
+
+    def test_invalid_history_never_reaches_gemini(self):
+        from unittest.mock import patch
+        import nelutu_gemini_optional as gemini
+        with patch.object(gemini.request, "urlopen") as opener:
+            self.assertIsNone(gemini.generate("Buna", (("user", "catalog elev"),),
+                                               api_key="dummy", enabled=True))
+            opener.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()
