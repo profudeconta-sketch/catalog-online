@@ -8,6 +8,7 @@ from __future__ import annotations
 import streamlit as st
 
 from nelutu_gemini_demo import DEMO_PROMPTS, demo_prompt
+from nelutu_gemini_optional import diagnose_status
 
 st.set_page_config(page_title="Neluțu — test Gemini izolat", page_icon="🤠")
 st.title("🤠 Neluțu — test Gemini izolat")
@@ -38,4 +39,14 @@ if st.button("Testează Gemini", disabled=not confirmed):
         if response:
             st.write(response)
         else:
-            st.info("Gemini nu a răspuns. Verifică accesul gratuit, modelul și limitele contului.")
+            st.info("Gemini nu a răspuns. Poți verifica separat categoria erorii mai jos.")
+
+if st.button("Diagnostic sigur (un apel separat)", disabled=not confirmed):
+    try:
+        key = st.secrets.get("NELUTU_GEMINI_API_KEY")
+    except (FileNotFoundError, KeyError, AttributeError):
+        key = None
+    status = diagnose_status(DEMO_PROMPTS[selection], api_key=key,
+                             enabled=True, public_text_confirmed=confirmed)
+    st.write("Cod diagnostic:", status)
+    st.caption("Nu se afișează cheia API, date personale sau mesajul brut de la Google.")
