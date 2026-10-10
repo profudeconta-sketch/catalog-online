@@ -29,7 +29,7 @@ class PostgreSQLBudget:
                 with conn.transaction():
                     with conn.cursor() as cur:
                         cur.execute(
-                            "UPDATE nelutu_gemini_budget SET used = used + 1 "
+                            "UPDATE public.nelutu_gemini_budget SET used = used + 1 "
                             "WHERE id = 1 AND used < %s RETURNING used",
                             (self.limit,),
                         )
@@ -42,7 +42,7 @@ class PostgreSQLBudget:
             import psycopg
             with psycopg.connect(self._dsn, connect_timeout=5) as conn:
                 with conn.cursor() as cur:
-                    cur.execute("SELECT used FROM nelutu_gemini_budget WHERE id = 1")
+                    cur.execute("SELECT used FROM public.nelutu_gemini_budget WHERE id = 1")
                     row = cur.fetchone()
                     return max(0, self.limit - row[0]) if row else 0
         except Exception:
