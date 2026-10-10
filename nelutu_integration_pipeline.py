@@ -40,6 +40,7 @@ def run_demo_pipeline(message: str, *, explicitly_enabled: bool, confirmed: bool
     if not isinstance(answer, str) or not answer.strip():
         return PipelineResult("provider_unavailable")
     clean_answer = answer.strip()[:1500].strip()
-    if not clean_answer or not clean_answer.isprintable():
+    # Allow ordinary multiline replies, but reject all other control characters.
+    if not clean_answer or any(not (ch.isprintable() or ch in "\\n\\t") for ch in clean_answer):
         return PipelineResult("provider_unavailable")
     return PipelineResult("ok", clean_answer)
