@@ -482,6 +482,12 @@ class FixedParaphraseBoundaryTests(unittest.TestCase):
             )
 
 
+class LocalMemoryBufferTests(unittest.TestCase):
+    def test_memory_buffer_isolation(self):
+        from nelutu_local_memory_checks import check_memory
+        self.assertTrue(check_memory())
+
+
 class FixedTopicReturnBoundaryTests(unittest.TestCase):
     def test_topic_return_requires_consent(self):
         from unittest.mock import patch
