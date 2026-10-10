@@ -357,5 +357,25 @@ class GeminiPreviewStaticTests(unittest.TestCase):
         self.assertIn("st.checkbox", code)
         self.assertIn("disabled=not confirmed", code)
 
+
+class GeminiProviderFailureTests(unittest.TestCase):
+    def test_http_failure_returns_none_without_raising(self):
+        from unittest.mock import patch
+        from urllib.error import URLError
+        import nelutu_gemini_optional as gemini
+        with patch.object(gemini.request, "urlopen", side_effect=URLError("unavailable")):
+            self.assertIsNone(gemini.generate(
+                "Ce mai faci?", api_key="dummy", enabled=True,
+                public_text_confirmed=True))
+
+    def test_invalid_secret_does_not_trigger_request(self):
+        from unittest.mock import patch
+        import nelutu_gemini_optional as gemini
+        with patch.object(gemini.request, "urlopen") as opener:
+            self.assertIsNone(gemini.generate(
+                "Ce mai faci?", api_key=123, enabled=True,
+                public_text_confirmed=True))
+            opener.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()
