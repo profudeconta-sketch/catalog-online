@@ -40,12 +40,12 @@ def answer_parent_dialogue(question, context=None, state=None):
     privacy = credential_warning(question) or authority_guard(question) or third_party_credential_guard(question) or privacy_guard(question) or access_guidance(question) or director_class_guidance(question)
     if privacy is not None:
         return privacy, DialogueState()
-    school = _school_topic(question)
-    if school is not None:
-        return school, DialogueState()
     flow = parent_flow_guidance(question)
     if flow is not None:
         return flow, DialogueState()
+    school = _school_topic(question)
+    if school is not None:
+        return school, DialogueState()
     # Continuarile educationale deja stabilite au prioritate fata de fallback-ul
     # vechi; fluxurile portalului si filtrele de confidentialitate raman primele.
     if state.topic == "purpose":
