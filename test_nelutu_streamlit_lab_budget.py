@@ -21,6 +21,8 @@ class Cursor:
         assert "public.nelutu_gemini_budget" not in sql
         assert not any(x in sql for x in ("CREATE ", "DROP ", "ALTER ", "TRUNCATE "))
     def fetchone(self):
+        if self.sql and self.sql[-1].startswith('UPDATE ') and self.row is not None and (self.row[0] < 0 or self.row[0] >= 3):
+            return None
         return self.row
 
 
@@ -52,8 +54,8 @@ class LabBudgetTests(unittest.TestCase):
         for row, remaining, reserved in [
             ((0,), 3, True),
             ((2,), 1, True),
-            ((3,), 0, True),
-            ((-1,), 0, True),
+            ((3,), 0, False),
+            ((-1,), 0, False),
             (None, 0, False),
         ]:
             with self.subTest(row=row):
