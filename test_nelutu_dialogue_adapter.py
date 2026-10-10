@@ -586,6 +586,7 @@ class SharedGeminiBudgetWiringTests(unittest.TestCase):
                 line = next(line for line in source.splitlines()
                             if line.startswith('if st.button("' + label + '"'))
                 self.assertIn("and reserve_gemini_attempt():", line)
+                self.assertIn("not shared_budget.allowed()", line)
         self.assertIn('st.session_state["nelutu_shared_gemini_budget"]', source)
 
 
