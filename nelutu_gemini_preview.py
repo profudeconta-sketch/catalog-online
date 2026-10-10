@@ -370,3 +370,23 @@ if st.button("Testează tonul", disabled=not tone_consent):
         st.write(answer if answer else "Serviciul nu a răspuns; nu se reîncearcă automat.")
     else:
         st.error("Cheia de test lipsește.")
+
+st.divider()
+st.subheader("Etapa 19: buget local de apeluri — demonstrație fără Gemini")
+from nelutu_demo_budget import DemoBudget
+if "nelutu_stage19_budget" not in st.session_state:
+    st.session_state["nelutu_stage19_budget"] = DemoBudget()
+stage19_budget = st.session_state["nelutu_stage19_budget"]
+st.caption("Simulare locală: maximum trei încercări într-o sesiune. Nu transmite nimic către Google.")
+st.write("Încercări disponibile:", stage19_budget.remaining())
+if st.button("Etapa 19 — simulează un apel", disabled=not stage19_budget.allowed()):
+    if stage19_budget.consume():
+        st.success("Încercare înregistrată numai local.")
+    else:
+        st.warning("Limita demonstrativă a fost atinsă.")
+if not stage19_budget.allowed():
+    st.warning("Limită locală atinsă: simularea nu mai permite încercări.")
+if st.button("Etapa 19 — resetează simularea"):
+    stage19_budget.reset()
+    st.info("Contorul demonstrativ a fost resetat.")
+st.caption("Atenție: această simulare NU limitează încă butoanele Gemini din etapele anterioare și NU oferă protecție globală contra abuzului.")
