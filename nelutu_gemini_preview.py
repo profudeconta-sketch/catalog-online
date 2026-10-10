@@ -77,3 +77,29 @@ if st.button("Testează memoria demonstrativă", disabled=not context_confirmed)
             st.write(context_answer)
         else:
             st.info("Testul de memorie nu a primit un răspuns utilizabil.")
+
+st.divider()
+st.subheader("Test extins: cinci replici demonstrative")
+from nelutu_gemini_fixed_multiturn import FIXED_EXCHANGE, fixed_multiturn_test
+for role, message in FIXED_EXCHANGE:
+    st.write(("Întrebare: " if role == "user" else "Răspuns demonstrativ: ") + message)
+st.caption("Se trimit doar aceste cinci replici prestabilite, nu conversații reale.")
+multi_confirmed = st.checkbox(
+    "Confirm transmiterea celor cinci replici demonstrative către Google.",
+    key="fixed_multiturn_consent",
+)
+if st.button("Testează dialogul extins", disabled=not multi_confirmed):
+    try:
+        multi_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
+    except (FileNotFoundError, KeyError, AttributeError):
+        multi_key = None
+    if not multi_key:
+        st.error("Cheia de test nu este configurată.")
+    else:
+        with st.spinner("Neluțu urmărește conversația..."):
+            multi_answer = fixed_multiturn_test(
+                api_key=multi_key, enabled=True, confirmed=multi_confirmed)
+        if multi_answer:
+            st.write(multi_answer)
+        else:
+            st.info("Testul extins nu a primit un răspuns utilizabil.")
