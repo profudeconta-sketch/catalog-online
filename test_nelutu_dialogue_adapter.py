@@ -610,7 +610,7 @@ class GeminiOfflineFailureMatrixTests(unittest.TestCase):
             with self.subTest(category=expected):
                 with patch.object(gemini.request, "urlopen", side_effect=failure) as opener:
                     status = gemini.diagnose_status(
-                        "Salut, Neluțu!", api_key=key, enabled=True,
+                        "Salut, Neluțu! Ce mai faci?", api_key=key, enabled=True,
                         public_text_confirmed=True,
                     )
                     self.assertEqual(status, expected)
@@ -618,7 +618,7 @@ class GeminiOfflineFailureMatrixTests(unittest.TestCase):
                     self.assertEqual(opener.call_count, 1)
                 with patch.object(gemini.request, "urlopen", side_effect=failure) as opener:
                     answer = gemini.generate(
-                        "Salut, Neluțu!", api_key=key, enabled=True,
+                        "Salut, Neluțu! Ce mai faci?", api_key=key, enabled=True,
                         public_text_confirmed=True,
                     )
                     self.assertIsNone(answer)
@@ -640,7 +640,7 @@ class GeminiOfflineFailureMatrixTests(unittest.TestCase):
             with self.subTest(reply=raw):
                 with patch.object(gemini.request, "urlopen", return_value=Reply(raw)) as opener:
                     self.assertIsNone(gemini.generate(
-                        "Salut, Neluțu!", api_key="dummy", enabled=True,
+                        "Salut, Neluțu! Ce mai faci?", api_key="dummy", enabled=True,
                         public_text_confirmed=True))
                     self.assertEqual(opener.call_count, 1)
 

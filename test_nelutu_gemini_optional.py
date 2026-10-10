@@ -46,7 +46,7 @@ class GeminiOptionalTests(unittest.TestCase):
                 }).encode()
         with patch.object(gemini.request, "urlopen", return_value=Response()) as opener:
             result = gemini.generate(
-                "Și eu sunt bine.",
+                "Salut, Neluțu! Ce mai faci?",
                 api_key="dummy", enabled=True, public_text_confirmed=True,
             )
             self.assertEqual(result, "No, bine! 🤠")
@@ -54,7 +54,7 @@ class GeminiOptionalTests(unittest.TestCase):
             self.assertEqual(kwargs["timeout"], gemini.TIMEOUT)
             payload = json.loads(args[0].data)
             self.assertEqual(len(payload["contents"]), 1)
-            self.assertEqual(payload["contents"][-1]["parts"][0]["text"], "Și eu sunt bine.")
+            self.assertEqual(payload["contents"][-1]["parts"][0]["text"], "Salut, Neluțu! Ce mai faci?")
 
 
 class Stage31IntegrationBoundaryTests(unittest.TestCase):
