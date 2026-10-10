@@ -80,4 +80,7 @@ def answer_parent_dialogue(question, context=None, state=None):
     local, next_state = local_reply(question, state)
     if local is not None:
         return local, next_state
+    if base.intent in ('fallback', 'clarification'):
+        from nelutu_assistant import NelutuAnswer
+        return NelutuAnswer('clarification', 'No io n-am priceput nimic din ce vrei să mă întrebi. Reformulează, te rog, că nu vreau să vorbesc prostii! 🤠'), DialogueState()
     return base, DialogueState()
