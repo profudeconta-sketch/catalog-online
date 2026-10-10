@@ -89,6 +89,23 @@ class AdapterTests(unittest.TestCase):
         with self._driver(Connection(cursor)):
             self.assertFalse(PostgreSQLBudget("postgresql://fake").reserve())
 
+    def test_failed_read_reports_zero_remaining(self):
+        cursor = Cursor(fail_at="SELECT")
+        with self._driver(Connection(cursor)):
+            self.assertEqual(PostgreSQLBudget("postgresql://fake").remaining(), 0)
+
+    def test_invalid_limits_are_rejected(self):
+        for invalid in (0, -1, True, 1.5, "3"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    PostgreSQLBudget("postgresql://fake", limit=invalid)
+
+    def test_empty_connection_string_is_rejected(self):
+        for invalid in ("", "  ", None):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    PostgreSQLBudget(invalid)
+
     def test_missing_row_returns_zero(self):
         cursor = Cursor()
         cursor.used = 0
