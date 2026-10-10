@@ -668,7 +668,7 @@ class InstanceGeminiBudgetTests(unittest.TestCase):
                 self.assertIn("not shared_budget.allowed()", line)
                 self.assertIn("not instance_budget.allowed()", line)
         self.assertIn("@st.cache_resource", source)
-        self.assertIn("if not instance_budget.consume():", source)
+        self.assertIn("budget_gate.reserve(shared_budget)", source)
 
 
 class FixedTransportStage23Tests(unittest.TestCase):
