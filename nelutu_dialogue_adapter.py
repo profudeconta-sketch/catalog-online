@@ -60,9 +60,6 @@ def answer_parent_dialogue(question, context=None, state=None):
     school = _school_topic(question)
     if school is not None:
         return school, DialogueState()
-    subject = subject_reply(question)
-    if subject is not None:
-        return subject, DialogueState()
     # Continuarile educationale deja stabilite au prioritate fata de fallback-ul
     # vechi; fluxurile portalului si filtrele de confidentialitate raman primele.
     if state.topic == "purpose":
@@ -71,6 +68,9 @@ def answer_parent_dialogue(question, context=None, state=None):
             return local_followup, next_state
     if state.topic == "social_wait" and social is not None and social.intent == "smalltalk_followup":
         return social, social_state
+    subject = subject_reply(question)
+    if subject is not None:
+        return subject, DialogueState()
     base = answer_parent(question, context)
     # Privacy-sensitive requests require a dedicated pre-routing guard.
 
