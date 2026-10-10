@@ -242,3 +242,29 @@ if st.button("Resetează numai memoria B"):
 st.write("Memoria A (maxim patru replici):", stage13_a.snapshot())
 st.write("Memoria B:", stage13_b.snapshot())
 st.caption("După șase adăugări în A, trebuie să rămână numai replicile 3–6. Resetarea A nu trebuie să modifice B.")
+
+st.divider()
+st.subheader("Etapa 14: răspuns contextual din memoria locală")
+st.caption("Conversație fictivă prestabilită; răspuns determinist, fără Gemini sau date personale.")
+from nelutu_context_offline import FICTIONAL_SCRIPT, answer_from_local_context
+if "nelutu_stage14_memory" not in st.session_state:
+    st.session_state["nelutu_stage14_memory"] = LocalConversation()
+if "nelutu_stage14_index" not in st.session_state:
+    st.session_state["nelutu_stage14_index"] = 0
+stage14_memory = st.session_state["nelutu_stage14_memory"]
+if st.button("Adaugă următoarea replică fictivă (Etapa 14)"):
+    i = st.session_state["nelutu_stage14_index"]
+    if i < len(FICTIONAL_SCRIPT):
+        role, message = FICTIONAL_SCRIPT[i]
+        if stage14_memory.append(role, message):
+            st.session_state["nelutu_stage14_index"] = i + 1
+    else:
+        st.info("Conversația fictivă este completă.")
+for role, message in stage14_memory.snapshot():
+    st.write(("Utilizator: " if role == "user" else "Neluțu: ") + message)
+if st.button("Întreabă ce plantă am menționat sâmbătă"):
+    st.info(answer_from_local_context(stage14_memory, "Ce plantă am spus că plantez sâmbătă?"))
+if st.button("Resetează contextul Etapei 14"):
+    stage14_memory.clear()
+    st.session_state["nelutu_stage14_index"] = 0
+st.caption("Înainte de prima replică sau după resetare, răspunsul trebuie să indice lipsa informației. După prima replică, trebuie să identifice trandafirul.")
