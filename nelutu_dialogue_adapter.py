@@ -42,6 +42,10 @@ def answer_parent_dialogue(question, context=None, state=None):
     privacy = credential_warning(question) or authority_guard(question) or third_party_credential_guard(question) or privacy_guard(question) or access_guidance(question) or director_class_guidance(question)
     if privacy is not None:
         return privacy, DialogueState()
+    # Saluturile simple nu trebuie interceptate de routerul generic al portalului.
+    social, social_state = local_reply(question, state)
+    if social is not None and social.intent == "smalltalk":
+        return social, social_state
     # Întrebările explicite despre plafonul de 40 de ore primesc întâi
     # explicația regulii, nu instrucțiunile generale pentru formular.
     normalized = _norm(question)
@@ -61,6 +65,8 @@ def answer_parent_dialogue(question, context=None, state=None):
         local_followup, next_state = local_reply(question, state)
         if local_followup is not None and local_followup.intent.startswith("education_followup_"):
             return local_followup, next_state
+    if state.topic == "social_wait" and social is not None and social.intent == "smalltalk_followup":
+        return social, social_state
     base = answer_parent(question, context)
     # Privacy-sensitive requests require a dedicated pre-routing guard.
 

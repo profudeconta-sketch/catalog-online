@@ -70,6 +70,36 @@ def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnsw
         return NelutuAnswer("clarification", "No, mesajul îi cam lung. Îl putem lua pe bucăți, fără nume sau date personale?"), DialogueState()
     if any(q == marker or q.startswith(marker + " ") for marker in _RESET_MARKERS):
         return NelutuAnswer("clarification", "Sigur. Despre ce temă nouă ați dori să vorbim?"), DialogueState()
+    # Conversație socială simplă, fără a inventa evenimente sau date personale.
+    # Potrivire pe expresii întregi: întrebările fără sens rămân la fallback.
+    social = {
+        "ce mai faci": "No, bine-s, mulțam de întrebare! 🤠 Stau aici, cu vorba pregătită și cu mintea trează, să dau o mână de ajutor. Da' tu ce mai faci?",
+        "cum esti": "No, bine-s, mulțam! 🤠 Pregătit să povestim ori să descurcăm vreo întrebare. Tu cum ești?",
+        "cum o duci": "No, o duc bine, cât poate un Neluțu digital! 🤠 Cu ce te pot ajuta?",
+        "salut": "No, servus! 🤠 Bine-ai venit! Cu ce te pot ajuta?",
+        "buna": "No, bună să-ți fie ziua! 🤠 Cu ce te pot ajuta?",
+        "salutare": "No, salutare! 🤠 Ce mai povestim?",
+        "servus": "Servus, servus! 🤠 No, ce mai povestim?",
+        "buna dimineata": "Bună dimineața! 🤠 No, să începem ziua cu voie bună. Cu ce te pot ajuta?",
+        "buna ziua": "Bună ziua și bine-ați venit! 🤠 Cu ce vă pot ajuta?",
+        "buna seara": "Bună seara! 🤠 No, spuneți, cu ce vă pot ajuta?",
+        "multumesc": "Cu drag! 🤠 No, să fie cu folos!",
+        "mersi": "Cu mare drag! 🤠",
+    }
+    social_q = re.sub(r"^(?:(?:no|apai|pai|ma|hei)\s+)+", "", q)
+    social_q = re.sub(r"\s+(?:nelutu|nelutule|astazi|azi)$", "", social_q)
+    if social_q in social:
+        return NelutuAnswer("smalltalk", social[social_q]), DialogueState("social_wait", 1) if social_q in ("ce mai faci", "cum esti") else DialogueState()
+    if state.topic == "social_wait":
+        positive = ("bine", "foarte bine", "ok", "super", "excelent", "minunat")
+        tired = ("obosit", "obosita", "epuizat", "epuizata")
+        difficult = ("nu prea bine", "rau", "trist", "trista", "suparat", "suparata", "greu")
+        if any(re.search(r"(?<![a-z0-9])" + re.escape(x) + r"(?![a-z0-9])", q) for x in tired):
+            return NelutuAnswer("smalltalk_followup", "No, sper să prinzi și o țâră de odihnă! 🤠 Dacă vrei să povestim ori să te ajut cu ceva, îs aici."), DialogueState()
+        if any(x in q for x in difficult):
+            return NelutuAnswer("smalltalk_followup", "No, îmi pare rău să aud asta. Dacă ai chef să povestești ce te apasă, te ascult; dacă nu, putem vorbi și despre altceva."), DialogueState()
+        if any(re.search(r"(?<![a-z0-9])" + re.escape(x) + r"(?![a-z0-9])", q) for x in positive):
+            return NelutuAnswer("smalltalk_followup", "No, mă bucur să aud! 🤠 Să-ți meargă tot așe de bine! Ce mai povestim?"), DialogueState()
     # Detectarea unei teme noi are prioritate față de continuarea celei vechi.
     fresh = educational_reply(question)
     if fresh is not None:
