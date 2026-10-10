@@ -11,6 +11,15 @@ class ClarificationTextTests(unittest.TestCase):
         self.assertEqual(answer.intent, "clarification")
         self.assertEqual(answer.text, "No io n-am priceput nimic din ce vrei să mă întrebi. Reformulează, te rog, că nu vreau să vorbesc prostii! 🤠")
 
+class AbsenceLimitRoutingTests(unittest.TestCase):
+    def test_explicit_limit_question(self):
+        answer, _ = answer_parent_dialogue("daca are 40 de absente pot sa le motivez pe toate?")
+        self.assertEqual(answer.intent, "absences_40")
+
+    def test_portal_how_to_remains_available(self):
+        answer, _ = answer_parent_dialogue("cum trimit cererea de motivare a absentelor?")
+        self.assertEqual(answer.intent, "parent_flow_excuse")
+
 class SchoolLanguageTests(unittest.TestCase):
     def test_colloquial_school_questions(self):
         examples = {
