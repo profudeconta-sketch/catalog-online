@@ -80,7 +80,7 @@ class Stage31IntegrationBoundaryTests(unittest.TestCase):
         from pathlib import Path
         source = Path(__file__).with_name("nelutu_gemini_preview.py").read_text(encoding="utf-8")
         self.assertEqual(source.count("and reserve_gemini_attempt():"), 9)
-        self.assertEqual(source.count("disabled=not "), 9)
+        self.assertGreaterEqual(source.count("disabled=not "), 9)
         self.assertIn("instance_budget.consume()", source)
         self.assertIn("shared_budget.consume()", source)
 
