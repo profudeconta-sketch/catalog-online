@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'nelutu_integration_gate.py'
+      - 'nelutu_integration_pipeline.py'
+      - 'test_nelutu_integration_pipeline.py'
       - 'test_nelutu_integration_gate.py'
       - 'nelutu_gemini_optional.py'
       - 'nelutu_gemini_demo.py'
@@ -23,6 +25,6 @@ jobs:
         with:
           python-version: '3.11'
       - name: Compile authorization boundary
-        run: python -m py_compile nelutu_integration_gate.py test_nelutu_integration_gate.py
+        run: python -m py_compile nelutu_integration_gate.py test_nelutu_integration_gate.py nelutu_integration_pipeline.py test_nelutu_integration_pipeline.py
       - name: Test authorization boundary
-        run: python -m unittest -v test_nelutu_integration_gate.py
+        run: python -m unittest -v test_nelutu_integration_gate.py test_nelutu_integration_pipeline.py
