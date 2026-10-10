@@ -27,6 +27,12 @@ class LiveProbeSafetyTest(unittest.TestCase):
         self.assertIn('os.environ.get(DSN_ENV)', self.source)
         self.assertIn('if __name__ == "__main__":', self.source)
 
+    def test_success_is_reported_only_after_cleanup(self):
+        cleanup_pos = self.source.index('if not cleanup_ok:')
+        success_pos = self.source.index('print("PASS" if passed else "FAIL"')
+        self.assertGreater(success_pos, cleanup_pos)
+        self.assertIn('raise RuntimeError("Isolated test table cleanup could not be verified")', self.source)
+
     def test_failures_do_not_count_as_refusals(self):
         self.assertIn('raise RuntimeError("Reservation failed; test is inconclusive")', self.source)
 
