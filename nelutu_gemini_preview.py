@@ -322,7 +322,7 @@ stage16_consent = st.checkbox(
     "Etapa 16: confirm transmiterea exclusivă a replicilor fictive afișate către Google Gemini.",
     key="nelutu_stage16_consent",
 )
-if st.button("Etapa 16 — testează răspunsul contextual Gemini", disabled=not stage16_consent) and reserve_gemini_attempt():
+if st.button("Etapa 16 — testează răspunsul contextual Gemini", disabled=not stage16_consent or not shared_budget.allowed()) and reserve_gemini_attempt():
     try:
         stage16_key = st.secrets.get("NELUTU_GEMINI_API_KEY")
     except (FileNotFoundError, KeyError, AttributeError):
