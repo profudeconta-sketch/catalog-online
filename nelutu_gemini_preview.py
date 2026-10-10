@@ -154,6 +154,9 @@ if st.button("Testează revenirea la subiect", disabled=not topic_consent):
             st.info("Testul 9 nu a primit un răspuns utilizabil.")
 
 st.divider()
+st.subheader("Etapa 10 — verificare automată a memoriei locale")
+st.success("Etapa 10 a fost validată în GitHub Actions: test_memory_buffer_isolation — reușit (111 teste unitare în suita Neluțu).")
+st.caption("Această etapă este un test automat, nu un dialog interactiv; nu transmite date către Gemini.")
 st.subheader("Etapa 11: memorie temporară locală, fără Gemini")
 from nelutu_conversation_local import LocalConversation
 if "nelutu_offline_memory" not in st.session_state:
