@@ -454,5 +454,32 @@ class FixedMultiturnBoundaryTests(unittest.TestCase):
                 list(demo.FIXED_EXCHANGE),
             )
 
+
+class FixedParaphraseBoundaryTests(unittest.TestCase):
+    def test_no_network_without_confirmation(self):
+        from unittest.mock import patch
+        import nelutu_gemini_fixed_paraphrase as demo
+        with patch.object(demo.request, "urlopen") as opener:
+            self.assertIsNone(demo.fixed_paraphrase_test(api_key="dummy", enabled=True))
+            self.assertIsNone(demo.fixed_paraphrase_test(api_key="dummy", confirmed=True))
+            opener.assert_not_called()
+
+    def test_only_fixed_paraphrase_is_transmitted(self):
+        from unittest.mock import patch
+        import json
+        import nelutu_gemini_fixed_paraphrase as demo
+        class Reply:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{"candidates":[{"content":{"parts":[{"text":"Cartea la biblioteca."}]}}]}'
+        with patch.object(demo.request, "urlopen", return_value=Reply()) as opener:
+            self.assertEqual(demo.fixed_paraphrase_test(
+                api_key="dummy", enabled=True, confirmed=True), "Cartea la biblioteca.")
+            payload = json.loads(opener.call_args.args[0].data)
+            self.assertEqual(
+                [(item["role"], item["parts"][0]["text"]) for item in payload["contents"]],
+                list(demo.PARAPHRASE_EXCHANGE),
+            )
+
 if __name__ == "__main__":
     unittest.main()
