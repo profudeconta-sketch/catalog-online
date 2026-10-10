@@ -68,10 +68,25 @@ def is_public_general_chat(message: str) -> bool:
     return True
 
 
+
+def is_approved_demo_message(message: str) -> bool:
+    """Exact allowlist at the network boundary; no arbitrary text may leave."""
+    if type(message) is not str:
+        return False
+    from nelutu_gemini_demo import DEMO_PROMPTS
+    approved = DEMO_PROMPTS + (
+        "Salut, Neluțu! Am sâmbăta liberă și vreau să ies la plimbare, dar parcă mă trage canapeaua înapoi. Dă-mi o idee practică și o glumă discretă, cu umor ardelenesc firesc, fără regionalisme forțate.",
+        "Salut, Neluțu! Propune o activitate relaxantă pentru o după-amiază liberă, cu umor discret.",
+        "Cum pot discuta calm și respectuos cu un prieten după o neînțelegere? Răspunde fără glume.",
+        "Explică precis diferența dintre RAM și SSD, în câteva propoziții, fără glume.",
+    )
+    return message in approved and is_public_general_chat(message)
+
+
 def diagnose_status(message: str, *, api_key: str | None = None,
                     enabled: bool = False, public_text_confirmed: bool = False) -> str:
     """Safe diagnostic: only a fixed category, never key or server error body."""
-    if not enabled or not public_text_confirmed or not is_public_general_chat(message):
+    if not enabled or not public_text_confirmed or not is_approved_demo_message(message):
         return "blocked"
     key = api_key or os.environ.get("NELUTU_GEMINI_API_KEY")
     if not isinstance(key, str) or not key.strip():
@@ -107,7 +122,7 @@ def generate(message: str, history: tuple[tuple[str, str], ...] = (), *,
     """
     # Explicit per-request consent is required even for apparently public text.
     # The caller must show the actual outbound message before confirmation.
-    if not enabled or not public_text_confirmed or not is_public_general_chat(message):
+    if not enabled or not public_text_confirmed or not is_approved_demo_message(message):
         return None
     key = api_key or os.environ.get("NELUTU_GEMINI_API_KEY")
     if not isinstance(key, str) or not key.strip():
