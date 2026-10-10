@@ -671,5 +671,34 @@ class InstanceGeminiBudgetTests(unittest.TestCase):
         self.assertIn("if not instance_budget.consume():", source)
 
 
+class FixedTransportStage23Tests(unittest.TestCase):
+    def test_all_fixed_modules_use_shared_transport(self):
+        from pathlib import Path
+        for filename in (
+            "nelutu_gemini_fixed_context.py",
+            "nelutu_gemini_fixed_multiturn.py",
+            "nelutu_gemini_fixed_paraphrase.py",
+            "nelutu_gemini_fixed_topic_return.py",
+        ):
+            with self.subTest(filename=filename):
+                source = Path(__file__).with_name(filename).read_text(encoding="utf-8")
+                self.assertIn("send_fixed_exchange(", source)
+                self.assertNotIn("request.Request(", source)
+
+    def test_shared_transport_fails_closed_without_retry(self):
+        from unittest.mock import Mock
+        from urllib.error import HTTPError
+        from nelutu_gemini_fixed_transport import send_fixed_exchange
+        opener = Mock(side_effect=HTTPError("https://example.invalid", 429, "quota", {}, None))
+        exchange = (("user", "Salut!"),)
+        for confirmed in (False, True):
+            result = send_fixed_exchange(
+                exchange, api_key="dummy", enabled=True,
+                confirmed=confirmed, temperature=0.4, opener=opener,
+            )
+            self.assertIsNone(result)
+        self.assertEqual(opener.call_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
