@@ -19,6 +19,8 @@ def authorize_experimental_request(message: str, *, explicitly_enabled: bool,
                                    confirmed: bool, provider_key_present: bool,
                                    durable_gate_ready: bool) -> IntegrationDecision:
     """Fail closed until every independent integration prerequisite is true."""
+    if type(explicitly_enabled) is not bool or type(confirmed) is not bool or type(provider_key_present) is not bool or type(durable_gate_ready) is not bool:
+        return IntegrationDecision(False, "invalid_gate_flags")
     if not explicitly_enabled:
         return IntegrationDecision(False, "disabled")
     if not confirmed:
