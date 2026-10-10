@@ -54,6 +54,33 @@ class GateOutageTests(unittest.TestCase):
                              ("local", "quota_gate_error"))
             self.assertEqual(sent, [])
 
+    def test_provider_exception_preserves_local_answer(self):
+        with tempfile.TemporaryDirectory() as folder:
+            args = self.params(folder)
+            def failing_sender(_):
+                raise ConnectionError("simulated provider outage")
+            result = route_single_answer(DEMO_PROMPTS[0],
+                sender=failing_sender, **args)
+            self.assertEqual((result.source, result.provider_status),
+                             ("local", "provider_error"))
+            self.assertEqual(result.text, "Neluțu local.")
+
+    def test_instance_gate_exception_never_sends(self):
+        with tempfile.TemporaryDirectory() as folder:
+            args = self.params(folder)
+            class BrokenInstance:
+                def allowed(self):
+                    raise ConnectionError("simulated instance outage")
+            class BrokenGate:
+                instance = BrokenInstance()
+            args["instance_gate"] = BrokenGate()
+            sent = []
+            result = route_single_answer(DEMO_PROMPTS[0],
+                sender=lambda msg: sent.append(msg) or "Experimental", **args)
+            self.assertEqual((result.source, result.provider_status),
+                             ("local", "quota_gate_error"))
+            self.assertEqual(sent, [])
+
     def test_invalid_optional_settings_preserve_local(self):
         with tempfile.TemporaryDirectory() as folder:
             args = self.params(folder)
