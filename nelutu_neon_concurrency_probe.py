@@ -36,6 +36,18 @@ def run() -> bool:
     try:
         with psycopg.connect(dsn, connect_timeout=5) as conn:
             with conn.cursor() as cur:
+                cur.execute("SELECT current_user")
+                role = cur.fetchone()[0]
+                if role != "nelutu_test_runner":
+                    print("DENIED: dedicated test role required")
+                    return False
+                cur.execute(
+                    "SELECT has_table_privilege(current_user, "
+                    "'public.nelutu_gemini_budget', 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE')"
+                )
+                if cur.fetchone()[0]:
+                    print("DENIED: test role can access live budget")
+                    return False
                 cur.execute(sql.SQL("CREATE TABLE {} (id integer PRIMARY KEY, used integer NOT NULL CHECK (used >= 0))").format(identifier))
                 cur.execute(sql.SQL("INSERT INTO {} (id, used) VALUES (1, 0)").format(identifier))
         def reserve(_):
