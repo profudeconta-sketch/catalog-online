@@ -566,5 +566,28 @@ class DemoBudgetTests(unittest.TestCase):
         self.assertEqual(second.remaining(), 3)
 
 
+class SharedGeminiBudgetWiringTests(unittest.TestCase):
+    def test_all_demo_network_buttons_reserve_shared_budget(self):
+        from pathlib import Path
+        source = Path(__file__).with_name("nelutu_gemini_preview.py").read_text(encoding="utf-8")
+        labels = (
+            "Testează Gemini",
+            "Diagnostic sigur (un apel separat)",
+            "Testează memoria demonstrativă",
+            "Testează dialogul extins",
+            "Testează reformularea",
+            "Testează revenirea la subiect",
+            "Etapa 16 — testează răspunsul contextual Gemini",
+            "Etapa 17 — verifică naturalitatea răspunsului",
+            "Testează tonul",
+        )
+        for label in labels:
+            with self.subTest(label=label):
+                line = next(line for line in source.splitlines()
+                            if line.startswith('if st.button("' + label + '"'))
+                self.assertIn("and reserve_gemini_attempt():", line)
+        self.assertIn('st.session_state["nelutu_shared_gemini_budget"]', source)
+
+
 if __name__ == "__main__":
     unittest.main()
