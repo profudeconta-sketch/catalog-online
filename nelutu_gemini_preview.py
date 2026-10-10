@@ -268,3 +268,30 @@ if st.button("Resetează contextul Etapei 14"):
     stage14_memory.clear()
     st.session_state["nelutu_stage14_index"] = 0
 st.caption("Înainte de prima replică sau după resetare, răspunsul trebuie să indice lipsa informației. După prima replică, trebuie să identifice trandafirul.")
+
+st.divider()
+st.subheader("Etapa 15: expirarea contextului după depășirea limitei")
+st.caption("Exercițiu complet local cu mesaje fictive. Nu transmite istoric către Gemini.")
+if "nelutu_stage15_memory" not in st.session_state:
+    st.session_state["nelutu_stage15_memory"] = LocalConversation()
+if "nelutu_stage15_count" not in st.session_state:
+    st.session_state["nelutu_stage15_count"] = 0
+stage15_memory = st.session_state["nelutu_stage15_memory"]
+stage15_question = "Ce plantă am spus că plantez sâmbătă?"
+if st.button("Etapa 15 — memorează trandafirul"):
+    stage15_memory.clear()
+    stage15_memory.append("user", "Sâmbătă plantez un trandafir.")
+    st.session_state["nelutu_stage15_count"] = 0
+if st.button("Etapa 15 — adaugă o replică nouă"):
+    count = st.session_state["nelutu_stage15_count"]
+    if count < 4:
+        if stage15_memory.append("model", "Replica fictivă suplimentară %d." % (count + 1)):
+            st.session_state["nelutu_stage15_count"] = count + 1
+    else:
+        st.info("Au fost adăugate deja patru replici suplimentare.")
+if st.button("Etapa 15 — șterge contextul"):
+    stage15_memory.clear()
+    st.session_state["nelutu_stage15_count"] = 0
+st.write("Memoria disponibilă:", stage15_memory.snapshot())
+st.write("Răspuns bazat pe dovezi:", answer_from_local_context(stage15_memory, stage15_question))
+st.caption("După memorare: trandafir. După patru replici suplimentare: informație indisponibilă, nu răspuns inventat.")
