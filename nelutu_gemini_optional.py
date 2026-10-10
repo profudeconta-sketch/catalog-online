@@ -60,16 +60,22 @@ def is_public_general_chat(message: str) -> bool:
 
 
 def generate(message: str, history: tuple[tuple[str, str], ...] = (), *,
-             api_key: str | None = None, enabled: bool = False) -> str | None:
+             api_key: str | None = None, enabled: bool = False,
+             public_text_confirmed: bool = False) -> str | None:
     """Return None on blocked, unavailable or failed service; never raise to UI.
 
     History is in-memory only and must already be restricted to public general
     conversation. Neither secrets nor request contents are logged.
     """
-    if not enabled or not is_public_general_chat(message):
+    # Explicit per-request consent is required even for apparently public text.
+    # The caller must show the actual outbound message before confirmation.
+    if not enabled or not public_text_confirmed or not is_public_general_chat(message):
         return None
     key = api_key or os.environ.get("NELUTU_GEMINI_API_KEY")
     if not key:
+        return None
+    # Until history has a separate explicit consent UI, forbid sending it.
+    if history:
         return None
     if len(history) > MAX_HISTORY or any(
         role not in ("user", "model") or not is_public_general_chat(text)
