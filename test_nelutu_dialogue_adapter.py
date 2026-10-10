@@ -4,6 +4,25 @@ from test_nelutu_parent_flows import ParentFlowMatrix
 from nelutu_dialogue_adapter import answer_parent_dialogue
 from nelutu_local_dialogue import DialogueState
 
+class SchoolLanguageTests(unittest.TestCase):
+    def test_colloquial_school_questions(self):
+        examples = {
+            "la cei buna atata scoala": "education_purpose",
+            "dc trebe sa mergem la scoala": "education_purpose",
+            "da ce folos are scoala asta": "education_purpose",
+            "pt ce mai invata copilu": "education_purpose",
+            "no da la ce ne trebe atata carte": "education_purpose",
+            "de ce facem fizica": "education_physics",
+            "ce invatam la chimie": "education_chemistry",
+            "ce facem la bazele contabilitatii": "education_accounting",
+            "ce fac la structuri de primire turistica": "education_tourism",
+            "care este regula cu 40 de absente": "absences_40",
+        }
+        for question, expected in examples.items():
+            with self.subTest(question=question):
+                answer, _ = answer_parent_dialogue(question)
+                self.assertEqual(answer.intent, expected)
+
 class AdapterTests(unittest.TestCase):
     def test_portal_question_keeps_existing_answer(self):
         answer, state = answer_parent_dialogue("Cum trimit scutirea medicală?")
