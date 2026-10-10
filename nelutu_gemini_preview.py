@@ -182,3 +182,23 @@ if st.button("Șterge memoria locală"):
 st.write("Replici păstrate în această sesiune:", len(local_memory.snapshot()))
 for role, message in local_memory.snapshot():
     st.write(("Utilizator: " if role == "user" else "Neluțu (fictiv): ") + message)
+
+st.divider()
+st.subheader("Etapa 12: separarea a două memorii locale")
+st.caption("Două instanțe demonstrative, independente, în aceeași sesiune Streamlit. Fără Gemini și fără date reale.")
+if "nelutu_demo_a" not in st.session_state:
+    st.session_state["nelutu_demo_a"] = LocalConversation()
+if "nelutu_demo_b" not in st.session_state:
+    st.session_state["nelutu_demo_b"] = LocalConversation()
+demo_a = st.session_state["nelutu_demo_a"]
+demo_b = st.session_state["nelutu_demo_b"]
+if st.button("Adaugă trandafirul numai în memoria A"):
+    demo_a.append("user", "Sâmbătă plantez un trandafir.")
+if st.button("Adaugă curcubeul numai în memoria B"):
+    demo_b.append("user", "Cum se formează curcubeul?")
+if st.button("Resetează ambele memorii demonstrative"):
+    demo_a.clear()
+    demo_b.clear()
+st.write("Memoria A:", demo_a.snapshot())
+st.write("Memoria B:", demo_b.snapshot())
+st.caption("Aceasta testează separarea obiectelor în aceeași sesiune, nu izolarea între utilizatori reali.")
