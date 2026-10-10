@@ -70,6 +70,23 @@ def reply(question: str, state: DialogueState | None = None) -> tuple[NelutuAnsw
         return NelutuAnswer("clarification", "No, mesajul îi cam lung. Îl putem lua pe bucăți, fără nume sau date personale?"), DialogueState()
     if any(q == marker or q.startswith(marker + " ") for marker in _RESET_MARKERS):
         return NelutuAnswer("clarification", "Sigur. Despre ce temă nouă ați dori să vorbim?"), DialogueState()
+    # Conversație socială simplă, fără a inventa evenimente sau date personale.
+    # Potrivire pe expresii întregi: întrebările fără sens rămân la fallback.
+    social = {
+        "ce mai faci": "No, bine-s, mulțam de întrebare! 🤠 Stau aici, cu vorba pregătită și cu mintea trează, să dau o mână de ajutor. Da' tu ce mai faci?",
+        "cum esti": "No, bine-s, mulțam! 🤠 Pregătit să povestim ori să descurcăm vreo întrebare. Tu cum ești?",
+        "cum o duci": "No, o duc bine, cât poate un Neluțu digital! 🤠 Cu ce te pot ajuta?",
+        "salut": "No, servus! 🤠 Bine-ai venit! Cu ce te pot ajuta?",
+        "servus": "Servus, servus! 🤠 No, ce mai povestim?",
+        "buna ziua": "Bună ziua și bine-ați venit! 🤠 Cu ce vă pot ajuta?",
+        "buna seara": "Bună seara! 🤠 No, spuneți, cu ce vă pot ajuta?",
+        "multumesc": "Cu drag! 🤠 No, să fie cu folos!",
+        "mersi": "Cu mare drag! 🤠",
+    }
+    social_q = re.sub(r"^(?:(?:no|apai|pai|ma|hei)\\s+)+", "", q)
+    social_q = re.sub(r"\\s+(?:nelutu|nelutule|astazi|azi)$", "", social_q)
+    if social_q in social:
+        return NelutuAnswer("smalltalk", social[social_q]), DialogueState()
     # Detectarea unei teme noi are prioritate față de continuarea celei vechi.
     fresh = educational_reply(question)
     if fresh is not None:
