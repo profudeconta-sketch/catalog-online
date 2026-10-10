@@ -377,5 +377,27 @@ class GeminiProviderFailureTests(unittest.TestCase):
                 public_text_confirmed=True))
             opener.assert_not_called()
 
+
+class GeminiSecretNonDisclosureTests(unittest.TestCase):
+    def test_provider_error_does_not_expose_key(self):
+        from unittest.mock import patch
+        from urllib.error import HTTPError
+        import nelutu_gemini_optional as gemini
+        secret = "PRIVATE_TEST_KEY_DO_NOT_PRINT"
+        with patch.object(gemini.request, "urlopen", side_effect=HTTPError(
+            gemini.ENDPOINT, 403, "invalid " + secret, {}, None)):
+            result = gemini.generate("Ce mai faci?", api_key=secret,
+                                     enabled=True, public_text_confirmed=True)
+        self.assertIsNone(result)
+
+    def test_history_never_serialized_even_when_confirmed(self):
+        from unittest.mock import patch
+        import nelutu_gemini_optional as gemini
+        with patch.object(gemini.request, "urlopen") as opener:
+            self.assertIsNone(gemini.generate(
+                "Ce mai faci?", (("user", "Salut"),),
+                api_key="dummy", enabled=True, public_text_confirmed=True))
+            opener.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()
