@@ -22,7 +22,7 @@ def _school_topic(question):
         return NelutuAnswer("education_physics", "No, fizica explică mișcarea, forțele, energia, căldura și electricitatea. De aceea pricepem cum frânează un vehicul, de ce ne protejează centura și cum funcționează aparatele.")
     if "chimie" in words or "chimia" in words or "chimiei" in words:
         return NelutuAnswer("education_chemistry", "No, chimia ne ajută să înțelegem substanțele și transformările lor: gătitul, curățenia, apa, medicamentele și protejarea mediului. Învățăm și cum să folosim produsele în siguranță.")
-    school_word = bool({"scoala", "scolii", "scoal", "invatatura", "invatat", "invata", "carte"} & words or "copilu" in words)
+    school_word = bool({"scoala", "scolii", "scoal", "invatatura", "carte"} & words or "copilu" in words)
     school_purpose = bool({"rost", "buna", "bun", "atata", "folos", "trebuie", "trebe", "dc", "dece", "pt", "pentru"} & words or "la cei buna" in q)
     if school_word and school_purpose:
         return NelutuAnswer("education_purpose", "No, școala nu-i numai pentru note. Ne învață să gândim, să punem întrebări, să lucrăm cu alții și să deprindem o meserie. Nu folosim fiecare formulă zilnic, dar felul în care învățăm să rezolvăm probleme ne rămâne!")
