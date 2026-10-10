@@ -13,6 +13,7 @@ from nelutu_gemini_optional import diagnose_status
 st.set_page_config(page_title="Neluțu — test Gemini izolat", page_icon="🤠")
 from nelutu_demo_budget import DemoBudget
 from nelutu_instance_budget import InstanceBudget, SharedBudgetGate
+from nelutu_durable_budget import DurableBudget
 
 @st.cache_resource
 def get_instance_budget() -> InstanceBudget:
@@ -25,12 +26,31 @@ def get_budget_gate() -> SharedBudgetGate:
     return SharedBudgetGate(get_instance_budget())
 
 budget_gate = get_budget_gate()
+
+# Stage 40: opt-in experimental durable mode. Missing/invalid storage fails closed.
+# Never place this database in a catalog or parent-portal data directory.
+durable_mode = st.secrets.get("NELUTU_DURABLE_BUDGET_ENABLED", False) is True
+durable_path = st.secrets.get("NELUTU_DURABLE_BUDGET_PATH", "")
+durable_budget = None
+if durable_mode:
+    try:
+        durable_budget = DurableBudget(durable_path)
+    except (ValueError, TypeError):
+        st.error("Bugetul persistent nu este configurat corect. Testele Gemini sunt blocate.")
+
 if "nelutu_shared_gemini_budget" not in st.session_state:
     st.session_state["nelutu_shared_gemini_budget"] = DemoBudget()
 shared_budget = st.session_state["nelutu_shared_gemini_budget"]
 
 def reserve_gemini_attempt() -> bool:
     """Reserve a test attempt before any possible network request."""
+    if durable_mode:
+        if durable_budget is None or not shared_budget.allowed() or not instance_budget.allowed():
+            st.warning("Bugetul persistent sau limita sesiunii nu permite testul.")
+            return False
+        if not durable_budget.reserve():
+            st.warning("Bugetul persistent nu este disponibil sau a fost epuizat.")
+            return False
     if budget_gate.reserve(shared_budget):
         return True
     st.warning("Limita sesiunii sau a instanței de test a fost atinsă.")
