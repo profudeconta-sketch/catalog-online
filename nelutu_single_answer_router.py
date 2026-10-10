@@ -30,12 +30,16 @@ def route_single_answer(question: str, *, local_answer: Callable[[str], str],
         return RoutedAnswer("Neluțu nu poate răspunde momentan. Încearcă din nou mai târziu.", "local", "local_error")
     if not isinstance(local, str):
         return RoutedAnswer("Neluțu nu poate răspunde momentan. Încearcă din nou mai târziu.", "local", "local_invalid")
-    result = handle_optional_demo(
-        question, settings=settings, confirmed=confirmed,
-        provider_key_present=provider_key_present,
-        durable_budget=durable_budget, session_budget=session_budget,
-        instance_gate=instance_gate, sender=sender,
-    )
+    try:
+        result = handle_optional_demo(
+            question, settings=settings, confirmed=confirmed,
+            provider_key_present=provider_key_present,
+            durable_budget=durable_budget, session_budget=session_budget,
+            instance_gate=instance_gate, sender=sender,
+        )
+    except Exception:
+        # The optional path cannot interrupt the existing local response.
+        return RoutedAnswer(local, "local", "experimental_error")
     if result.status == "ok" and result.answer:
         return RoutedAnswer(result.answer, "experimental", result.status)
     return RoutedAnswer(local, "local", result.status)
