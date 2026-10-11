@@ -619,6 +619,9 @@ if unified_submit:
         elif __import__("importlib").util.find_spec("psycopg") is None:
             st.warning("Biblioteca PostgreSQL (psycopg) lipsește din mediul Streamlit. Gemini nu a fost apelat.")
             st.markdown(local_answer.text)
+        elif not st.secrets.get("NELUTU_NEON_LIVE_BUDGET_APPROVED", False) is True:
+            st.warning("Rezervarea cotei reale Neon nu este autorizată. Gemini nu a fost apelat.")
+            st.markdown(local_answer.text)
         elif not PostgreSQLBudget(st.secrets.get("NELUTU_NEON_DSN", "")).reserve():
             st.warning("Neon nu a confirmat rezervarea cotei. Gemini nu a fost apelat.")
             st.markdown(local_answer.text)
