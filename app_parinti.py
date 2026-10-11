@@ -43,7 +43,7 @@ def _nelutu_answer_compat(question, context, mode='portal'):
                 state=previous if isinstance(previous, _NelutuDialogueState) else _NelutuDialogueState(),
             )
             provider, reserved = _nelutu_optional_provider(
-                question, "fallback", consent=True, history=public_history,
+                question, local.intent, consent=True, history=public_history,
             )
         result = _nelutu_modern_answer(
             question, context=context,
@@ -626,6 +626,10 @@ else:
                 ("Ghidul portalului", "Stăm la povești"),
                 horizontal=True,
                 key="nelutu_conversation_mode",
+            )
+            st.caption(
+                "1. **Ghidul portalului** – Te ajut să descoperi și să folosești funcționalitățile portalului școlar.\n\n"
+                "2. **Stăm la povești** – Putem vorbi despre orice! Îți răspund la întrebări, îți explic lucruri interesante și îți dau o mână de ajutor la temele pentru a doua zi. No, întreabă-mă ce vrei! 🤠"
             )
             _nelutu_mode_code = "portal" if _nelutu_mode == "Ghidul portalului" else "chat"
             # Formularul trimite întrebarea direct la Enter, fără al doilea clic.
