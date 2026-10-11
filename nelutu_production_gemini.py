@@ -6,7 +6,9 @@ from nelutu_unified_reply_policy import choose_reply_route
 
 def optional_provider(question, local_intent, *, consent=False, settings=None):
     """Return (provider, reserved). Never log prompts, keys, DSNs or errors."""
-    settings = settings or {}
+    if settings is None:
+        import streamlit as st
+        settings = st.secrets
     required = (
         "NELUTU_GEMINI_ENABLED",
         "NELUTU_PROVIDER_PRIVACY_APPROVED",
