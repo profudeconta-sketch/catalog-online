@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from nelutu_gemini_optional import is_public_general_chat
 
-MAX_TURNS = 6
-MAX_TOTAL_CHARS = 1800
+MAX_TURNS = 12
+MAX_TOTAL_CHARS = 6000
 
 
 def prepare_public_dialogue(history, new_message, *, consent=False):
@@ -38,3 +38,21 @@ def prepare_public_dialogue(history, new_message, *, consent=False):
             return None
         result.append({"role": role, "parts": [{"text": message}]})
     return result
+
+
+def bounded_public_history(history):
+    """Keep recent complete public exchanges; discard oldest, never all on overflow."""
+    if type(history) is not tuple or len(history) % 2:
+        return ()
+    valid = []
+    for index in range(0, len(history), 2):
+        pair = history[index:index + 2]
+        if (len(pair) != 2 or any(type(item) is not tuple or len(item) != 2 for item in pair)
+                or pair[0][0] != "user" or pair[1][0] != "model"
+                or not all(is_public_general_chat(item[1]) for item in pair)):
+            return ()
+        valid.extend(pair)
+    while valid and (len(valid) > MAX_TURNS or
+                     sum(len(message) for _, message in valid) > MAX_TOTAL_CHARS):
+        valid = valid[2:]
+    return tuple(valid)
