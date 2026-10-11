@@ -54,19 +54,6 @@ if st.button("Verifică permisiunile Neon de laborator", key="nelutu_lab_runtime
             "Contorul de laborator rămâne blocat; nu se fac scrieri."
         )
 
-st.caption("Diagnostic suplimentar: verificare separată a rolului și schemei, fără scrieri.")
-if st.button("Diagnostic Neon: rol și schemă", key="nelutu_lab_setup_diagnostic"):
-    from nelutu_neon_isolated_diagnostic import diagnose_isolated_neon
-    _lab_dsn_diag = st.secrets.get("NELUTU_TEST_DATABASE_URL", "")
-    _lab_status = diagnose_isolated_neon(_lab_dsn_diag)
-    st.info("Rezultat diagnostic: " + _lab_status)
-    if _lab_status == "ready":
-        st.warning(
-            "Diagnosticul inițial confirmă dreptul CREATE. "
-            "Pentru execuția contorului, acest drept trebuie eliminat "
-            "după pregătirea tabelei, de către administratorul Neon."
-        )
-
 st.caption("Verificare detaliată a tabelei de laborator — numai citire.")
 if st.button("Verifică tabela și drepturile Neon", key="nelutu_lab_table_rights"):
     _dsn = st.secrets.get("NELUTU_TEST_DATABASE_URL", "")
@@ -106,3 +93,25 @@ if st.button("Verifică tabela și drepturile Neon", key="nelutu_lab_table_right
             st.caption("Verificare exclusiv SELECT; fără modificări sau apeluri Gemini.")
         except Exception:
             st.warning("Verificarea tabelei a eșuat; nu s-a efectuat nicio modificare.")
+
+st.divider()
+st.subheader("🧪 Contor fictiv persistent — laborator Neon")
+st.caption(
+    "Test exclusiv pe tabela izolată. Fără elevi, fără Gemini, "
+    "fără resetare și fără scrieri automate."
+)
+from nelutu_streamlit_lab_budget import IsolatedLabBudget
+_lab_counter_dsn = st.secrets.get("NELUTU_TEST_DATABASE_URL", "")
+try:
+    _lab_counter = IsolatedLabBudget(_lab_counter_dsn, enabled=True)
+    if _lab_counter._ready():
+        st.metric("Unități fictive rămase (maximum 3)", _lab_counter.remaining())
+        if st.button("Consumă 1 unitate fictivă de test", key="nelutu_lab_reserve_one"):
+            if _lab_counter.reserve():
+                st.success("O unitate fictivă a fost rezervată în Neon. Reîncarcă pagina pentru verificare.")
+            else:
+                st.warning("Rezervare refuzată sau limită atinsă; nicio unitate suplimentară acordată.")
+    else:
+        st.warning("Contorul rămâne blocat: drepturile runtime nu sunt validate.")
+except (TypeError, ValueError):
+    st.warning("Conexiunea izolată lipsește sau este invalidă.")
