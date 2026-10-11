@@ -10,6 +10,12 @@ class LabDependenciesTests(unittest.TestCase):
         self.assertIn("psycopg[binary]", manifest)
         self.assertIn("streamlit", manifest)
 
+    def test_preview_manifest_includes_school_dependencies_and_driver(self):
+        root = Path(__file__).parent
+        manifest = (root / "requirements-nelutu-preview.txt").read_text(encoding="utf-8")
+        self.assertIn("-r requirements.txt", manifest)
+        self.assertIn("psycopg[binary]", manifest)
+
     def test_school_manifest_not_extended_with_lab_driver(self):
         root = Path(__file__).parent
         manifest = (root / "requirements.txt").read_text(encoding="utf-8")
