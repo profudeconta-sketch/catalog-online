@@ -79,6 +79,9 @@ def answer_parent_dialogue(question, context=None, state=None, mode="auto"):
     # to interrupt a general conversation with the obsolete mode question.
     # This only changes conversational wording; the protected-intent and
     # external-provider privacy gates remain authoritative.
+    if mode == "chat" and context_kind == "portal":
+        from nelutu_assistant import NelutuAnswer
+        return NelutuAnswer("privacy_chat_boundary", "Pentru operatiuni scolare, foloseste Ghidul portalului. Aici stam la povesti, fara acces la datele catalogului."), DialogueState()
     if mode == "chat" and context_kind == "ambiguous":
         context_kind = "general"
     if context_kind == "ambiguous":
