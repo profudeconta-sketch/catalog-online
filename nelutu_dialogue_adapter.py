@@ -50,6 +50,31 @@ def answer_parent_dialogue(question, context=None, state=None):
     social, social_state = local_reply(question, state)
     if social is not None and social.intent == "smalltalk":
         return social, social_state
+    # Public/general questions must not be hijacked by substring matches in
+    # the legacy portal router (e.g. "ziua in plus", "Luna ziua").
+    # All privacy and serious-safety guards above remain authoritative.
+    from nelutu_gemini_optional import is_public_general_chat
+    portal_cues = (
+        "portal", "aplicati", "catalog", "scutir", "motivar", "absent",
+        "invoir", "bilet de voie", "document", "dosar", "bursa",
+        "dirigint", "profesor", "scoal", "elev", "parint",
+        "instiint", "matricol", "incarc", "depun cerer",
+        "trimit cerer", "cerere medical", "contul", "parola",
+    )
+    normalized_public = _norm(question)
+    if (is_public_general_chat(question)
+            and not any(term in normalized_public for term in portal_cues)):
+        subject = subject_reply(question)
+        if subject is not None:
+            return subject, DialogueState()
+        educational = educational_reply(question)
+        if educational is not None:
+            return educational, DialogueState()
+        from nelutu_assistant import NelutuAnswer
+        return NelutuAnswer(
+            "fallback",
+            "No, spune-mi mai multe, ca sa-ti raspund cat mai potrivit. 🤠",
+        ), DialogueState()
     # Întrebările explicite despre plafonul de 40 de ore primesc întâi
     # explicația regulii, nu instrucțiunile generale pentru formular.
     normalized = _norm(question)
