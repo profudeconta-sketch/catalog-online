@@ -16,7 +16,11 @@ def diagnose_isolated_neon(dsn: str | None) -> str:
         return "missing_driver"
     try:
         import psycopg
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        conn = psycopg.connect(dsn, connect_timeout=5)
+    except Exception:
+        return "connection_failed"
+    try:
+        with conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT current_user")
                 row = cur.fetchone()
@@ -33,4 +37,4 @@ def diagnose_isolated_neon(dsn: str | None) -> str:
                     return "permissions_failed"
                 return "ready"
     except Exception:
-        return "connection_or_query_failed"
+        return "query_failed"
