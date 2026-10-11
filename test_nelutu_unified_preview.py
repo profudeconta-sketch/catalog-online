@@ -13,6 +13,11 @@ class UnifiedPreviewTests(unittest.TestCase):
         self.assertIn("reserve_gemini_attempt()", section)
         self.assertLess(section.index("reserve_gemini_attempt()"), section.index("generate_public_dialogue("))
         self.assertIn("answer_parent_dialogue", section)
+        self.assertIn("nelutu_unified_public_history", section)
+        self.assertIn("Șterge conversația generativă", section)
+        self.assertIn("_prepare_public(_history, unified_question, consent=True)", section)
+        self.assertIn("history=_history", section)
+        self.assertIn("len(_next_history) <= 6", section)
         self.assertNotIn("import app_parinti", section)
         self.assertNotIn("import app_web_catalog", section)
 
