@@ -1,0 +1,40 @@
+import unittest
+from nelutu_free_dialogue_preparation import append_local_public_archive, bounded_public_history, prepare_public_dialogue
+from nelutu_unified_reply_policy import choose_reply_route
+
+
+class FollowupMemoryTests(unittest.TestCase):
+    def test_einstein_gps_technical_and_continue(self):
+        history = ()
+        for question, answer in (
+            ("Vorbeste-mi despre Einstein", "Einstein a explicat relativitatea si legatura cu GPS."),
+            ("Da, din punct de vedere tehnic ma intereseaza GPS", "GPS foloseste ceasuri atomice si corectii relativiste."),
+            ("Vorbeste-mi despre Einstein", "Einstein a formulat teoria relativitatii."),
+        ):
+            window = bounded_public_history(history[-12:], question)
+            route, _ = choose_reply_route(question, existing_intent="fallback", consent=True, history=window)
+            self.assertEqual(route, "generative_eligible")
+            history = append_local_public_archive(history, question, answer)
+        window = bounded_public_history(history[-12:], "continua")
+        route, _ = choose_reply_route("continua", existing_intent="clarification", consent=True, history=window)
+        self.assertEqual(route, "generative_eligible")
+        self.assertIsNotNone(prepare_public_dialogue(window, "continua", consent=True))
+
+    def test_local_archive_longer_than_outbound_window(self):
+        history = ()
+        for i in range(25):
+            history = append_local_public_archive(history, "Ce este o stea? " + str(i), "Un corp ceresc.")
+        self.assertEqual(len(history), 50)
+        self.assertEqual(len(bounded_public_history(history[-12:], "continua")), 12)
+
+    def test_private_turn_clears_public_archive(self):
+        history = append_local_public_archive((), "Ce este o stea?", "Un corp ceresc.")
+        self.assertEqual(append_local_public_archive(history, "Ce note are elevul meu?", "Nu pot divulga."), ())
+
+    def test_no_generating_without_consent(self):
+        history = append_local_public_archive((), "Vorbeste-mi despre Einstein", "Relativitate.")
+        self.assertNotEqual(choose_reply_route("continua", existing_intent="clarification", consent=False, history=history)[0], "generative_eligible")
+
+
+if __name__ == "__main__":
+    unittest.main()
