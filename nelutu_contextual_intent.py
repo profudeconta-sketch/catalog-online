@@ -1,7 +1,7 @@
-"""Contextual intent gate for Neluțu. Classification never authorizes data export.
+"""Context-based routing for Neluțu. Never authorizes external transmission.
 
-An isolated menu label is ambiguous: keep the established local help.
-A general question mentioning a shared word must not trigger portal instructions.
+A bare menu word is ambiguous; shared vocabulary in general questions does
+not imply a portal request. Safety/privacy checks remain separate and first.
 """
 import re
 import unicodedata
@@ -19,66 +19,80 @@ _MENU = (
     "dosar bursa", "motivare absente parinte", "merit", "sociala orfan",
     "orfan", "sociala venit", "sociala", "venit", "sociala medicala",
     "medicala", "mame minore", "minore", "mame", "ces",
+    "dosar", "personal", "scutiri", "medicale", "bursa", "motivare",
+    "absente", "parinte", "mame", "social", "document", "scolar",
 )
 _PORTAL_MARKERS = (
-    "portal", "aplicatie", "aplicatia", "catalog", "buton", "fila",
-    "sectiune", "sectiunea", "meniu", "interfata", "contul",
-    "autentificare", "numar matricol", "diriginte", "in platforma",
-    "in sistem", "pe site", "in portal", "in aplicatie",
+    "portal", "aplicatia", "aplicatie", "catalogul", "catalog",
+    "buton", "fila", "sectiune", "meniu", "interfata",
+    "contul", "autentificare", "numar matricol", "diriginte",
+    "in platforma", "in sistemul nostru", "pe site", "in portal",
+    "in aplicatie", "din portal", "din aplicatie",
 )
-_PROCEDURAL = (
-    "cum completez", "cum se completeaza", "cum incarc", "unde incarc",
-    "cum trimit", "unde trimit", "cum depun", "unde depun",
-    "cum solicit", "cum cer", "cum motivez", "cum justific absente",
-    "cum vad", "unde vad", "cum accesez", "unde gasesc",
-    "ce buton", "ce trebuie sa apas", "cum folosesc",
-)
-_SCHOOL_OBJECTS = (
-    "scutire", "scutiri", "motivare absente", "absente", "invoire",
-    "bilet de voie", "bursa", "burse", "dosar", "document",
-    "instiintare", "notificare", "elev", "parinte", "scoala",
-    "catalog", "portal", "cerere", "adeverinta",
+_SCHOOL_TRANSACTIONS = (
+    "cerere de motivare", "cerere de invoire", "motivarea absentelor",
+    "motivare absente", "scutire medicala pentru elev",
+    "dosar de bursa", "bursa scolara", "bursa de merit",
+    "bursa sociala", "bilet de voie", "pleaca de la scoala",
+    "plece de la scoala", "incarc scutirea", "trimit scutirea",
+    "incarc document", "trimit document", "depun cererea",
+    "justific absentele", "motivez absente", "invoirea elevului",
 )
 _GENERAL_CONTEXT = (
     "soare", "luna", "astronomi", "planeta", "univers", "stele",
     "ziua afara", "noapte afara", "ziua in plus", "an bisect",
     "poveste", "poezie", "literatura", "istorie", "filosofie",
-    "in natura", "in societate", "in general", "in medicina",
+    "natura", "societate", "in general", "in medicina",
     "sensul cuvantului", "ce inseamna cuvantul", "etimologia",
+    "economi", "financ", "afacer", "profit", "salariu",
+    "familie", "mama", "copii", "copilarie", "orfelinat",
+    "psiholog", "biolog", "stiinta", "geograf", "universitate",
+    "vreme", "clima", "sanatate", "arta", "muzica",
+)
+_GENERAL_QUESTIONS = (
+    "de ce", "ce inseamna", "ce este", "cine este", "cum functioneaza",
+    "cum se formeaza", "cum se explica", "unde se duce",
+    "unde pleaca", "care este diferenta", "povesteste",
+    "explica mi despre", "spune mi despre",
+)
+_HELP_REQUEST = (
+    "cum completez", "cum se completeaza", "cum incarc",
+    "unde incarc", "cum trimit", "unde trimit", "cum depun",
+    "unde depun", "cum solicit", "cum motivez", "cum justific",
+    "cum accesez", "unde gasesc", "ce buton", "cum folosesc",
 )
 
 
-def asks_about_portal(question):
-    """Conservative local intent: require contextual evidence, not a word hit."""
+def _has(q, terms):
+    return any(re.search(r"\b" + re.escape(term) + r"\b", q) for term in terms)
+
+
+def classify_context(question):
+    """Return 'portal', 'general', 'ambiguous', or 'unknown'."""
     q = _norm(question)
     if not q:
-        return False
+        return "unknown"
+    if _has(q, _PORTAL_MARKERS) or _has(q, _SCHOOL_TRANSACTIONS):
+        return "portal"
+    if _has(q, _GENERAL_CONTEXT):
+        return "general"
     if q in _MENU:
-        return True
-    if any(marker in q for marker in _GENERAL_CONTEXT) and not any(
-        marker in q for marker in _PORTAL_MARKERS
-    ):
-        return False
-    if any(re.search(r"\b" + re.escape(x) + r"\b", q) for x in _PORTAL_MARKERS):
-        return True
-    if any(verb in q for verb in _PROCEDURAL) and any(
-        re.search(r"\b" + re.escape(obj) + r"\b", q) for obj in _SCHOOL_OBJECTS
-    ):
-        return True
-    # Explicit school transactions, not a mere mention of a shared term.
-    return any(x in q for x in (
-        "pleaca de la scoala", "plece de la scoala",
-        "cerere de motivare", "cerere de invoire",
-        "motivarea absentelor", "motivare absente",
-        "scutire medicala pentru elev", "dosar de bursa",
-        "bursa scolara", "bursa de merit", "bursa sociala",
-        "confirmare de primire de la scoala",
-    ))
+        return "ambiguous"
+    if _has(q, _HELP_REQUEST) and _has(q, _MENU):
+        return "portal" if _has(q, ("cerere", "elev", "diriginte", "portal")) else "ambiguous"
+    if _has(q, _GENERAL_QUESTIONS):
+        return "general"
+    # For ordinary sentences, do not infer a school operation from one word.
+    return "unknown"
+
+
+def asks_about_portal(question):
+    return classify_context(question) == "portal"
 
 
 def is_clearly_general(question):
-    """Override legacy keyword matching only with positive non-portal context."""
-    q = _norm(question)
-    return bool(q and any(x in q for x in _GENERAL_CONTEXT)
-                and not any(re.search(r"\\b" + re.escape(x) + r"\\b", q)
-                            for x in _PORTAL_MARKERS))
+    return classify_context(question) == "general"
+
+
+def needs_clarification(question):
+    return classify_context(question) == "ambiguous"
