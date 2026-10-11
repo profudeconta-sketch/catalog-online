@@ -73,6 +73,10 @@ def classify_context(question):
     if not q:
         return "unknown"
     if _has(q, _PORTAL_MARKERS) or _has(q, _SCHOOL_TRANSACTIONS) or (
+        _has(q, ("invoire", "invoirea")) and _has(q, ("cer", "solicit", "copil", "elev"))
+    ) or (
+        _has(q, ("instiintare", "notificare")) and _has(q, ("deschid", "confirm", "primire", "scoala"))
+    ) or (
         _has(q, ("motivare", "motivarea", "motivez"))
         and _has(q, ("absente", "absentelor", "absenta", "cerere", "cererea"))
         and _has(q, ("trimit", "completez", "depun", "solicit", "cum"))
@@ -87,6 +91,16 @@ def classify_context(question):
     if _has(q, _HELP_REQUEST) and _has(q, _MENU):
         return "portal" if _has(q, ("cerere", "elev", "diriginte", "portal")) else "ambiguous"
     if _has(q, _GENERAL_QUESTIONS) and _has(q, _MENU) and not _has(q, ("invatam", "invatatura", "facem", "trebe", "trebuie")):
+        return "general"
+    # A menu word embedded in a normal sentence is not an instruction to open
+    # that menu. Preserve established educational-purpose and school operations.
+    if _has(q, _MENU) and len(q.split()) > 2 and not _has(q, (
+        "de ce invatam", "la ce buna scoala", "la cei buna",
+        "ce rost are scoala", "trebe scoala", "trebuie scoala",
+        "cum trimit", "cum depun", "cum completez", "cum incarc",
+        "cum motivez", "unde incarc", "unde trimit", "unde gasesc",
+        "cum folosesc", "cum accesez", "cum solicit",
+    )):
         return "general"
     # For ordinary sentences, do not infer a school operation from one word.
     return "unknown"
