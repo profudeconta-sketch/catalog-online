@@ -110,7 +110,7 @@ class FollowupMemoryTests(unittest.TestCase):
         }
         with patch("nelutu_production_gemini.PostgreSQLBudget") as budget:
             provider, reserved = optional_provider(
-                "Cum folosesc portalul?", "portal_help",
+                "Explica tehnic GPS", "privacy_guard",
                 consent=True, settings=settings, history=(),
             )
             self.assertIsNone(provider)
