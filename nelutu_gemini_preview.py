@@ -542,6 +542,18 @@ from nelutu_free_dialogue_transport import generate_public_dialogue
 from nelutu_assistant import NelutuAnswer
 from nelutu_unified_reply_policy import choose_reply_route
 
+# Keep only validated public dialogue, never student context or local school answers.
+if "nelutu_unified_public_history" not in st.session_state:
+    st.session_state["nelutu_unified_public_history"] = ()
+from nelutu_free_dialogue_preparation import prepare_public_dialogue as _prepare_public
+from nelutu_gemini_optional import is_public_general_chat as _public_chat_ok
+if st.button("Șterge conversația generativă", key="nelutu_unified_clear"):
+    st.session_state["nelutu_unified_public_history"] = ()
+    st.rerun()
+for _role, _message in st.session_state["nelutu_unified_public_history"]:
+    with st.chat_message("assistant" if _role == "model" else "user"):
+        st.write(_message)
+
 with st.form("nelutu_unified_live_form", clear_on_submit=False):
     unified_question = st.text_input(
         "Întreabă-l pe Neluțu (maximum 600 de caractere)",
@@ -562,7 +574,11 @@ if unified_submit:
         consent=unified_consent,
     )
     if route == "generative_eligible":
-        if not (durable_mode and durable_budget is not None):
+        _history = st.session_state["nelutu_unified_public_history"]
+        if _prepare_public(_history, unified_question, consent=True) is None:
+            st.warning("Contextul nu mai poate fi transmis în siguranță. Șterge conversația și reîncearcă.")
+            st.markdown(local_answer.text)
+        elif not (durable_mode and durable_budget is not None):
             st.warning("Dialogul extern este blocat: lipsește bugetul persistent.")
             st.markdown(local_answer.text)
         elif not st.secrets.get("NELUTU_UNIFIED_LIVE_ENABLED", False) is True:
@@ -581,10 +597,18 @@ if unified_submit:
                     confirmed=True, budget_reserved=True,
                 )
             result, source = nelutu_unified_respond(
-                unified_question, local_answer, consent=True,
+                unified_question, local_answer, history=_history, consent=True,
                 enabled=True, budget_reserved=True, provider=_call_gemini,
             )
             st.markdown(result.text)
+            if source == "generative":
+                _next_history = _history + (("user", unified_question), ("model", result.text))
+                if (len(_next_history) <= 6 and _public_chat_ok(result.text)
+                        and _prepare_public(_next_history, "Salut!", consent=True) is not None):
+                    st.session_state["nelutu_unified_public_history"] = _next_history
+                else:
+                    st.session_state["nelutu_unified_public_history"] = ()
+                    st.caption("Contextul conversației a fost resetat pentru protecția datelor.")
             st.caption("Sursă: " + ("Gemini (test)" if source == "generative" else "răspuns local"))
     else:
         result, source = nelutu_unified_respond(
