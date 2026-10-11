@@ -60,6 +60,9 @@ def reserve_gemini_attempt() -> bool:
     return False
 
 
+st.info("🧭 Testul final Neluțu se află la sfârșitul acestei pagini lungi.")
+st.markdown("[**➡️ Mergi la dialogul generativ experimental**](#nelutu-dialog-generativ-experimental)")
+
 st.title("🤠 Neluțu — test Gemini izolat")
 st.caption("Buget comun pentru toate testele Gemini: maximum 3 încercări per sesiune, inclusiv diagnosticul. Încercările sunt rezervate înaintea verificării cheii; nu există reîncercare automată.")
 st.write("Încercări Gemini rămase în sesiune:", shared_budget.remaining())
@@ -532,6 +535,7 @@ st.info(
 
 
 st.divider()
+st.markdown('<div id="nelutu-dialog-generativ-experimental"></div>', unsafe_allow_html=True)
 st.subheader("🤠 Neluțu — dialog generativ experimental (un singur asistent)")
 st.caption(
     "Opțional, numai pentru întrebări generale publice. Nu trimite date școlare, "
