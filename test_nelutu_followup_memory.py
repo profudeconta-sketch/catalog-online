@@ -59,6 +59,43 @@ class FollowupMemoryTests(unittest.TestCase):
                 )
                 self.assertEqual(route, "existing")
 
+    def test_selected_mode_controls_public_provider(self):
+        from nelutu_unified_orchestrator import respond
+        from nelutu_assistant import NelutuAnswer
+        called = []
+        def provider(history, question):
+            called.append(question)
+            return "Explicatia publica solicitata."
+        local = NelutuAnswer("education_technical", "Raspuns local.")
+        question = "Explica tehnic GPS"
+        args = dict(history=(), consent=True, enabled=True,
+                    budget_reserved=True, provider=provider)
+        answer, route = respond(question, local, mode="portal", **args)
+        self.assertEqual(route, "existing")
+        self.assertEqual(called, [])
+        answer, route = respond(question, local, mode="chat", **args)
+        self.assertEqual(route, "generative")
+        self.assertEqual(called, [question])
+
+    def test_chat_mode_never_bypasses_sensitive_or_portal(self):
+        from nelutu_unified_orchestrator import respond
+        from nelutu_assistant import NelutuAnswer
+        called = []
+        def provider(history, question):
+            called.append(question)
+            return "Nu ar trebui apelat."
+        args = dict(mode="chat", history=(), consent=True, enabled=True,
+                    budget_reserved=True, provider=provider)
+        for question, answer in (
+            ("Cum folosesc portalul?", NelutuAnswer("portal_help", "Ghid.")),
+            ("Ce note are elevul meu?", NelutuAnswer("grades", "Local.")),
+            ("Explica GPS", NelutuAnswer("sensitive_redirect", "Protectie.", serious=True)),
+        ):
+            with self.subTest(question=question):
+                _, route = respond(question, answer, **args)
+                self.assertEqual(route, "existing")
+        self.assertEqual(called, [])
+
     def test_no_generating_without_consent(self):
         history = append_local_public_archive((), "Vorbeste-mi despre Einstein", "Relativitate.")
         self.assertNotEqual(choose_reply_route("continua", existing_intent="clarification", consent=False, history=history)[0], "generative_eligible")
