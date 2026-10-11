@@ -16,10 +16,12 @@ class LabDependenciesTests(unittest.TestCase):
         self.assertIn("-r requirements.txt", manifest)
         self.assertIn("psycopg[binary]", manifest)
 
-    def test_school_manifest_not_extended_with_lab_driver(self):
+    def test_staging_root_manifest_includes_driver_without_database_configuration(self):
         root = Path(__file__).parent
         manifest = (root / "requirements.txt").read_text(encoding="utf-8")
-        self.assertNotIn("psycopg", manifest)
+        self.assertIn("psycopg[binary]", manifest)
+        self.assertNotIn("NELUTU_NEON_DSN=", manifest)
+        self.assertNotIn("NELUTU_GEMINI_API_KEY=", manifest)
 
 
 if __name__ == "__main__":
