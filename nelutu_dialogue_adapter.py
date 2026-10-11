@@ -46,15 +46,15 @@ def answer_parent_dialogue(question, context=None, state=None, mode="auto"):
     privacy = credential_warning(question) or authority_guard(question) or third_party_credential_guard(question) or privacy_guard(question) or access_guidance(question) or director_class_guidance(question)
     if privacy is not None:
         return privacy, DialogueState()
+    if mode == "chat":
+        from nelutu_assistant import NelutuAnswer
+        return NelutuAnswer("fallback", "Conversatie libera."), DialogueState()
     # Saluturile simple nu trebuie interceptate de routerul generic al portalului.
     social, social_state = local_reply(question, state)
     if social is not None and social.intent == "smalltalk":
         return social, social_state
     # The parent's explicit guide selection replaces lexical ambiguity guessing.
     # Keep privacy, safety and authentication guards above this point unchanged.
-    if mode == "chat":
-        from nelutu_assistant import NelutuAnswer
-        return NelutuAnswer("fallback", "Conversatie libera."), DialogueState()
     if mode == "portal":
         # Authenticated facts take precedence over generic tutorial passages.
         from nelutu_assistant import answer_with_context
