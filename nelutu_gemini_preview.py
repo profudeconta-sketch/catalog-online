@@ -14,6 +14,7 @@ st.set_page_config(page_title="Neluțu — test Gemini izolat", page_icon="🤠"
 from nelutu_demo_budget import DemoBudget
 from nelutu_instance_budget import InstanceBudget, SharedBudgetGate
 from nelutu_durable_budget import DurableBudget
+from nelutu_postgres_budget import PostgreSQLBudget
 
 @st.cache_resource
 def get_instance_budget() -> InstanceBudget:
@@ -597,8 +598,8 @@ if unified_submit:
         if _prepare_public(_history, unified_question, consent=True) is None:
             st.warning("Contextul nu mai poate fi transmis în siguranță. Șterge conversația și reîncearcă.")
             st.markdown(local_answer.text)
-        elif not (durable_mode and durable_budget is not None):
-            st.warning("Dialogul extern este blocat: lipsește bugetul persistent.") 
+        elif not st.secrets.get("NELUTU_NEON_BUDGET_ENABLED", False) is True:
+            st.warning("Bugetul Neon nu este activat pentru testul experimental.") 
             st.markdown(local_answer.text)
         elif not _unified_operator_authorized:
             st.warning("Accesul la testul generativ este restricționat operatorului.")
@@ -609,7 +610,14 @@ if unified_submit:
         elif not st.secrets.get("NELUTU_GEMINI_API_KEY"):
             st.warning("Cheia Gemini nu este configurată.")
             st.markdown(local_answer.text)
-        elif not reserve_gemini_attempt():
+        elif not (shared_budget.allowed() and instance_budget.allowed()):
+            st.warning("Limita locală a testului a fost atinsă.")
+            st.markdown(local_answer.text)
+        elif not PostgreSQLBudget(st.secrets.get("NELUTU_NEON_DSN", "")).reserve():
+            st.warning("Neon nu a confirmat rezervarea cotei. Gemini nu a fost apelat.")
+            st.markdown(local_answer.text)
+        elif not budget_gate.reserve(shared_budget):
+            st.warning("Limita locală a testului a fost atinsă.")
             st.markdown(local_answer.text)
         else:
             key = st.secrets.get("NELUTU_GEMINI_API_KEY")
