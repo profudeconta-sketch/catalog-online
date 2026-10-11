@@ -60,7 +60,7 @@ def answer_parent_dialogue(question, context=None, state=None, mode="auto"):
         guide = tutorial_context(question)
         if guide:
             from nelutu_assistant import NelutuAnswer
-            return NelutuAnswer("system_tutorial", "No, potrivit ghidului portalului:\\n\\n" + guide), DialogueState()
+            return NelutuAnswer("system_tutorial", "No, potrivit ghidului portalului:\n\n" + guide), DialogueState()
         base = answer_parent(question, context)
         if base.intent not in ("fallback", "clarification"):
             return base, DialogueState()
