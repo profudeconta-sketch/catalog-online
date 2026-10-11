@@ -28,7 +28,10 @@ if st.button("Verifică Neon izolat", key="nelutu_isolated_neon_health"):
             "missing_driver": "Biblioteca psycopg nu este disponibilă.",
             "wrong_role": "Conexiunea funcționează, dar rolul autentificat nu este nelutu_test_runner.",
             "permissions_failed": "Conexiunea funcționează, dar permisiunile de izolare nu corespund.",
-            "connection_failed": "Conectarea la Neon a eșuat înainte de interogare. Verifică rolul, parola, hostul și accesul la rețea, fără a le divulga.",
+            "incomplete_dsn": "Adresa din Secrets este incompletă sau are format greșit. Copiază integral Connection string din Neon, fără să o trimiți în chat.",
+            "dsn_wrong_role": "Adresa din Secrets indică alt rol decât nelutu_test_runner. Selectează rolul de test în Neon.",
+            "connection_operational_failure": "Adresa are structura așteptată, dar Neon a refuzat sau nu a putut stabili conexiunea (autentificare, host, SSL ori rețea).",
+            "connection_other_failure": "Conectarea a eșuat dintr-o cauză tehnică locală. Verifică jurnalul fără a divulga date confidențiale.",
             "query_failed": "Conectarea la Neon a reușit, dar interogarea de verificare a eșuat. Nu modifica permisiunile înainte de diagnostic.",
             "missing_secret": "Conexiunea de test nu este configurată.",
         }
