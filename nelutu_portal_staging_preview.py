@@ -53,3 +53,16 @@ if st.button("Verifică permisiunile Neon de laborator", key="nelutu_lab_runtime
             "Permisiunile de execuție nu sunt încă validate. "
             "Contorul de laborator rămâne blocat; nu se fac scrieri."
         )
+
+st.caption("Diagnostic suplimentar: verificare separată a rolului și schemei, fără scrieri.")
+if st.button("Diagnostic Neon: rol și schemă", key="nelutu_lab_setup_diagnostic"):
+    from nelutu_neon_isolated_diagnostic import diagnose_isolated_neon
+    _lab_dsn_diag = st.secrets.get("NELUTU_TEST_DATABASE_URL", "")
+    _lab_status = diagnose_isolated_neon(_lab_dsn_diag)
+    st.info("Rezultat diagnostic: " + _lab_status)
+    if _lab_status == "ready":
+        st.warning(
+            "Diagnosticul inițial confirmă dreptul CREATE. "
+            "Pentru execuția contorului, acest drept trebuie eliminat "
+            "după pregătirea tabelei, de către administratorul Neon."
+        )
