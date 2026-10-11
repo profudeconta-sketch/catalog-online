@@ -486,3 +486,47 @@ stage20_case = st.selectbox("Alege o eroare fictivă", list(stage20_cases), key=
 if st.button("Etapa 20 — simulează eroarea local"):
     st.warning(stage20_cases[stage20_case])
     st.info("Simulare încheiată fără apel extern; contorul Gemini nu a fost consumat.")
+
+
+st.divider()
+st.subheader("🤠 Dialog liber — pregătire sigură")
+st.caption(
+    "Poți formula întrebări noi, dar această etapă verifică doar conversația local. "
+    "Nu transmite text către Gemini și nu consumă încercări API."
+)
+from nelutu_free_dialogue_preparation import prepare_public_dialogue
+
+if "nelutu_free_chat_history" not in st.session_state:
+    st.session_state["nelutu_free_chat_history"] = ()
+free_history = st.session_state["nelutu_free_chat_history"]
+for role, content in free_history:
+    with st.chat_message("assistant" if role == "model" else "user"):
+        st.write(content)
+
+with st.form("nelutu_free_chat_offline_form", clear_on_submit=True):
+    free_question = st.text_input(
+        "Scrie o întrebare generală, fără date personale sau școlare",
+        max_chars=600,
+        key="nelutu_free_chat_input",
+    )
+    free_submit = st.form_submit_button("Verifică întrebarea (fără trimitere)")
+if free_submit:
+    prepared = prepare_public_dialogue(free_history, free_question, consent=True)
+    if prepared is None:
+        st.warning(
+            "Textul sau istoricul nu poate fi acceptat în acest test. "
+            "Nu au fost transmise informații."
+        )
+    else:
+        st.session_state["nelutu_free_chat_history"] = (
+            free_history + (("user", free_question), ("model",
+            "Întrebarea a fost acceptată local. Dialogul generativ real nu este activat încă.")),
+        )
+        st.rerun()
+if st.button("Șterge conversația liberă locală", key="nelutu_clear_free_chat"):
+    st.session_state["nelutu_free_chat_history"] = ()
+    st.rerun()
+st.info(
+    "Dialogul liber cu Gemini rămâne dezactivat până la validarea confidențialității "
+    "și a unei cote reale persistente. Un cont gratuit nu înlocuiește aceste protecții."
+)
