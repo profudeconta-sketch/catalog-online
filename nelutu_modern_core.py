@@ -1,11 +1,8 @@
-"""Single modern Neluțu entry point for the existing portal.
-
-School facts and protected local answers remain authoritative. Generative
-calls are optional and forbidden for authenticated school context.
-"""
+"""Unified modern Neluțu: local school authority + optional safe Gemini."""
 from dataclasses import dataclass
 from nelutu_dialogue_adapter import answer_parent_dialogue
 from nelutu_local_dialogue import DialogueState
+from nelutu_unified_orchestrator import respond
 
 @dataclass(frozen=True)
 class ModernReply:
@@ -20,6 +17,11 @@ def answer(question, *, context=None, state=None, history=(),
         question, context=context,
         state=state if isinstance(state, DialogueState) else DialogueState()
     )
-    # No outbound data in authenticated parent sessions. Provider integration
-    # must be independently reviewed before any external call is enabled.
-    return ModernReply(local, next_state, "local")
+    # No authenticated portal context or school data is passed to Gemini.
+    # Only public question text; history deliberately suppressed in production.
+    final, route = respond(
+        question, local, history=(), consent=consent,
+        enabled=generative_enabled, budget_reserved=budget_reserved,
+        provider=provider,
+    )
+    return ModernReply(final, next_state, route)
