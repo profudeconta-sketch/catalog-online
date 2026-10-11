@@ -28,7 +28,10 @@ def _nelutu_answer_compat(question, context):
     if not _NELUTU_V2_ENABLED:
         return nelutu_answer(question, context)
     previous = st.session_state.get("nelutu_v2_dialogue_state")
-    public_history = st.session_state.get("nelutu_gemini_public_history", ())
+    from nelutu_free_dialogue_preparation import bounded_public_history
+    public_history = bounded_public_history(
+        st.session_state.get("nelutu_gemini_public_history", ()), question
+    )
     if os.environ.get("NELUTU_MODERN_ENABLED", "1") == "1":
         provider = None
         reserved = False
@@ -56,15 +59,13 @@ def _nelutu_answer_compat(question, context):
         if result.route == "generative" and _nelutu_public_text(result.answer.text):
             candidate = public_history + (("user", question), ("model", result.answer.text))
             st.session_state["nelutu_gemini_public_history"] = (
-                candidate if len(candidate) <= 6 and
-                sum(len(message) for _, message in candidate) <= 1800 else ()
+                bounded_public_history(candidate)
             )
         elif _nelutu_public_text(question) and _nelutu_public_text(result.answer.text):
             # Preserve only public dialogue through temporary provider fallback.
             candidate = public_history + (("user", question), ("model", result.answer.text))
             st.session_state["nelutu_gemini_public_history"] = (
-                candidate if len(candidate) <= 6 and
-                sum(len(message) for _, message in candidate) <= 1800 else ()
+                bounded_public_history(candidate)
             )
         else:
             st.session_state["nelutu_gemini_public_history"] = ()
