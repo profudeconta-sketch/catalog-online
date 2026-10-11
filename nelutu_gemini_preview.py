@@ -529,3 +529,66 @@ st.info(
     "Dialogul generativ real nu este activat în această secțiune. "
     "Întrebările nu sunt trimise la Google și nu consumă încercări API."
 )
+
+
+st.divider()
+st.subheader("🤠 Neluțu — dialog generativ experimental (un singur asistent)")
+st.caption(
+    "Opțional, numai pentru întrebări generale publice. Nu trimite date școlare, "
+    "nume, date de contact ori documente. Nu modifică portalul sau catalogul."
+)
+from nelutu_unified_orchestrator import respond as nelutu_unified_respond
+from nelutu_free_dialogue_transport import generate_public_dialogue
+from nelutu_assistant import NelutuAnswer
+from nelutu_unified_reply_policy import choose_reply_route
+
+with st.form("nelutu_unified_live_form", clear_on_submit=False):
+    unified_question = st.text_input(
+        "Întreabă-l pe Neluțu (maximum 600 de caractere)",
+        max_chars=600, key="nelutu_unified_question",
+    )
+    unified_consent = st.checkbox(
+        "Confirm că întrebarea este publică, nu conține date personale sau școlare "
+        "și sunt de acord să fie transmisă către Google Gemini.",
+        value=False, key="nelutu_unified_consent",
+    )
+    unified_submit = st.form_submit_button("💬 Răspunde, Neluțu!")
+if unified_submit:
+    from nelutu_dialogue_adapter import answer_parent_dialogue
+    # Existing local intelligence remains the first and authoritative source.
+    local_answer, _ = answer_parent_dialogue(unified_question, context=None)
+    route, _ = choose_reply_route(
+        unified_question, existing_intent=local_answer.intent,
+        consent=unified_consent,
+    )
+    if route == "generative_eligible":
+        if not (durable_mode and durable_budget is not None):
+            st.warning("Dialogul extern este blocat: lipsește bugetul persistent.")
+            st.markdown(local_answer.text)
+        elif not st.secrets.get("NELUTU_UNIFIED_LIVE_ENABLED", False) is True:
+            st.warning("Dialogul generativ experimental nu este activat de operator.")
+            st.markdown(local_answer.text)
+        elif not st.secrets.get("NELUTU_GEMINI_API_KEY"):
+            st.warning("Cheia Gemini nu este configurată.")
+            st.markdown(local_answer.text)
+        elif not reserve_gemini_attempt():
+            st.markdown(local_answer.text)
+        else:
+            key = st.secrets.get("NELUTU_GEMINI_API_KEY")
+            def _call_gemini(history, question):
+                return generate_public_dialogue(
+                    history, question, api_key=key, enabled=True,
+                    confirmed=True, budget_reserved=True,
+                )
+            result, source = nelutu_unified_respond(
+                unified_question, local_answer, consent=True,
+                enabled=True, budget_reserved=True, provider=_call_gemini,
+            )
+            st.markdown(result.text)
+            st.caption("Sursă: " + ("Gemini (test)" if source == "generative" else "răspuns local"))
+    else:
+        result, source = nelutu_unified_respond(
+            unified_question, local_answer, consent=False,
+        )
+        st.markdown(result.text)
+        st.caption("Sursă: tutorialul sistemului / Neluțu local. Fără apel extern.")
