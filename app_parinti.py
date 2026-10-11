@@ -53,6 +53,7 @@ def _nelutu_answer_compat(question, context, mode='portal'):
             generative_enabled=provider is not None,
             budget_reserved=reserved,
             provider=provider,
+            mode=mode,
         )
         st.session_state["nelutu_gemini_diagnostic"] = None
         from nelutu_free_dialogue_preparation import append_local_public_archive
