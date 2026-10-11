@@ -8,6 +8,11 @@ class UnifiedPreviewTests(unittest.TestCase):
         source = Path(__file__).with_name("nelutu_gemini_preview.py").read_text(encoding="utf-8")
         section = source.split('st.subheader("🤠 Neluțu — dialog generativ experimental', 1)[1]
         self.assertIn("NELUTU_UNIFIED_LIVE_ENABLED", section)
+        self.assertIn("NELUTU_UNIFIED_ACCESS_CODE", section)
+        self.assertIn("_hmac.compare_digest", section)
+        self.assertIn("len(_unified_expected_code) >= 16", section)
+        self.assertIn("elif not _unified_operator_authorized:", section)
+        self.assertLess(section.index("elif not _unified_operator_authorized:"), section.index("reserve_gemini_attempt()"))
         self.assertIn("unified_consent", section)
         self.assertIn("durable_mode and durable_budget is not None", section)
         self.assertIn("reserve_gemini_attempt()", section)
