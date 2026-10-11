@@ -13,7 +13,6 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-st.set_page_config(page_title="Neluțu — simulare portal părinți", page_icon="🤠")
 st.title("🤠 Neluțu-al-nost — simulare portal părinți")
 st.info(
     "SIMULARE EXPERIMENTALĂ — fără autentificare de părinți, fără elevi reali "
