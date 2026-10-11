@@ -86,7 +86,7 @@ def classify_context(question):
         return "ambiguous"
     if _has(q, _HELP_REQUEST) and _has(q, _MENU):
         return "portal" if _has(q, ("cerere", "elev", "diriginte", "portal")) else "ambiguous"
-    if _has(q, _GENERAL_QUESTIONS) and _has(q, _MENU) and not _has(q, ("scoala", "scolii", "invatam")):
+    if _has(q, _GENERAL_QUESTIONS) and _has(q, _MENU) and not _has(q, ("invatam", "invatatura", "facem", "trebe", "trebuie")):
         return "general"
     # For ordinary sentences, do not infer a school operation from one word.
     return "unknown"
