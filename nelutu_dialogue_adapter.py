@@ -46,6 +46,9 @@ def answer_parent_dialogue(question, context=None, state=None, mode="auto"):
     privacy = credential_warning(question) or authority_guard(question) or third_party_credential_guard(question) or privacy_guard(question) or access_guidance(question) or director_class_guidance(question)
     if privacy is not None:
         return privacy, DialogueState()
+    if mode == "chat":
+        from nelutu_assistant import NelutuAnswer
+        return NelutuAnswer("fallback", "Conversatie libera."), DialogueState()
     # Saluturile simple nu trebuie interceptate de routerul generic al portalului.
     social, social_state = local_reply(question, state)
     if social is not None and social.intent == "smalltalk":
@@ -79,6 +82,9 @@ def answer_parent_dialogue(question, context=None, state=None, mode="auto"):
     # to interrupt a general conversation with the obsolete mode question.
     # This only changes conversational wording; the protected-intent and
     # external-provider privacy gates remain authoritative.
+    if mode == "chat" and context_kind == "portal":
+        from nelutu_assistant import NelutuAnswer
+        return NelutuAnswer("privacy_chat_boundary", "Pentru operatiuni scolare, foloseste Ghidul portalului. Aici stam la povesti, fara acces la datele catalogului."), DialogueState()
     if mode == "chat" and context_kind == "ambiguous":
         context_kind = "general"
     if context_kind == "ambiguous":
