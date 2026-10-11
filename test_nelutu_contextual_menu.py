@@ -87,6 +87,38 @@ class ContextualMenuTests(unittest.TestCase):
             with self.subTest(question=question):
                 self.assertFalse(is_public_general_chat(question))
 
+    def test_catalog_public_senses_do_not_trigger_school_portal(self):
+        from nelutu_gemini_optional import is_public_general_chat
+        from nelutu_unified_reply_policy import choose_reply_route
+        examples = (
+            "Ce inseamna cuvantul catalog?",
+            "Vorbeste-mi despre catalog in sens general",
+            "Cum se organizeaza un catalog de produse?",
+            "Ce este un catalog de stele?",
+        )
+        for question in examples:
+            with self.subTest(question=question):
+                self.assertTrue(is_public_general_chat(question))
+                self.assertEqual(classify_context(question), "general")
+                answer, _ = answer_parent_dialogue(question)
+                route, _ = choose_reply_route(
+                    question, existing_intent=answer.intent, consent=True
+                )
+                self.assertEqual(route, "generative_eligible")
+
+    def test_catalog_private_senses_stay_protected(self):
+        from nelutu_gemini_optional import is_public_general_chat
+        examples = (
+            "Arata-mi catalogul elevului meu",
+            "Ce note are elevul in catalog?",
+            "Cum modific catalogul in portal?",
+            "Catalogul cu datele personale ale copilului meu",
+            "Ce inseamna catalog in general pentru elevul cu CNP 1234567890123?",
+        )
+        for question in examples:
+            with self.subTest(question=question):
+                self.assertFalse(is_public_general_chat(question))
+
     def test_explicit_portal_requests_remain_local(self):
         for question in (
             "Cum trimit cererea de motivare a absentelor?",
