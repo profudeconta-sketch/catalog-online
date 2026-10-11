@@ -20,7 +20,7 @@ def answer(question, *, context=None, state=None, history=(),
     # No authenticated portal context or school data is passed to Gemini.
     # Only public question text; history deliberately suppressed in production.
     final, route = respond(
-        question, local, history=(), consent=consent,
+        question, local, history=history, consent=consent,
         enabled=generative_enabled, budget_reserved=budget_reserved,
         provider=provider,
     )
