@@ -15,7 +15,8 @@ def answer(question, *, context=None, state=None, history=(),
            provider=None, mode="auto"):
     local, next_state = answer_parent_dialogue(
         question, context=context,
-        state=state if isinstance(state, DialogueState) else DialogueState()
+        state=state if isinstance(state, DialogueState) else DialogueState(),
+        mode=mode,
     )
     # No authenticated portal context or school data is passed to Gemini.
     # Only public question text; history deliberately suppressed in production.
