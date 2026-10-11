@@ -62,6 +62,20 @@ def answer_parent_dialogue(question, context=None, state=None):
             "ori intrebi despre sensul general al acestui subiect? 🤠",
         ), DialogueState()
     if context_kind == "general":
+        # Existing educational/subject and conversational continuations retain priority.
+        if state.topic:
+            continuation, continuation_state = local_reply(question, state)
+            if continuation is not None and continuation.intent not in ("fallback", "clarification"):
+                return continuation, continuation_state
+        subject = subject_reply(question)
+        if subject is not None:
+            return subject, DialogueState()
+        school = _school_topic(question)
+        if school is not None:
+            return school, DialogueState()
+        educational = educational_reply(question)
+        if educational is not None:
+            return educational, DialogueState()
         from nelutu_assistant import NelutuAnswer
         return NelutuAnswer(
             "fallback",
