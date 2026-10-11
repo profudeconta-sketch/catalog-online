@@ -74,3 +74,11 @@ def asks_about_portal(question):
         "bursa scolara", "bursa de merit", "bursa sociala",
         "confirmare de primire de la scoala",
     ))
+
+
+def is_clearly_general(question):
+    """Override legacy keyword matching only with positive non-portal context."""
+    q = _norm(question)
+    return bool(q and any(x in q for x in _GENERAL_CONTEXT)
+                and not any(re.search(r"\\b" + re.escape(x) + r"\\b", q)
+                            for x in _PORTAL_MARKERS))
