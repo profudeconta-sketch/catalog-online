@@ -19,21 +19,24 @@ def choose_reply_route(question, *, existing_intent=None, consent=False, history
     """
     if not isinstance(question, str) or not question.strip():
         return "local_only", ""
-    # A public follow-up must remain with the generative conversation instead
-    # of being hijacked by an unrelated legacy/local educational reply.
-    # Never bypass serious, privacy, school or portal intents.
-    followup = _norm(question)
-    public_followup = bool(history) and (
-        followup in ("continua", "continuam", "da", "sigur", "mai mult", "detaliaza")
-        or followup.startswith(("da din punct de vedere", "din punct de vedere tehnic",
-                              "vreau mai multe", "poti continua", "explica mai mult"))
-    )
+    # The lexical word "tehnic" is never a routing command. Public,
+    # contextually general questions may use Gemini even if the local
+    # educational router produced a generic educational answer.
+    # Privacy/safety/portal and all other authoritative intents remain local.
     from nelutu_contextual_intent import classify_context
-    if public_followup and classify_context(question) not in ("portal", "ambiguous"):
-        if existing_intent in (None, "fallback", "clarification", "smalltalk_followup") and (
-            prepare_public_dialogue(history, question, consent=consent) is not None
-        ):
+    from nelutu_gemini_optional import is_public_general_chat
+    kind = classify_context(question)
+    public = is_public_general_chat(question)
+    non_authoritative = (
+        existing_intent in (None, "fallback", "clarification", "smalltalk_followup")
+        or (isinstance(existing_intent, str) and existing_intent.startswith(
+            ("education_", "education_followup_")
+        ))
+    )
+    if public and kind not in ("portal", "ambiguous") and non_authoritative:
+        if prepare_public_dialogue(history, question, consent=consent) is not None:
             return "generative_eligible", ""
+        return "local_only", ""
     if existing_intent not in (None, "fallback", "clarification", "smalltalk", "smalltalk_followup"):
         return "existing", ""
     # A generic public question must never trigger tutorial retrieval by
