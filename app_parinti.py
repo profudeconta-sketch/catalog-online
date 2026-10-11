@@ -24,9 +24,11 @@ from nelutu_local_dialogue import DialogueState as _NelutuDialogueState
 # Comutator de revenire imediată la Neluțu clasic, fără intervenții asupra datelor.
 _NELUTU_V2_ENABLED = os.environ.get("NELUTU_V2_ENABLED", "1") == "1"
 
-def _nelutu_answer_compat(question, context):
+def _nelutu_answer_compat(question, context, mode='portal'):
     if not _NELUTU_V2_ENABLED:
         return nelutu_answer(question, context)
+    if mode not in ("portal", "chat"):
+        mode = "portal"
     previous = st.session_state.get("nelutu_v2_dialogue_state")
     from nelutu_free_dialogue_preparation import bounded_public_history
     public_history = bounded_public_history(
@@ -35,13 +37,13 @@ def _nelutu_answer_compat(question, context):
     if os.environ.get("NELUTU_MODERN_ENABLED", "1") == "1":
         provider = None
         reserved = False
-        if _nelutu_public_text(question):
+        if mode == "chat" and _nelutu_public_text(question):
             local, _ = _nelutu_v2_answer(
                 question, context=context,
                 state=previous if isinstance(previous, _NelutuDialogueState) else _NelutuDialogueState(),
             )
             provider, reserved = _nelutu_optional_provider(
-                question, local.intent, consent=True, history=public_history,
+                question, "fallback", consent=True, history=public_history,
             )
         result = _nelutu_modern_answer(
             question, context=context,
@@ -52,10 +54,7 @@ def _nelutu_answer_compat(question, context):
             budget_reserved=reserved,
             provider=provider,
         )
-        st.session_state["nelutu_gemini_diagnostic"] = (
-            _nelutu_diagnostic_status(question, local.intent, history=public_history)
-            if _nelutu_public_text(question) and result.route != "generative" else None
-        )
+        st.session_state["nelutu_gemini_diagnostic"] = None
         from nelutu_free_dialogue_preparation import append_local_public_archive
         archive = append_local_public_archive(
             st.session_state.get("nelutu_public_local_archive", ()),
@@ -621,6 +620,13 @@ else:
             _nelutu_context = {"facts": [
                 {"keywords": ("portal", "cum folosesc portalul"), "answer": "Ești autentificat în Portalul Părinților; pot explica orice zonă vizibilă aici, fără să modific date."}
             ]}
+            _nelutu_mode = st.radio(
+                "Ce dorești să facem?",
+                ("Ghidul portalului", "Stăm la povești"),
+                horizontal=True,
+                key="nelutu_conversation_mode",
+            )
+            _nelutu_mode_code = "portal" if _nelutu_mode == "Ghidul portalului" else "chat"
             # Formularul trimite întrebarea direct la Enter, fără al doilea clic.
             with st.form(key="nelutu_question_form", clear_on_submit=True):
                 _nelutu_question = st.text_input(
@@ -633,7 +639,7 @@ else:
             if _nelutu_ask and _nelutu_current_prompt:
                 with st.spinner("No, amu lasă-mă o țâră să cuget..."):
                     st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
-                    st.session_state["nelutu_answered_reply"] = _nelutu_answer_compat(_nelutu_current_prompt, _nelutu_context)
+                    st.session_state["nelutu_answered_reply"] = _nelutu_answer_compat(_nelutu_current_prompt, _nelutu_context, _nelutu_mode_code)
             _kept_prompt, _nelutu_reply = _nelutu_fresh_reply(
                 st.session_state.get("nelutu_answered_prompt"),
                 st.session_state.get("nelutu_answered_reply"),
@@ -643,8 +649,6 @@ else:
                 st.session_state.pop("nelutu_answered_prompt", None)
                 st.session_state.pop("nelutu_answered_reply", None)
             if _nelutu_reply is not None:
-                if st.session_state.get("nelutu_gemini_diagnostic"):
-                    st.caption(st.session_state["nelutu_gemini_diagnostic"])
                 st.markdown("**Neluțu:**")
                 st.markdown(_nelutu_reply.text)
                 if _nelutu_reply.source_label and _nelutu_reply.source_url:
