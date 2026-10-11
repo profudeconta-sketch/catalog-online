@@ -6,6 +6,8 @@ approves privacy, costs, access, a dedicated durable quota and per-message conse
 import hmac
 import streamlit as st
 from nelutu_modern_core import answer
+from nelutu_dialogue_adapter import answer_parent_dialogue
+from nelutu_unified_reply_policy import choose_reply_route
 from nelutu_gemini_optional import is_public_general_chat
 from nelutu_free_dialogue_transport import generate_public_dialogue
 from nelutu_postgres_budget import PostgreSQLBudget
@@ -61,7 +63,11 @@ if pending:
     if st.button("🤠 Trimite întrebarea", key="nelutu_modern_send"):
         provider = None
         reserved = False
-        if public and approved and consent:
+        local, _ = answer_parent_dialogue(pending)
+        route, _ = choose_reply_route(
+            pending, existing_intent=local.intent, consent=bool(consent)
+        )
+        if public and approved and consent and route == "generative_eligible":
             dsn = st.secrets.get("NELUTU_NEON_DSN", "")
             key = st.secrets.get("NELUTU_GEMINI_API_KEY", "")
             if isinstance(dsn, str) and dsn.strip() and isinstance(key, str) and key.strip():
