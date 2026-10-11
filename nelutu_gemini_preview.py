@@ -653,5 +653,17 @@ if unified_submit:
         result, source = nelutu_unified_respond(
             unified_question, local_answer, consent=False,
         )
-        st.markdown(result.text)
+        # A general question can be understandable even if local knowledge
+        # cannot answer it. Preserve existing school and tutorial replies.
+        if (route == "local_only" and local_answer.intent in ("fallback", "clarification")
+                and isinstance(unified_question, str) and unified_question.strip()
+                and not unified_consent):
+            st.info(
+                "Întrebarea este clară, dar conversația generativă nu este "
+                "autorizată. Pentru întrebări generale, Gemini poate fi "
+                "folosit numai în testul autorizat, cu consimțământ și "
+                "buget disponibil. Niciun apel extern nu a fost efectuat."
+            )
+        else:
+            st.markdown(result.text)
         st.caption("Sursă: tutorialul sistemului / Neluțu local. Fără apel extern.")
