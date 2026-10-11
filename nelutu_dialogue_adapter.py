@@ -32,7 +32,7 @@ def _school_topic(question):
         return NelutuAnswer("education_purpose", "No, școala nu-i numai pentru note. Ne învață să gândim, să punem întrebări, să lucrăm cu alții și să deprindem o meserie. Nu folosim fiecare formulă zilnic, dar felul în care învățăm să rezolvăm probleme ne rămâne!")
     return None
 
-def answer_parent_dialogue(question, context=None, state=None):
+def answer_parent_dialogue(question, context=None, state=None, mode="auto"):
     """Prioritizează întotdeauna routerul portalului; continuitatea este limitată."""
     state = state if isinstance(state, DialogueState) else DialogueState()
     # Filtrul de risc al dialogului nou se execută înainte de rutarea portalului.
@@ -50,6 +50,22 @@ def answer_parent_dialogue(question, context=None, state=None):
     social, social_state = local_reply(question, state)
     if social is not None and social.intent == "smalltalk":
         return social, social_state
+    # The parent's explicit guide selection replaces lexical ambiguity guessing.
+    # Keep privacy, safety and authentication guards above this point unchanged.
+    if mode == "portal":
+        flow = parent_flow_guidance(question)
+        if flow is not None:
+            return flow, DialogueState()
+        from nelutu_system_tutorial_context import tutorial_context
+        guide = tutorial_context(question)
+        if guide:
+            from nelutu_assistant import NelutuAnswer
+            return NelutuAnswer("system_tutorial", "No, potrivit ghidului portalului:\\n\\n" + guide), DialogueState()
+        base = answer_parent(question, context)
+        if base.intent not in ("fallback", "clarification"):
+            return base, DialogueState()
+        from nelutu_assistant import NelutuAnswer
+        return NelutuAnswer("clarification", "No, în Ghidul portalului te ajut cu Învoire, burse, documente, motivări, înștiințări și situația școlară. Spune-mi ce vrei să faci și îți arăt pașii. 🤠"), DialogueState()
     # Decide from the full question before any legacy substring router.
     # The privacy and safety guards above still take precedence.
     from nelutu_contextual_intent import classify_context
