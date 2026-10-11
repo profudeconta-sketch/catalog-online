@@ -1816,8 +1816,57 @@ with st.sidebar:
     st.divider()
     if st.button("🚪 Deconectare (Logout)", use_container_width=True):
         st.session_state["authenticated"] = False
+        st.session_state.pop("nelutu_admin_verified", None)
         st.rerun()
         
+    # Administrare Neluțu: independentă de parola comună a profesorilor.
+    with st.expander("🤠 Administrare Neluțu — administrator"):
+        import hmac
+        from nelutu_postgres_budget import PostgreSQLBudget
+
+        def _nelutu_admin_secret(name):
+            try:
+                value = st.secrets.get(name, "")
+                return value if isinstance(value, str) else ""
+            except Exception:
+                return ""
+
+        _admin_password = _nelutu_admin_secret("NELUTU_ADMIN_PASSWORD")
+        _neon_dsn = _nelutu_admin_secret("NELUTU_NEON_DSN")
+        if not _admin_password or hmac.compare_digest(_admin_password, PAROLA_PROFESORI):
+            st.warning("Monitorizarea necesită NELUTU_ADMIN_PASSWORD distinctă de parola profesorilor, configurată în Secrets.")
+        else:
+            if not st.session_state.get("nelutu_admin_verified", False):
+                with st.form("nelutu_admin_auth"):
+                    _admin_input = st.text_input("Parola administratorului Neluțu", type="password")
+                    _admin_submit = st.form_submit_button("Accesează monitorizarea")
+                if _admin_submit:
+                    if hmac.compare_digest(_admin_input, _admin_password):
+                        st.session_state["nelutu_admin_verified"] = True
+                        st.rerun()
+                    else:
+                        st.error("Parolă incorectă.")
+            if st.session_state.get("nelutu_admin_verified", False):
+                if st.button("Închide accesul administrativ", key="nelutu_admin_logout"):
+                    st.session_state["nelutu_admin_verified"] = False
+                    st.rerun()
+                st.caption("Contorul de rezervări Neon; nu reprezintă neapărat răspunsuri externe reușite.")
+                if not _neon_dsn:
+                    st.warning("Conexiunea NELUTU_NEON_DSN nu este configurată în această aplicație.")
+                else:
+                    _quota = PostgreSQLBudget(_neon_dsn).status()
+                    if _quota is None:
+                        st.warning("Contorul nu poate fi citit în siguranță. Date indisponibile.")
+                    else:
+                        st.metric("Consumate azi", _quota["used"])
+                        st.metric("Rămase azi", _quota["remaining"])
+                        st.progress(_quota["used"] / _quota["daily_limit"])
+                        st.caption(
+                            f'Limita zilnică: {_quota["daily_limit"]} | '
+                            f'În minutul curent: {_quota["minute_used"]}/{_quota["minute_limit"]} | '
+                            f'Zi de buget (Pacific): {_quota["budget_day"]}'
+                        )
+                        st.caption("Resetare: miezul nopții în America/Los_Angeles (09:00 sau 10:00 în România, după sezon).")
     render_sidebar_copyright()
 
 if not os.path.exists(selected_file):
