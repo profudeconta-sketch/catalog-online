@@ -1,0 +1,4 @@
+# Optional, isolated Neluțu Neon laboratory dependencies.
+# Do not modify the school applications' requirements.txt.
+streamlit
+psycopg[binary]>=3.2,<4

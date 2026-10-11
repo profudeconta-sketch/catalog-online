@@ -1,0 +1,3 @@
+# Only for the experimental Neluțu Streamlit deployment.
+-r ../requirements.txt
+psycopg[binary]>=3.2,<4

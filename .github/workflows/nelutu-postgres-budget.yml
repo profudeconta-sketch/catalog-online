@@ -1,0 +1,26 @@
+name: Nelutu PostgreSQL quota offline tests
+
+on:
+  pull_request:
+    paths:
+      - 'nelutu_postgres_budget.py'
+      - 'test_nelutu_postgres_budget.py'
+      - '.github/workflows/nelutu-postgres-budget.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-quota-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile isolated adapter
+        run: python -m py_compile nelutu_postgres_budget.py test_nelutu_postgres_budget.py
+      - name: Run offline safety tests
+        run: python -m unittest -v test_nelutu_postgres_budget.py

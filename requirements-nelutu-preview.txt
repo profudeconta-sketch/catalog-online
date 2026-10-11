@@ -1,0 +1,3 @@
+# Experimental Neluțu preview only; do not select for the school apps.
+-r requirements.txt
+psycopg[binary]>=3.2,<4
