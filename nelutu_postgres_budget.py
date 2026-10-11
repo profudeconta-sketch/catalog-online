@@ -1,4 +1,4 @@
-"""Experimental PostgreSQL quota adapter. Not wired to Streamlit or Gemini.
+"""Experimental PostgreSQL quota adapter, used by the opt-in unified Streamlit preview.
 
 Requires optional psycopg 3 and a dedicated PostgreSQL database. Never pass school
 records, prompts, API keys or student identifiers to this module.
@@ -30,7 +30,7 @@ class PostgreSQLBudget:
                     with conn.cursor() as cur:
                         cur.execute(
                             "UPDATE public.nelutu_gemini_budget SET used = used + 1 "
-                            "WHERE id = 1 AND used < %s RETURNING used",
+                            "WHERE id = 1 AND used >= 0 AND used < %s RETURNING used",
                             (self.limit,),
                         )
                         return cur.fetchone() is not None
@@ -44,6 +44,6 @@ class PostgreSQLBudget:
                 with conn.cursor() as cur:
                     cur.execute("SELECT used FROM public.nelutu_gemini_budget WHERE id = 1")
                     row = cur.fetchone()
-                    return max(0, self.limit - row[0]) if row else 0
+                    return max(0, self.limit - row[0]) if (row and type(row[0]) is int and 0 <= row[0] <= self.limit) else 0
         except Exception:
             return 0
