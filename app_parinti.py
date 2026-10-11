@@ -17,7 +17,7 @@ from nelutu_assistant import QUICK_TOPICS as _NELUTU_BASE_TOPICS
 from nelutu_parent_guide import TUTORIAL_TOPIC as NELUTU_TUTORIAL_TOPIC, TUTORIAL_TEXT as NELUTU_TUTORIAL_TEXT, answer_parent as nelutu_answer
 from nelutu_dialogue_adapter import answer_parent_dialogue as _nelutu_v2_answer
 from nelutu_modern_core import answer as _nelutu_modern_answer
-from nelutu_production_gemini import optional_provider as _nelutu_optional_provider
+from nelutu_production_gemini import optional_provider as _nelutu_optional_provider, diagnostic_status as _nelutu_diagnostic_status
 from nelutu_gemini_optional import is_public_general_chat as _nelutu_public_text
 from nelutu_local_dialogue import DialogueState as _NelutuDialogueState
 
@@ -48,6 +48,10 @@ def _nelutu_answer_compat(question, context):
             generative_enabled=provider is not None,
             budget_reserved=reserved,
             provider=provider,
+        )
+        st.session_state["nelutu_gemini_diagnostic"] = (
+            _nelutu_diagnostic_status(question, local.intent, history=public_history)
+            if _nelutu_public_text(question) and result.route != "generative" else None
         )
         if result.route == "generative" and _nelutu_public_text(result.answer.text):
             candidate = public_history + (("user", question), ("model", result.answer.text))
@@ -637,6 +641,8 @@ else:
                 st.session_state.pop("nelutu_answered_prompt", None)
                 st.session_state.pop("nelutu_answered_reply", None)
             if _nelutu_reply is not None:
+                if st.session_state.get("nelutu_gemini_diagnostic"):
+                    st.caption(st.session_state["nelutu_gemini_diagnostic"])
                 st.markdown("**Neluțu:**")
                 st.markdown(_nelutu_reply.text)
                 if _nelutu_reply.source_label and _nelutu_reply.source_url:
