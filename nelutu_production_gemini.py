@@ -3,8 +3,9 @@ from nelutu_gemini_optional import is_public_general_chat
 from nelutu_free_dialogue_transport import generate_public_dialogue
 from nelutu_postgres_budget import PostgreSQLBudget
 from nelutu_unified_reply_policy import choose_reply_route
+from nelutu_free_dialogue_preparation import prepare_public_dialogue
 
-def optional_provider(question, local_intent, *, consent=False, settings=None):
+def optional_provider(question, local_intent, *, consent=False, settings=None, history=()):
     """Return (provider, reserved). Never log prompts, keys, DSNs or errors."""
     if settings is None:
         import streamlit as st
@@ -18,10 +19,10 @@ def optional_provider(question, local_intent, *, consent=False, settings=None):
     )
     if not consent or any(settings.get(key) is not True for key in required):
         return None, False
-    if not is_public_general_chat(question):
+    if not is_public_general_chat(question) or prepare_public_dialogue(history, question, consent=True) is None:
         return None, False
     route, _ = choose_reply_route(question, existing_intent=local_intent,
-                                  consent=True, history=())
+                                  consent=True, history=history)
     if route != "generative_eligible":
         return None, False
     key = settings.get("NELUTU_GEMINI_API_KEY")
@@ -34,7 +35,7 @@ def optional_provider(question, local_intent, *, consent=False, settings=None):
         return None, False
     def provider(_history, text):
         return generate_public_dialogue(
-            (), text, api_key=key, enabled=True,
+            history, text, api_key=key, enabled=True,
             confirmed=True, budget_reserved=True,
         )
     return provider, True
