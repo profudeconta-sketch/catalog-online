@@ -56,18 +56,21 @@ def _nelutu_answer_compat(question, context):
             _nelutu_diagnostic_status(question, local.intent, history=public_history)
             if _nelutu_public_text(question) and result.route != "generative" else None
         )
-        if result.route == "generative" and _nelutu_public_text(result.answer.text):
-            candidate = public_history + (("user", question), ("model", result.answer.text))
-            st.session_state["nelutu_gemini_public_history"] = (
-                bounded_public_history(candidate)
+        if _nelutu_public_text(question):
+            # The assistant may use a protected/menu word in an otherwise
+            # public explanation. Never transmit such a reply to Gemini.
+            # Retain the already-approved public question with a fixed,
+            # content-free model turn so the topic survives the next follow-up.
+            safe_reply = (
+                result.answer.text if _nelutu_public_text(result.answer.text)
+                else "Am raspuns la intrebarea anterioara."
             )
-        elif _nelutu_public_text(question) and _nelutu_public_text(result.answer.text):
-            # Preserve only public dialogue through temporary provider fallback.
-            candidate = public_history + (("user", question), ("model", result.answer.text))
+            candidate = public_history + (("user", question), ("model", safe_reply))
             st.session_state["nelutu_gemini_public_history"] = (
                 bounded_public_history(candidate)
             )
         else:
+            # Private/portal turns must never enter the external transcript.
             st.session_state["nelutu_gemini_public_history"] = ()
         st.session_state["nelutu_v2_dialogue_state"] = result.state
         return result.answer
