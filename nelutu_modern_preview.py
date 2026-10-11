@@ -36,6 +36,10 @@ if "nelutu_modern_state" not in st.session_state:
     st.session_state.nelutu_modern_state = None
 if "nelutu_modern_history" not in st.session_state:
     st.session_state.nelutu_modern_history = []
+if "nelutu_modern_public_history" not in st.session_state:
+    st.session_state.nelutu_modern_public_history = ()
+if "nelutu_modern_question_number" not in st.session_state:
+    st.session_state.nelutu_modern_question_number = 0
 for role, text in st.session_state.nelutu_modern_history[-12:]:
     with st.chat_message("assistant" if role == "assistant" else "user"):
         st.markdown(text)
@@ -47,6 +51,7 @@ if question:
     # Never send history or authenticated portal context to the provider.
     # The current message must be explicitly approved each time.
     st.session_state.nelutu_modern_pending = question
+    st.session_state.nelutu_modern_question_number += 1
 
 pending = st.session_state.get("nelutu_modern_pending")
 if pending:
@@ -58,14 +63,16 @@ if pending:
         and secret_bool("NELUTU_PROVIDER_PRIVACY_APPROVED")
         and secret_bool("NELUTU_PROVIDER_COST_APPROVED")
     )
-    consent = st.checkbox("Confirm că întrebarea afișată este publică și accept transmiterea ei către Google Gemini.", key="nelutu_modern_consent")
+    consent = st.checkbox("Confirm că întrebarea afișată este publică și accept transmiterea ei către Google Gemini.", key="nelutu_modern_consent_" + str(st.session_state.nelutu_modern_question_number))
     st.caption("Mesaj propus pentru transmitere: " + pending)
     if st.button("🤠 Trimite întrebarea", key="nelutu_modern_send"):
         provider = None
         reserved = False
-        local, _ = answer_parent_dialogue(pending)
+        local, _ = answer_parent_dialogue(pending, state=st.session_state.nelutu_modern_state)
+        public_history = st.session_state.nelutu_modern_public_history
         route, _ = choose_reply_route(
-            pending, existing_intent=local.intent, consent=bool(consent)
+            pending, existing_intent=local.intent, consent=bool(consent),
+            history=public_history
         )
         if public and approved and consent and route == "generative_eligible":
             dsn = st.secrets.get("NELUTU_NEON_DSN", "")
@@ -76,12 +83,23 @@ if pending:
                 reserved = PostgreSQLBudget(dsn).reserve()
                 if reserved:
                     provider = lambda _history, text: generate_public_dialogue(
-                        (), text, api_key=key, enabled=True,
+                        public_history, text, api_key=key, enabled=True,
                         confirmed=True, budget_reserved=True
                     )
-        result = answer(pending, consent=bool(public and consent),
+        result = answer(pending, state=st.session_state.nelutu_modern_state,
+                        history=public_history, consent=bool(public and consent),
                         generative_enabled=bool(approved), budget_reserved=reserved,
                         provider=provider)
+        # Only a separate, explicitly public generative exchange may be sent
+        # as follow-up context. Local/portal answers never enter provider history.
+        if result.route == "generative" and is_public_general_chat(result.answer.text):
+            candidate = public_history + (("user", pending), ("model", result.answer.text))
+            if len(candidate) <= 6 and sum(len(text) for _, text in candidate) <= 1800:
+                st.session_state.nelutu_modern_public_history = candidate
+            else:
+                st.session_state.nelutu_modern_public_history = ()
+        else:
+            st.session_state.nelutu_modern_public_history = ()
         st.session_state.nelutu_modern_history.extend(
             [("user", pending), ("assistant", result.answer.text)]
         )
