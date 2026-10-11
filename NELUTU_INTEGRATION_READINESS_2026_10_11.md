@@ -75,3 +75,9 @@ Nu există dovadă în cod că aceste comutatoare sunt activate în Streamlit Se
 - Modificările sunt izolate pe ramura experimentală, fără DDL, fără conexiuni live, fără Gemini și fără modificarea aplicațiilor școlare.
 - **Testele GitHub pentru noul commit trebuie confirmate separat**; rezultatele verzi pentru commituri anterioare nu certifică automat modificarea curentă.
 - Criteriu GO de integrare: CI nou verde + dovezi E2E lipsă + confidențialitate/costuri + rollback + acord explicit. Până atunci: NO-GO pentru producție.
+
+## Confirmare CI efectivă pentru ultimul cod — 11.10
+
+GitHub Actions a confirmat **8/8 fluxuri success** la commitul `394517ed7851e594663a16a5cbbbd0f57aabdcf5`, inclusiv `Nelutu PostgreSQL transaction tests`. Verificat direct prin rulările asociate commitului, nu extrapolat din testele de ieri. Această condiție este **TRECUTĂ și nu se reia** dacă nu se modifică din nou codul.
+
+PR #112: open, Draft, merged=false la verificare. Celelalte condiții externe nu sunt demonstrate automat de CI. Costul zero rămâne o constrângere obligatorie stabilită de utilizator, nu dovada unei facturări Google verificate. Evaluările de confidențialitate și cost se marchează ca deja discutate, dar nu se transformă în GO operațional fără dovezi concrete de configurare și de test E2E.
