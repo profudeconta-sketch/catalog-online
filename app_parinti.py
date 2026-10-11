@@ -59,6 +59,13 @@ def _nelutu_answer_compat(question, context):
                 candidate if len(candidate) <= 6 and
                 sum(len(message) for _, message in candidate) <= 1800 else ()
             )
+        elif _nelutu_public_text(question) and _nelutu_public_text(result.answer.text):
+            # Preserve only public dialogue through temporary provider fallback.
+            candidate = public_history + (("user", question), ("model", result.answer.text))
+            st.session_state["nelutu_gemini_public_history"] = (
+                candidate if len(candidate) <= 6 and
+                sum(len(message) for _, message in candidate) <= 1800 else ()
+            )
         else:
             st.session_state["nelutu_gemini_public_history"] = ()
         st.session_state["nelutu_v2_dialogue_state"] = result.state
