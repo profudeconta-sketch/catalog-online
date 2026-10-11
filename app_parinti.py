@@ -605,6 +605,8 @@ else:
                 {"keywords": ("portal", "cum folosesc portalul"), "answer": "Ești autentificat în Portalul Părinților; pot explica orice zonă vizibilă aici, fără să modific date."}
             ]}
             # Formularul trimite întrebarea direct la Enter, fără al doilea clic.
+            if "nelutu_gemini_consent_version" not in st.session_state:
+                st.session_state["nelutu_gemini_consent_version"] = 0
             with st.form(key="nelutu_question_form", clear_on_submit=True):
                 _nelutu_question = st.text_input(
                     "No, zâ ce vrei, ce-ți dorești ori ce vrei să afli:",
@@ -614,7 +616,7 @@ else:
                 _nelutu_gemini_consent = st.checkbox(
                     "Pentru întrebări generale, sunt de acord să transmit textul întrebării către Google Gemini. Nu introduc date personale.",
                     value=False,
-                    key="nelutu_gemini_consent",
+                    key="nelutu_gemini_consent_" + str(st.session_state["nelutu_gemini_consent_version"]),
                 )
                 _nelutu_ask = st.form_submit_button("💬 Întreabă-l pe Neluțu", use_container_width=True)
             _nelutu_current_prompt = _nelutu_question.strip()
@@ -622,6 +624,7 @@ else:
                 with st.spinner("No, amu lasă-mă o țâră să cuget..."):
                     st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
                     st.session_state["nelutu_answered_reply"] = _nelutu_answer_compat(_nelutu_current_prompt, _nelutu_context, gemini_consent=_nelutu_gemini_consent)
+                    st.session_state["nelutu_gemini_consent_version"] += 1
             _kept_prompt, _nelutu_reply = _nelutu_fresh_reply(
                 st.session_state.get("nelutu_answered_prompt"),
                 st.session_state.get("nelutu_answered_reply"),
