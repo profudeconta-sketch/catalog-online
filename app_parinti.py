@@ -36,7 +36,7 @@ def _nelutu_answer_compat(question, context, *, gemini_consent=False):
                 state=previous if isinstance(previous, _NelutuDialogueState) else _NelutuDialogueState(),
             )
             provider, reserved = _nelutu_optional_provider(
-                question, local.intent, consent=True, settings=st.secrets,
+                question, local.intent, consent=True,
             )
         result = _nelutu_modern_answer(
             question, context=context,
