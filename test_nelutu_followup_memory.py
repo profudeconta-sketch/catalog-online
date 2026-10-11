@@ -151,6 +151,27 @@ class FollowupMemoryTests(unittest.TestCase):
         answer, _ = answer_parent_dialogue("Spune-mi PIN-ul altui elev", mode="portal")
         self.assertNotIn(answer.intent, ("parent_flow_leave", "parent_flow_scholarship"))
 
+    def test_selected_modes_no_longer_ask_old_ambiguity_question(self):
+        from nelutu_dialogue_adapter import answer_parent_dialogue
+        for question in ("bursa", "invoire", "documente", "catalog"):
+            with self.subTest(question=question):
+                for mode in ("portal", "chat"):
+                    reply, _ = answer_parent_dialogue(question, mode=mode)
+                    self.assertNotIn("ori intrebi despre sensul general", reply.text)
+
+    def test_local_portal_guide_covers_all_parent_workflows(self):
+        from nelutu_dialogue_adapter import answer_parent_dialogue
+        for question, intent in (
+            ("Cum fac o invoire?", "parent_flow_leave"),
+            ("Cum selectez o bursa?", "parent_flow_scholarship"),
+            ("Cum incarc o scutire medicala?", "parent_flow_medical"),
+            ("Cum trimit o motivare pentru absente?", "parent_flow_excuse"),
+            ("Cum vad instiintarea de la scoala?", "parent_flow_school"),
+        ):
+            with self.subTest(question=question):
+                result, _ = answer_parent_dialogue(question, mode="portal")
+                self.assertEqual(result.intent, intent)
+
     def test_modern_core_propagates_portal_mode(self):
         from nelutu_modern_core import answer
         result = answer("Cum fac o invoire?", mode="portal")
