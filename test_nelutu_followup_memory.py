@@ -31,6 +31,34 @@ class FollowupMemoryTests(unittest.TestCase):
         history = append_local_public_archive((), "Ce este o stea?", "Un corp ceresc.")
         self.assertEqual(append_local_public_archive(history, "Ce note are elevul meu?", "Nu pot divulga."), ())
 
+    def test_technical_word_does_not_force_local_educational_answer(self):
+        for question in (
+            "Explica tehnic cum functioneaza GPS",
+            "Din punct de vedere tehnic cum functioneaza un motor?",
+            "Vreau o explicatie tehnica despre sateliti",
+            "continua",
+        ):
+            with self.subTest(question=question):
+                history = (("user", "Vorbeste-mi despre Einstein"),
+                           ("model", "Einstein a explicat relativitatea."))
+                route, _ = choose_reply_route(
+                    question, existing_intent="education_followup_technical",
+                    consent=True, history=history
+                )
+                self.assertEqual(route, "generative_eligible")
+
+    def test_private_and_portal_intents_cannot_be_overridden(self):
+        history = (("user", "Vorbeste-mi despre Einstein"),
+                   ("model", "Einstein a explicat relativitatea."))
+        for intent in ("parent_flow_documents", "sensitive_redirect",
+                       "privacy_guard", "system_tutorial"):
+            with self.subTest(intent=intent):
+                route, _ = choose_reply_route(
+                    "Explica tehnic GPS", existing_intent=intent,
+                    consent=True, history=history
+                )
+                self.assertEqual(route, "existing")
+
     def test_no_generating_without_consent(self):
         history = append_local_public_archive((), "Vorbeste-mi despre Einstein", "Relativitate.")
         self.assertNotEqual(choose_reply_route("continua", existing_intent="clarification", consent=False, history=history)[0], "generative_eligible")
