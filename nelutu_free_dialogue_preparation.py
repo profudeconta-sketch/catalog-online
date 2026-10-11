@@ -56,3 +56,20 @@ def bounded_public_history(history, next_message=""):
                      sum(len(message) for _, message in valid) + len(next_message) > MAX_TOTAL_CHARS):
         valid = valid[2:]
     return tuple(valid)
+
+
+def append_public_exchange(history, question, answer):
+    """Store a public turn without exposing assistant text rejected by privacy gate.
+
+    A fixed non-informative model turn preserves the public question's topic.
+    Private questions clear external context rather than crossing the boundary.
+    """
+    if not is_public_general_chat(question):
+        return ()
+    safe_answer = answer if is_public_general_chat(answer) else (
+        "Am raspuns la intrebarea anterioara."
+    )
+    return bounded_public_history(
+        bounded_public_history(history, question) +
+        (("user", question), ("model", safe_answer))
+    )

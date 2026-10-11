@@ -56,19 +56,10 @@ def _nelutu_answer_compat(question, context):
             _nelutu_diagnostic_status(question, local.intent, history=public_history)
             if _nelutu_public_text(question) and result.route != "generative" else None
         )
-        if result.route == "generative" and _nelutu_public_text(result.answer.text):
-            candidate = public_history + (("user", question), ("model", result.answer.text))
-            st.session_state["nelutu_gemini_public_history"] = (
-                bounded_public_history(candidate)
-            )
-        elif _nelutu_public_text(question) and _nelutu_public_text(result.answer.text):
-            # Preserve only public dialogue through temporary provider fallback.
-            candidate = public_history + (("user", question), ("model", result.answer.text))
-            st.session_state["nelutu_gemini_public_history"] = (
-                bounded_public_history(candidate)
-            )
-        else:
-            st.session_state["nelutu_gemini_public_history"] = ()
+        from nelutu_free_dialogue_preparation import append_public_exchange
+        st.session_state["nelutu_gemini_public_history"] = append_public_exchange(
+            public_history, question, result.answer.text
+        )
         st.session_state["nelutu_v2_dialogue_state"] = result.state
         return result.answer
     answer, next_state = _nelutu_v2_answer(
