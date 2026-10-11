@@ -8,9 +8,25 @@ from nelutu_unified_reply_policy import choose_reply_route
 
 
 def respond(question, existing_answer, *, history=(), consent=False,
-            enabled=False, budget_reserved=False, provider=None):
+            enabled=False, budget_reserved=False, provider=None, mode="portal"):
     """Return (answer, route). The existing assistant remains authoritative."""
     intent = getattr(existing_answer, "intent", None)
+    # The selected mode is authoritative only for public, non-portal questions.
+    # Safety, privacy and school operations keep their existing local routing.
+    from nelutu_gemini_optional import is_public_general_chat
+    from nelutu_contextual_intent import classify_context
+    protected = bool(getattr(existing_answer, "serious", False)) or (
+        isinstance(intent, str) and (
+            intent.startswith(("privacy", "credential", "access_", "authority",
+                               "parent_", "portal_", "system_", "sensitive"))
+        )
+    )
+    if mode == "portal":
+        return existing_answer, "existing"
+    if (mode == "chat" and not protected
+            and is_public_general_chat(question)
+            and classify_context(question) not in ("portal", "ambiguous")):
+        intent = "fallback"
     route, guide = choose_reply_route(
         question, existing_intent=intent, consent=consent, history=history
     )
