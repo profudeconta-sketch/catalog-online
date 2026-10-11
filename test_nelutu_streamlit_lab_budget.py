@@ -43,13 +43,13 @@ class LabBudgetTests(unittest.TestCase):
             with self.subTest(dsn=dsn), self.assertRaises(ValueError):
                 IsolatedLabBudget(dsn)
 
-    @patch("nelutu_streamlit_lab_budget.isolated_neon_ready", return_value=False)
+    @patch("nelutu_streamlit_lab_budget.runtime_permissions_ready", return_value=False)
     def test_failed_privilege_check_denies_all(self, _):
         budget = IsolatedLabBudget("postgresql://example", enabled=True)
         self.assertEqual(budget.remaining(), 0)
         self.assertFalse(budget.reserve())
 
-    @patch("nelutu_streamlit_lab_budget.isolated_neon_ready", return_value=True)
+    @patch("nelutu_streamlit_lab_budget.runtime_permissions_ready", return_value=True)
     def test_read_and_reserve(self, _):
         for row, remaining, reserved in [
             ((0,), 3, True),
@@ -65,7 +65,7 @@ class LabBudgetTests(unittest.TestCase):
                     self.assertEqual(budget.remaining(), remaining)
                     self.assertIs(budget.reserve(), reserved)
 
-    @patch("nelutu_streamlit_lab_budget.isolated_neon_ready", return_value=True)
+    @patch("nelutu_streamlit_lab_budget.runtime_permissions_ready", return_value=True)
     def test_db_failure_fails_closed(self, _):
         def broken(*a, **k):
             raise OSError("no database")
