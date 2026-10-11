@@ -40,7 +40,7 @@ def prepare_public_dialogue(history, new_message, *, consent=False):
     return result
 
 
-def bounded_public_history(history):
+def bounded_public_history(history, next_message=""):
     """Keep recent complete public exchanges; discard oldest, never all on overflow."""
     if type(history) is not tuple or len(history) % 2:
         return ()
@@ -53,6 +53,6 @@ def bounded_public_history(history):
             return ()
         valid.extend(pair)
     while valid and (len(valid) > MAX_TURNS or
-                     sum(len(message) for _, message in valid) > MAX_TOTAL_CHARS):
+                     sum(len(message) for _, message in valid) + len(next_message) > MAX_TOTAL_CHARS):
         valid = valid[2:]
     return tuple(valid)
