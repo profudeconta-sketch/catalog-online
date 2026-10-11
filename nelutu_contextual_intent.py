@@ -72,6 +72,10 @@ def classify_context(question):
     q = _norm(question)
     if not q:
         return "unknown"
+    # Explicit public senses take precedence over shared menu vocabulary.
+    from nelutu_gemini_optional import is_unambiguously_public_topic
+    if is_unambiguously_public_topic(question):
+        return "general"
     if _has(q, _PORTAL_MARKERS) or _has(q, _SCHOOL_TRANSACTIONS) or (
         _has(q, ("invoire", "invoirea")) and _has(q, ("cer", "solicit", "copil", "elev"))
     ) or (
