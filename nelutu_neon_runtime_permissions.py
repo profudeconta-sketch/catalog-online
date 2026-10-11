@@ -26,9 +26,10 @@ def runtime_permissions_ready(dsn: str | None, *, enabled: bool = False) -> bool
                     "has_schema_privilege(current_user, %s, 'CREATE'), "
                     "has_table_privilege(current_user, %s, 'SELECT'), "
                     "has_table_privilege(current_user, %s, 'UPDATE'), "
-                    "has_table_privilege(current_user, "
-                    "'public.nelutu_gemini_budget', "
-                    "'SELECT, INSERT, UPDATE, DELETE, TRUNCATE')",
+                    "CASE WHEN to_regclass('public.nelutu_gemini_budget') IS NULL "
+                    "THEN FALSE ELSE has_table_privilege(current_user, "
+                    "to_regclass('public.nelutu_gemini_budget'), "
+                    "'SELECT, INSERT, UPDATE, DELETE, TRUNCATE') END",
                     (TEST_SCHEMA, TEST_SCHEMA, TEST_TABLE, TEST_TABLE),
                 )
                 row = cur.fetchone()
