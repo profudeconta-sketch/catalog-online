@@ -23,7 +23,8 @@ if st.button("Verifică Neon izolat", key="nelutu_isolated_neon_health"):
     else:
         _status = diagnose_isolated_neon(_test_dsn)
         _messages = {
-            "ready": "Neon: conexiune validă, rolul și permisiunile de test sunt confirmate.",
+            "ready": "Neon: conexiune validă, izolare confirmată și drept CREATE în schema de laborator verificat (fără scrieri).",
+            "schema_create_missing": "Neon: conexiune și izolare confirmate, dar rolul nu poate crea tabele în schema de laborator. Nu s-a scris nimic.",
             "invalid_scheme": "Formatul conexiunii de test nu este valid.",
             "missing_driver": "Biblioteca psycopg nu este disponibilă.",
             "wrong_role": "Conexiunea funcționează, dar rolul autentificat nu este nelutu_test_runner.",
