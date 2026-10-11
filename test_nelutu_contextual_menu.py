@@ -52,6 +52,11 @@ class ContextualMenuTests(unittest.TestCase):
                     "parent_flow_leave", "portal_component",
                 ))
 
+    def test_public_regex_patterns_really_match_normalized_phrases(self):
+        from nelutu_gemini_optional import _PUBLIC_SENSES, _normalize
+        self.assertTrue(any(p.search(_normalize("Ce este bursa de valori?")) for p in _PUBLIC_SENSES))
+        self.assertTrue(any(p.search(_normalize("Care-i mai bun dosarul cu șină?")) for p in _PUBLIC_SENSES))
+
     def test_public_senses_are_eligible_for_general_conversation(self):
         from nelutu_gemini_optional import is_public_general_chat
         from nelutu_unified_reply_policy import choose_reply_route
