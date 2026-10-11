@@ -30,3 +30,26 @@ st.markdown(
 # Reuse the existing preview verbatim, including provider gates and budgets.
 # Never fork the Gemini implementation or import school applications.
 runpy.run_path(str(ROOT / "nelutu_gemini_preview.py"), run_name="__main__")
+
+# Read-only lab diagnostics. Never expose DSN, table contents, or credentials.
+st.divider()
+st.subheader("🔒 Neon — verificare izolată, fără scrieri")
+st.caption(
+    "Verifică rolul și drepturile de execuție pentru contorul fictiv. "
+    "Nu consumă cotă, nu modifică Neon și nu apelează Gemini."
+)
+if st.button("Verifică permisiunile Neon de laborator", key="nelutu_lab_runtime_check"):
+    from nelutu_neon_runtime_permissions import runtime_permissions_ready
+    _lab_dsn = st.secrets.get("NELUTU_TEST_DATABASE_URL", "")
+    if not _lab_dsn:
+        st.warning("Lipsește conexiunea izolată de laborator.")
+    elif runtime_permissions_ready(_lab_dsn, enabled=True):
+        st.success(
+            "Rolul de laborator are drepturile necesare pentru contorul fictiv "
+            "și nu are CREATE în schema de test sau acces la contorul Gemini."
+        )
+    else:
+        st.warning(
+            "Permisiunile de execuție nu sunt încă validate. "
+            "Contorul de laborator rămâne blocat; nu se fac scrieri."
+        )
