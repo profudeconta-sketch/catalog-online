@@ -74,6 +74,8 @@ def classify_context(question):
         return "unknown"
     if _has(q, _PORTAL_MARKERS) or _has(q, _SCHOOL_TRANSACTIONS):
         return "portal"
+    if _has(q, ("incarc", "trimit", "depun", "completez", "completeaza", "solicit", "aproba", "motiv", "scutir")) and _has(q, ("document", "scutire", "cerere", "absente", "invoire", "bursa", "dosar", "elev")):
+        return "portal"
     if _has(q, _GENERAL_CONTEXT):
         return "general"
     if q in _MENU:
