@@ -41,6 +41,7 @@ def _nelutu_answer_compat(question, context, mode='portal'):
             local, _ = _nelutu_v2_answer(
                 question, context=context,
                 state=previous if isinstance(previous, _NelutuDialogueState) else _NelutuDialogueState(),
+                mode=mode,
             )
             provider, reserved = _nelutu_optional_provider(
                 question, local.intent, consent=True, history=public_history,
