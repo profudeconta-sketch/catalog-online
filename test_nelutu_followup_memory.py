@@ -172,6 +172,29 @@ class FollowupMemoryTests(unittest.TestCase):
                 result, _ = answer_parent_dialogue(question, mode="portal")
                 self.assertEqual(result.intent, intent)
 
+    def test_catalog_dictionary_question_is_public_in_chat_mode(self):
+        from nelutu_gemini_optional import is_public_general_chat
+        from nelutu_dialogue_adapter import answer_parent_dialogue
+        from nelutu_unified_reply_policy import choose_reply_route
+        question = "Ce este un catalog?"
+        self.assertTrue(is_public_general_chat(question))
+        local, _ = answer_parent_dialogue(question, mode="chat")
+        route, _ = choose_reply_route(
+            question, existing_intent=local.intent, consent=True, history=()
+        )
+        self.assertEqual(route, "generative_eligible")
+
+    def test_catalog_private_questions_stay_local(self):
+        from nelutu_gemini_optional import is_public_general_chat
+        for question in (
+            "Ce note are elevul meu in catalog?",
+            "Arata-mi catalogul clasei",
+            "Care este numarul matricol al elevului?",
+            "Cum modific o nota in catalog?",
+        ):
+            with self.subTest(question=question):
+                self.assertFalse(is_public_general_chat(question))
+
     def test_modern_core_propagates_portal_mode(self):
         from nelutu_modern_core import answer
         result = answer("Cum fac o invoire?", mode="portal")
