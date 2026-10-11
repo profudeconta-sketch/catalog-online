@@ -18,6 +18,7 @@ from nelutu_parent_guide import TUTORIAL_TOPIC as NELUTU_TUTORIAL_TOPIC, TUTORIA
 from nelutu_dialogue_adapter import answer_parent_dialogue as _nelutu_v2_answer
 from nelutu_modern_core import answer as _nelutu_modern_answer
 from nelutu_production_gemini import optional_provider as _nelutu_optional_provider
+from nelutu_gemini_optional import is_public_general_chat as _nelutu_public_text
 from nelutu_local_dialogue import DialogueState as _NelutuDialogueState
 
 # Comutator de revenire imediată la Neluțu clasic, fără intervenții asupra datelor.
@@ -27,6 +28,7 @@ def _nelutu_answer_compat(question, context, *, gemini_consent=False):
     if not _NELUTU_V2_ENABLED:
         return nelutu_answer(question, context)
     previous = st.session_state.get("nelutu_v2_dialogue_state")
+    public_history = st.session_state.get("nelutu_gemini_public_history", ())
     if os.environ.get("NELUTU_MODERN_ENABLED", "0") == "1":
         provider = None
         reserved = False
@@ -36,16 +38,25 @@ def _nelutu_answer_compat(question, context, *, gemini_consent=False):
                 state=previous if isinstance(previous, _NelutuDialogueState) else _NelutuDialogueState(),
             )
             provider, reserved = _nelutu_optional_provider(
-                question, local.intent, consent=True,
+                question, local.intent, consent=True, history=public_history,
             )
         result = _nelutu_modern_answer(
             question, context=context,
             state=previous if isinstance(previous, _NelutuDialogueState) else _NelutuDialogueState(),
+            history=public_history,
             consent=bool(gemini_consent),
             generative_enabled=provider is not None,
             budget_reserved=reserved,
             provider=provider,
         )
+        if result.route == "generative" and _nelutu_public_text(result.answer.text):
+            candidate = public_history + (("user", question), ("model", result.answer.text))
+            st.session_state["nelutu_gemini_public_history"] = (
+                candidate if len(candidate) <= 6 and
+                sum(len(message) for _, message in candidate) <= 1800 else ()
+            )
+        else:
+            st.session_state["nelutu_gemini_public_history"] = ()
         st.session_state["nelutu_v2_dialogue_state"] = result.state
         return result.answer
     answer, next_state = _nelutu_v2_answer(
