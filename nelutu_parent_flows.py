@@ -102,7 +102,10 @@ def answer(question):
                "după starea solicitării; înștiințările după confirmarea accesării.")
         return NelutuAnswer("parent_flow_complete", msg + END)
 
-    if _has(q, "invoir", "bilet de voie") or (\n        _has(q, "plece mai devreme", "pleaca mai devreme")\n        and _has(q, "elev", "copil", "scoala", "portal", "dirigint")\n    ):
+    if _has(q, "invoir", "bilet de voie") or (
+        _has(q, "plece mai devreme", "pleaca mai devreme")
+        and _has(q, "elev", "copil", "scoala", "portal", "dirigint")
+    ):
         msg = (PREFIX + "deschizi **🚪 Învoire**, completezi solicitarea "
                "pentru **ziua curentă**, alegi motivul și o oră viitoare, "
                "apoi trimiți cererea. Verifică mesajul de transmitere și "
