@@ -53,6 +53,11 @@ def answer_parent_dialogue(question, context=None, state=None, mode="auto"):
     # The parent's explicit guide selection replaces lexical ambiguity guessing.
     # Keep privacy, safety and authentication guards above this point unchanged.
     if mode == "portal":
+        # Authenticated facts take precedence over generic tutorial passages.
+        from nelutu_assistant import answer_with_context
+        authorized = answer_with_context(question, context)
+        if authorized.intent == "authorized_context":
+            return authorized, DialogueState()
         flow = parent_flow_guidance(question)
         if flow is not None:
             return flow, DialogueState()
