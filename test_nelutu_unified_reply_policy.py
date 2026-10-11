@@ -15,6 +15,16 @@ class UnifiedPolicyTests(unittest.TestCase):
         self.assertEqual(choose_reply_route("Salut, ce mai faci?")[0], "local_only")
         self.assertEqual(choose_reply_route("Salut, ce mai faci?", consent=True)[0], "generative_eligible")
 
+    def test_opted_in_smalltalk_can_be_generatively_extended(self):
+        self.assertEqual(
+            choose_reply_route("Salut, ce mai faci?", existing_intent="smalltalk", consent=True)[0],
+            "generative_eligible",
+        )
+        self.assertEqual(
+            choose_reply_route("Salut, ce mai faci?", existing_intent="smalltalk", consent=False)[0],
+            "local_only",
+        )
+
     def test_school_private_content_never_goes_to_provider(self):
         self.assertNotEqual(choose_reply_route("Ce nota are elevul?", consent=True)[0], "generative_eligible")
 
