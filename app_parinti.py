@@ -17,19 +17,34 @@ from nelutu_assistant import QUICK_TOPICS as _NELUTU_BASE_TOPICS
 from nelutu_parent_guide import TUTORIAL_TOPIC as NELUTU_TUTORIAL_TOPIC, TUTORIAL_TEXT as NELUTU_TUTORIAL_TEXT, answer_parent as nelutu_answer
 from nelutu_dialogue_adapter import answer_parent_dialogue as _nelutu_v2_answer
 from nelutu_modern_core import answer as _nelutu_modern_answer
+from nelutu_production_gemini import optional_provider as _nelutu_optional_provider
 from nelutu_local_dialogue import DialogueState as _NelutuDialogueState
 
 # Comutator de revenire imediată la Neluțu clasic, fără intervenții asupra datelor.
 _NELUTU_V2_ENABLED = os.environ.get("NELUTU_V2_ENABLED", "1") == "1"
 
-def _nelutu_answer_compat(question, context):
+def _nelutu_answer_compat(question, context, *, gemini_consent=False):
     if not _NELUTU_V2_ENABLED:
         return nelutu_answer(question, context)
     previous = st.session_state.get("nelutu_v2_dialogue_state")
     if os.environ.get("NELUTU_MODERN_ENABLED", "0") == "1":
+        provider = None
+        reserved = False
+        if gemini_consent:
+            local, _ = _nelutu_v2_answer(
+                question, context=context,
+                state=previous if isinstance(previous, _NelutuDialogueState) else _NelutuDialogueState(),
+            )
+            provider, reserved = _nelutu_optional_provider(
+                question, local.intent, consent=True, settings=st.secrets,
+            )
         result = _nelutu_modern_answer(
             question, context=context,
             state=previous if isinstance(previous, _NelutuDialogueState) else _NelutuDialogueState(),
+            consent=bool(gemini_consent),
+            generative_enabled=provider is not None,
+            budget_reserved=reserved,
+            provider=provider,
         )
         st.session_state["nelutu_v2_dialogue_state"] = result.state
         return result.answer
@@ -596,12 +611,17 @@ else:
                     placeholder="Scrie-i lu’ Neluțu și apasă Enter...",
                     key="nelutu_question",
                 )
+                _nelutu_gemini_consent = st.checkbox(
+                    "Pentru întrebări generale, sunt de acord să transmit textul întrebării către Google Gemini. Nu introduc date personale.",
+                    value=False,
+                    key="nelutu_gemini_consent",
+                )
                 _nelutu_ask = st.form_submit_button("💬 Întreabă-l pe Neluțu", use_container_width=True)
             _nelutu_current_prompt = _nelutu_question.strip()
             if _nelutu_ask and _nelutu_current_prompt:
                 with st.spinner("No, amu lasă-mă o țâră să cuget..."):
                     st.session_state["nelutu_answered_prompt"] = _nelutu_current_prompt
-                    st.session_state["nelutu_answered_reply"] = _nelutu_answer_compat(_nelutu_current_prompt, _nelutu_context)
+                    st.session_state["nelutu_answered_reply"] = _nelutu_answer_compat(_nelutu_current_prompt, _nelutu_context, gemini_consent=_nelutu_gemini_consent)
             _kept_prompt, _nelutu_reply = _nelutu_fresh_reply(
                 st.session_state.get("nelutu_answered_prompt"),
                 st.session_state.get("nelutu_answered_reply"),
