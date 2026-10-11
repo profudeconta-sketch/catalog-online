@@ -20,6 +20,13 @@ def choose_reply_route(question, *, existing_intent=None, consent=False, history
         return "local_only", ""
     if existing_intent not in (None, "fallback", "clarification", "smalltalk", "smalltalk_followup"):
         return "existing", ""
+    # A generic public question must never trigger tutorial retrieval by
+    # coincidental shared words (e.g. 'unde pleaca soarele noaptea').
+    from nelutu_gemini_optional import is_public_general_chat
+    if is_public_general_chat(question):
+        if prepare_public_dialogue(history, question, consent=consent) is not None:
+            return "generative_eligible", ""
+        return "local_only", ""
     guide = tutorial_context(question)
     if guide:
         return "tutorial", guide
