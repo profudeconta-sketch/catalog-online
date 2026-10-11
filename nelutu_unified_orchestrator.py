@@ -42,4 +42,7 @@ def respond(question, existing_answer, *, history=(), consent=False,
                 return NelutuAnswer("generative", response.strip()[:1500]), "generative"
         except Exception:
             pass
+    if mode == "chat" and not protected:
+        from nelutu_assistant import NelutuAnswer
+        return NelutuAnswer("chat_unavailable", "No, momentan nu pot continua discutia libera. Mai incearca putin mai tarziu. 🤠"), "local_only"
     return existing_answer, "existing"
