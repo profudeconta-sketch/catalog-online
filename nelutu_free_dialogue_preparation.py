@@ -73,3 +73,18 @@ def append_public_exchange(history, question, answer):
         bounded_public_history(history, question) +
         (("user", question), ("model", safe_answer))
     )
+
+
+# Local-only archive is independent of the bounded outbound Gemini window.
+# It contains only text accepted by the existing public privacy filter.
+MAX_LOCAL_TURNS = 200
+
+
+def append_local_public_archive(archive, question, answer):
+    """Retain up to 100 safe public exchanges locally; no network or storage writes."""
+    if not is_public_general_chat(question):
+        return ()
+    if type(archive) is not tuple or len(archive) % 2:
+        archive = ()
+    safe = answer if is_public_general_chat(answer) else "Am raspuns la intrebarea anterioara."
+    return (archive + (("user", question), ("model", safe)))[-MAX_LOCAL_TURNS:]
