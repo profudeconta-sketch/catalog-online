@@ -30,7 +30,7 @@ def _nelutu_answer_compat(question, context):
     previous = st.session_state.get("nelutu_v2_dialogue_state")
     from nelutu_free_dialogue_preparation import bounded_public_history
     public_history = bounded_public_history(
-        st.session_state.get("nelutu_public_local_archive", ()), question
+        st.session_state.get("nelutu_public_local_archive", ())[-12:], question
     )
     if os.environ.get("NELUTU_MODERN_ENABLED", "1") == "1":
         provider = None
@@ -62,7 +62,7 @@ def _nelutu_answer_compat(question, context):
             question, result.answer.text
         )
         st.session_state["nelutu_public_local_archive"] = archive
-        st.session_state["nelutu_gemini_public_history"] = bounded_public_history(archive)
+        st.session_state["nelutu_gemini_public_history"] = bounded_public_history(archive[-12:])
         st.session_state["nelutu_v2_dialogue_state"] = result.state
         return result.answer
     answer, next_state = _nelutu_v2_answer(
