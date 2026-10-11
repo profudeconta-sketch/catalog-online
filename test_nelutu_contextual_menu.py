@@ -32,6 +32,26 @@ class ContextualMenuTests(unittest.TestCase):
                     "parent_guide_leave", "portal_component", "scholarship",
                 ))
 
+    def test_shared_menu_words_in_social_and_general_sentences(self):
+        examples = (
+            "am venit numa sa vad ce faci",
+            "Am venit numai sa te salut.",
+            "Merit o pauza dupa o zi grea.",
+            "Mama mea a venit in vizita.",
+            "Documentele istorice sunt interesante.",
+            "Ce inseamna venit in viata de zi cu zi?",
+            "Orfanul din poveste a gasit o familie.",
+        )
+        for question in examples:
+            with self.subTest(question=question):
+                self.assertEqual(classify_context(question), "general")
+                answer, _ = answer_parent_dialogue(question)
+                self.assertNotIn(answer.intent, (
+                    "scholarship", "documents", "parent_flow_documents",
+                    "parent_guide_documents", "parent_guide_leave",
+                    "parent_flow_leave", "portal_component",
+                ))
+
     def test_explicit_portal_requests_remain_local(self):
         for question in (
             "Cum trimit cererea de motivare a absentelor?",
