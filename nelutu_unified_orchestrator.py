@@ -8,7 +8,7 @@ from nelutu_unified_reply_policy import choose_reply_route
 
 
 def respond(question, existing_answer, *, history=(), consent=False,
-            enabled=False, budget_reserved=False, provider=None, mode="portal"):
+            enabled=False, budget_reserved=False, provider=None, mode="auto"):
     """Return (answer, route). The existing assistant remains authoritative."""
     intent = getattr(existing_answer, "intent", None)
     # The selected mode is authoritative only for public, non-portal questions.
