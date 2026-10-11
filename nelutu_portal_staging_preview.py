@@ -115,3 +115,36 @@ try:
         st.warning("Contorul rămâne blocat: drepturile runtime nu sunt validate.")
 except (TypeError, ValueError):
     st.warning("Conexiunea izolată lipsește sau este invalidă.")
+
+st.divider()
+st.subheader("⚡ Test rapid: două sesiuni, un singur contor")
+st.caption(
+    "Un singur clic lansează două rezervări concurente pe contorul fictiv. "
+    "Nu resetează limita, nu folosește Gemini și nu accesează date școlare. "
+    "Cu 2 unități rămase, cel mult 2 rezervări pot reuși."
+)
+if st.button("Execută testul simultan (2 cereri)", key="nelutu_lab_parallel_two"):
+    from concurrent.futures import ThreadPoolExecutor
+    from nelutu_streamlit_lab_budget import IsolatedLabBudget
+    _parallel_dsn = st.secrets.get("NELUTU_TEST_DATABASE_URL", "")
+    try:
+        _parallel_budget = IsolatedLabBudget(_parallel_dsn, enabled=True)
+        if not _parallel_budget._ready():
+            st.warning("Test blocat: permisiunile de execuție nu sunt validate.")
+        else:
+            _before = _parallel_budget.remaining()
+            with ThreadPoolExecutor(max_workers=2) as _pool:
+                _results = list(_pool.map(lambda _: _parallel_budget.reserve(), range(2)))
+            _after = _parallel_budget.remaining()
+            st.write({
+                "Unități înainte": _before,
+                "Rezervări acceptate": sum(_results),
+                "Rezervări refuzate": 2 - sum(_results),
+                "Unități după": _after,
+            })
+            if _before - _after == sum(_results) and _after >= 0:
+                st.success("Test simultan coerent: fără depășirea limitei.")
+            else:
+                st.error("Test neconcludent: valorile necesită investigație.")
+    except (TypeError, ValueError):
+        st.warning("Conexiunea izolată lipsește sau este invalidă.")
