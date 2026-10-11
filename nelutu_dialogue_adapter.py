@@ -70,6 +70,12 @@ def answer_parent_dialogue(question, context=None, state=None, mode="auto"):
     # The privacy and safety guards above still take precedence.
     from nelutu_contextual_intent import classify_context
     context_kind = classify_context(question)
+    # With explicit parent modes, an ambiguous menu word is not a reason
+    # to interrupt a general conversation with the obsolete mode question.
+    # This only changes conversational wording; the protected-intent and
+    # external-provider privacy gates remain authoritative.
+    if mode == "chat" and context_kind == "ambiguous":
+        context_kind = "general"
     if context_kind == "ambiguous":
         from nelutu_assistant import NelutuAnswer
         return NelutuAnswer(
