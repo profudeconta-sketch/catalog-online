@@ -68,3 +68,10 @@ Separat, demo-urile prestabilite din partea superioară a preview-ului folosesc 
 Nu există dovadă în cod că aceste comutatoare sunt activate în Streamlit Secrets; simpla prezență în surse nu autorizează apeluri reale Gemini sau scrieri în buget. Nici codul de operator al preview-ului nu se transferă părinților. Integrarea finală trebuie să păstreze o singură interfață și fără cod suplimentar pentru părinți.
 
 **Regulă anti-duplicare:** înainte de a declara lipsă o funcționalitate, inspectăm întregul entrypoint, inclusiv secțiunile de la final, plus comutatoarele și testele istorice.
+
+## Etapă de întărire a protecției cotei — 11.10
+
+- În `nelutu_postgres_budget.py`, UPDATE condițional respinge explicit `used < 0`; `remaining()` respinge valori negative, peste limită și tipuri invalide. Testele de regresie au fost extinse în `test_nelutu_postgres_transactions.py`.
+- Modificările sunt izolate pe ramura experimentală, fără DDL, fără conexiuni live, fără Gemini și fără modificarea aplicațiilor școlare.
+- **Testele GitHub pentru noul commit trebuie confirmate separat**; rezultatele verzi pentru commituri anterioare nu certifică automat modificarea curentă.
+- Criteriu GO de integrare: CI nou verde + dovezi E2E lipsă + confidențialitate/costuri + rollback + acord explicit. Până atunci: NO-GO pentru producție.
