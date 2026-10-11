@@ -73,6 +73,10 @@ def classify_context(question):
     if not q:
         return "unknown"
     if _has(q, _PORTAL_MARKERS) or _has(q, _SCHOOL_TRANSACTIONS) or (
+        _has(q, ("invoire", "invoirea")) and _has(q, ("cer", "solicit", "copil", "elev"))
+    ) or (
+        _has(q, ("instiintare", "notificare")) and _has(q, ("deschid", "confirm", "primire", "scoala"))
+    ) or (
         _has(q, ("motivare", "motivarea", "motivez"))
         and _has(q, ("absente", "absentelor", "absenta", "cerere", "cererea"))
         and _has(q, ("trimit", "completez", "depun", "solicit", "cum"))
