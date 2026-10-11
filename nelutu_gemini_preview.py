@@ -598,7 +598,7 @@ if unified_submit:
             st.warning("Contextul nu mai poate fi transmis în siguranță. Șterge conversația și reîncearcă.")
             st.markdown(local_answer.text)
         elif not (durable_mode and durable_budget is not None):
-            st.warning("Dialogul extern este blocat: lipsește bugetul persistent.")
+            st.warning("Dialogul extern este blocat: lipsește bugetul persistent.") 
             st.markdown(local_answer.text)
         elif not _unified_operator_authorized:
             st.warning("Accesul la testul generativ este restricționat operatorului.")
