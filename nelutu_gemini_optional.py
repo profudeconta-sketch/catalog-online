@@ -63,10 +63,14 @@ _PUBLIC_SENSES = (
     re.compile(r"\bburs(?:a|e|ei|ele)\s+de\s+(?:marfuri|valori|energie|cereale)\b"),
     re.compile(r"\bdosar(?:ul|e|ele)?\s+(?:plic|cu\s+sina|cu\s+șină|cu\s+elastic)\b"),
     re.compile(r"\bdosar(?:ul|e|ele)?\s+(?:plic|cu\s+sina)\b"),
+    # Public dictionary/product/library meanings, never a school record.
+    re.compile(r"\bcatalog(?:ul|ului|e|ele)?\s+(?:de\s+)?(?:produse|producte|biblioteca|biblioteci|carti|arta|muzeu|stele|galaxii|astronomic|comercial)\b"),
+    re.compile(r"\b(?:cuvantul|termenul|sensul\s+cuvantului)\s+catalog\b"),
+    re.compile(r"\bcatalog(?:ul)?\s+(?:in\s+sens\s+general|la\s+modul\s+general|ca\s+termen\s+general)\b"),
 )
 _PROTECTED_CONTEXT = (
     "elev", "eleva", "copilul meu", "fiul meu", "fiica mea",
-    "parinte", "catalog", "nota", "notele", "medie", "absent",
+    "parinte", "nota", "notele", "medie", "absent",
     "invoir", "scutir", "dirigint", "profesor", "scoala", "clasa",
     "matricol", "pin", "parola", "contul", "telefon", "adresa",
     "email", "cnp", "serie", "buletin", "diagnostic", "medical",
