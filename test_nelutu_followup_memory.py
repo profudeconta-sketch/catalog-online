@@ -96,6 +96,42 @@ class FollowupMemoryTests(unittest.TestCase):
                 self.assertEqual(route, "existing")
         self.assertEqual(called, [])
 
+    def test_provider_gate_does_not_reserve_for_protected_intent(self):
+        from unittest.mock import patch
+        from nelutu_production_gemini import optional_provider
+        settings = {
+            "NELUTU_GEMINI_ENABLED": True,
+            "NELUTU_PROVIDER_PRIVACY_APPROVED": True,
+            "NELUTU_PROVIDER_COST_APPROVED": True,
+            "NELUTU_NEON_BUDGET_ENABLED": True,
+            "NELUTU_NEON_LIVE_BUDGET_APPROVED": True,
+            "NELUTU_GEMINI_API_KEY": "test-key",
+            "NELUTU_NEON_DSN": "test-dsn",
+        }
+        with patch("nelutu_production_gemini.PostgreSQLBudget") as budget:
+            provider, reserved = optional_provider(
+                "Explica tehnic GPS", "privacy_guard",
+                consent=True, settings=settings, history=(),
+            )
+            self.assertIsNone(provider)
+            self.assertFalse(reserved)
+            budget.assert_not_called()
+
+    def test_portal_mode_never_calls_provider(self):
+        from nelutu_unified_orchestrator import respond
+        from nelutu_assistant import NelutuAnswer
+        calls = []
+        def provider(history, question):
+            calls.append(question)
+            return "Unexpected."
+        answer, route = respond(
+            "Explica relativitatea", NelutuAnswer("fallback", "Local."),
+            mode="portal", consent=True, enabled=True,
+            budget_reserved=True, provider=provider,
+        )
+        self.assertEqual(route, "existing")
+        self.assertEqual(calls, [])
+
     def test_no_generating_without_consent(self):
         history = append_local_public_archive((), "Vorbeste-mi despre Einstein", "Relativitate.")
         self.assertNotEqual(choose_reply_route("continua", existing_intent="clarification", consent=False, history=history)[0], "generative_eligible")
