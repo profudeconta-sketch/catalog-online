@@ -1,0 +1,27 @@
+name: Validate Neluțu parent modes
+on:
+  pull_request:
+    paths:
+      - 'app_parinti.py'
+      - 'nelutu_*.py'
+      - 'test_nelutu_*.py'
+      - '.github/workflows/nelutu-parent-modes-validation.yml'
+  push:
+    branches:
+      - feat/nelutu-explicit-parent-modes
+      - main
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax validation
+        run: python -m py_compile app_parinti.py nelutu_modern_core.py nelutu_unified_orchestrator.py nelutu_production_gemini.py test_nelutu_followup_memory.py
+      - name: Isolated Neluțu regression tests
+        run: python -m unittest -v test_nelutu_followup_memory
