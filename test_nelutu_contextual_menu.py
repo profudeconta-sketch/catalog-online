@@ -38,9 +38,9 @@ class ContextualMenuTests(unittest.TestCase):
             "Am venit numai sa te salut.",
             "Merit o pauza dupa o zi grea.",
             "Mama mea a venit in vizita.",
-            "Documentele istorice sunt interesante.",
+            "Documente istorice sunt interesante.",
             "Ce inseamna venit in viata de zi cu zi?",
-            "Orfanul din poveste a gasit o familie.",
+            "Un orfan din poveste a gasit o familie.",
         )
         for question in examples:
             with self.subTest(question=question):
