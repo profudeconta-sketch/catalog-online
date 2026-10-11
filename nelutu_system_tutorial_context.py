@@ -11,6 +11,7 @@ from nelutu_parent_guide import TUTORIAL_TEXT
 
 MAX_EXCERPT_CHARS = 3000
 MAX_SECTIONS = 3
+_STOPWORDS = {"cum", "unde", "care", "este", "sunt", "pentru", "despre", "poate", "vreau", "fac", "din", "sau", "prin", "mai", "tot", "toate", "acest", "asta", "sistemul", "aplicatia"}
 
 
 def _tokens(text):
@@ -35,7 +36,7 @@ def tutorial_context(question: str) -> str:
     """Select relevant complete-system guide sections; return empty if uncertain."""
     if not isinstance(question, str) or not question.strip() or len(question) > 600:
         return ""
-    query = _tokens(question)
+    query = _tokens(question) - _STOPWORDS
     if not query:
         return ""
     ranked = []
@@ -43,7 +44,7 @@ def tutorial_context(question: str) -> str:
         title_terms = _tokens(heading)
         body_terms = _tokens(body)
         score = 4 * len(query & title_terms) + len(query & body_terms)
-        if score >= 2:
+        if (query & title_terms) or (len(query & body_terms) >= 3):
             ranked.append((-score, index, heading, body))
     ranked.sort()
     result = []
