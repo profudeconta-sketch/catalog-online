@@ -39,3 +39,27 @@ def optional_provider(question, local_intent, *, consent=False, settings=None, h
             confirmed=True, budget_reserved=True,
         )
     return provider, True
+
+def diagnostic_status(question, local_intent, *, settings=None, history=()):
+    """Safe operator-facing reason category; no prompts, credentials or DB errors."""
+    if settings is None:
+        import streamlit as st
+        settings = st.secrets
+    flags = ("NELUTU_GEMINI_ENABLED", "NELUTU_PROVIDER_PRIVACY_APPROVED",
+             "NELUTU_PROVIDER_COST_APPROVED", "NELUTU_NEON_BUDGET_ENABLED",
+             "NELUTU_NEON_LIVE_BUDGET_APPROVED")
+    if any(settings.get(flag) is not True for flag in flags):
+        return "Gemini: activarea sau aprobările din Secrets sunt incomplete."
+    if not isinstance(settings.get("NELUTU_GEMINI_API_KEY"), str) or not settings.get("NELUTU_GEMINI_API_KEY").strip():
+        return "Gemini: cheia API lipsește."
+    dsn = settings.get("NELUTU_NEON_DSN")
+    if not isinstance(dsn, str) or not dsn.strip():
+        return "Gemini: conexiunea Neon lipsește."
+    if not is_public_general_chat(question) or prepare_public_dialogue(history, question, consent=True) is None:
+        return "Gemini: întrebarea nu a trecut filtrul pentru dialog public."
+    route, _ = choose_reply_route(question, existing_intent=local_intent, consent=True, history=history)
+    if route != "generative_eligible":
+        return "Gemini: răspunsul este gestionat local."
+    if PostgreSQLBudget(dsn).remaining() == 0:
+        return "Gemini: contorul Neon este epuizat sau conexiunea nu poate fi verificată."
+    return "Gemini: configurația preliminară este validă; verificați răspunsul serviciului."
