@@ -148,3 +148,32 @@ if st.button("Execută testul simultan (2 cereri)", key="nelutu_lab_parallel_two
                 st.error("Test neconcludent: valorile necesită investigație.")
     except (TypeError, ValueError):
         st.warning("Conexiunea izolată lipsește sau este invalidă.")
+
+st.divider()
+st.subheader("🛑 Verificare finală: limită epuizată")
+st.caption("O singură încercare fictivă; nu resetează contorul și nu apelează Gemini.")
+if st.button("Verifică refuzul după epuizare", key="nelutu_lab_exhaustion"):
+    from nelutu_streamlit_lab_budget import IsolatedLabBudget
+    _exhaust_dsn = st.secrets.get("NELUTU_TEST_DATABASE_URL", "")
+    try:
+        _exhaust_budget = IsolatedLabBudget(_exhaust_dsn, enabled=True)
+        if not _exhaust_budget._ready():
+            st.warning("Verificarea este blocată: permisiuni runtime nevalidate.")
+        else:
+            _exhaust_before = _exhaust_budget.remaining()
+            if _exhaust_before != 0:
+                st.warning("Contorul nu este epuizat; testul de refuz nu a fost executat.")
+            else:
+                _accepted = _exhaust_budget.reserve()
+                _exhaust_after = _exhaust_budget.remaining()
+                st.write({
+                    "Unități înainte": _exhaust_before,
+                    "Cerere suplimentară acceptată": _accepted,
+                    "Unități după": _exhaust_after,
+                })
+                if not _accepted and _exhaust_after == 0:
+                    st.success("PASS: cererea suplimentară a fost refuzată; limita rămâne zero.")
+                else:
+                    st.error("FAIL: comportament neașteptat; opriți testele.")
+    except (TypeError, ValueError):
+        st.warning("Conexiunea izolată lipsește sau este invalidă.")
