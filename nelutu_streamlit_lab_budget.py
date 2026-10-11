@@ -6,7 +6,7 @@ Runtime never creates, deletes, resets or alters database objects.
 """
 from __future__ import annotations
 
-from nelutu_neon_isolated_health import isolated_neon_ready
+from nelutu_neon_runtime_permissions import runtime_permissions_ready
 
 SCHEMA = "nelutu_test_concurenta"
 TABLE = "nelutu_streamlit_lab_budget"
@@ -22,7 +22,7 @@ class IsolatedLabBudget:
         self._dsn = dsn
 
     def _ready(self) -> bool:
-        return isolated_neon_ready(self._dsn, enabled=True)
+        return runtime_permissions_ready(self._dsn, enabled=True)
 
     def remaining(self) -> int:
         if not self._ready():
