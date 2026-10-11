@@ -58,3 +58,13 @@ Cod inspectat: `nelutu_preview_deploy/app.py`, `nelutu_gemini_preview.py`, `nelu
 **Ordinea corectă, fără teste duplicate:** (a) păstrarea dovezilor Neon 8/3/5 și CI; (b) proiectarea separată a conexiunii la contorul persistent cu rol minim și acces privat; (c) teste strict noi pentru persistență/restart și integrare reală; (d) validarea confidențialității, a costurilor și UI; (e) acord explicit pentru modificările în aplicația activă.
 
 **Verdict tehnic:** fundament experimental verificat parțial, dar cablarea persistentă Streamlit–Neon în fluxul de răspuns și dialogul liber în portal nu sunt implementări demonstrate de codul inspectat. Nu se face merge și nu se activează furnizorul.
+
+## Corecție audit: comutatoare existente și cale Neon reală în preview
+
+După verificarea liniilor 555–650 din `nelutu_gemini_preview.py`, constatarea anterioară „Neon nu este legat de fluxul experimental Gemini” era prea generală. **Există deja o cale de dialog liber care rezervă buget prin `PostgreSQLBudget(NELUTU_NEON_DSN).reserve()`**, cu comutatoare stricte `NELUTU_NEON_BUDGET_ENABLED`, `NELUTU_UNIFIED_LIVE_ENABLED`, `NELUTU_NEON_LIVE_BUDGET_APPROVED`, cod de operator `NELUTU_UNIFIED_ACCESS_CODE` și consimțământ explicit. Nu se reconstruiește.
+
+Separat, demo-urile prestabilite din partea superioară a preview-ului folosesc `DurableBudget` SQLite și limite de sesiune/instanță. Acestea sunt fluxuri distincte și nu trebuie confundate. `NELUTU_TEST_DATABASE_URL` este numai pentru diagnosticul izolat; nu se confundă cu `NELUTU_NEON_DSN`, care indică bugetul PostgreSQL al fluxului generativ și necesită aprobare explicită pentru rezervare.
+
+Nu există dovadă în cod că aceste comutatoare sunt activate în Streamlit Secrets; simpla prezență în surse nu autorizează apeluri reale Gemini sau scrieri în buget. Nici codul de operator al preview-ului nu se transferă părinților. Integrarea finală trebuie să păstreze o singură interfață și fără cod suplimentar pentru părinți.
+
+**Regulă anti-duplicare:** înainte de a declara lipsă o funcționalitate, inspectăm întregul entrypoint, inclusiv secțiunile de la final, plus comutatoarele și testele istorice.
