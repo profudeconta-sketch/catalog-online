@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from nelutu_free_dialogue_preparation import prepare_public_dialogue
 from nelutu_system_tutorial_context import tutorial_context
+from nelutu_local_dialogue import _norm
 
 
 def choose_reply_route(question, *, existing_intent=None, consent=False, history=()):
@@ -18,6 +19,21 @@ def choose_reply_route(question, *, existing_intent=None, consent=False, history
     """
     if not isinstance(question, str) or not question.strip():
         return "local_only", ""
+    # A public follow-up must remain with the generative conversation instead
+    # of being hijacked by an unrelated legacy/local educational reply.
+    # Never bypass serious, privacy, school or portal intents.
+    followup = _norm(question)
+    public_followup = bool(history) and (
+        followup in ("continua", "continuam", "da", "sigur", "mai mult", "detaliaza")
+        or followup.startswith(("da din punct de vedere", "din punct de vedere tehnic",
+                              "vreau mai multe", "poti continua", "explica mai mult"))
+    )
+    from nelutu_contextual_intent import classify_context
+    if public_followup and classify_context(question) not in ("portal", "ambiguous"):
+        if existing_intent in (None, "fallback", "clarification", "smalltalk_followup") and (
+            prepare_public_dialogue(history, question, consent=consent) is not None
+        ):
+            return "generative_eligible", ""
     if existing_intent not in (None, "fallback", "clarification", "smalltalk", "smalltalk_followup"):
         return "existing", ""
     # A generic public question must never trigger tutorial retrieval by
