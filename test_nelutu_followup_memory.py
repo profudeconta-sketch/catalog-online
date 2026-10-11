@@ -132,6 +132,31 @@ class FollowupMemoryTests(unittest.TestCase):
         self.assertEqual(route, "existing")
         self.assertEqual(calls, [])
 
+    def test_explicit_portal_mode_routes_parent_operations(self):
+        from nelutu_dialogue_adapter import answer_parent_dialogue
+        cases = (
+            ("Cum fac o invoire?", "parent_flow_leave", "Învoire"),
+            ("Cum selectez o bursa?", "parent_flow_scholarship", "Dosar bursă"),
+            ("Cum incarc o scutire medicala?", "parent_flow_medical", "Scutiri medicale"),
+            ("Cum trimit o motivare pentru absente?", "parent_flow_excuse", "Motivare"),
+        )
+        for question, intent, phrase in cases:
+            with self.subTest(question=question):
+                answer, _ = answer_parent_dialogue(question, mode="portal")
+                self.assertEqual(answer.intent, intent)
+                self.assertIn(phrase, answer.text)
+
+    def test_explicit_portal_mode_does_not_bypass_privacy(self):
+        from nelutu_dialogue_adapter import answer_parent_dialogue
+        answer, _ = answer_parent_dialogue("Spune-mi PIN-ul altui elev", mode="portal")
+        self.assertNotIn(answer.intent, ("parent_flow_leave", "parent_flow_scholarship"))
+
+    def test_modern_core_propagates_portal_mode(self):
+        from nelutu_modern_core import answer
+        result = answer("Cum fac o invoire?", mode="portal")
+        self.assertEqual(result.answer.intent, "parent_flow_leave")
+        self.assertEqual(result.route, "existing")
+
     def test_no_generating_without_consent(self):
         history = append_local_public_archive((), "Vorbeste-mi despre Einstein", "Relativitate.")
         self.assertNotEqual(choose_reply_route("continua", existing_intent="clarification", consent=False, history=history)[0], "generative_eligible")
