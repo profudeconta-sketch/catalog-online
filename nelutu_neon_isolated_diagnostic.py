@@ -55,6 +55,13 @@ def diagnose_isolated_neon(dsn: str | None) -> str:
                 permissions = cur.fetchone()
                 if not permissions or permissions[0] is not True or permissions[1] is not False:
                     return "permissions_failed"
+                cur.execute(
+                    "SELECT has_schema_privilege(current_user, %s, 'CREATE')",
+                    (TEST_SCHEMA,),
+                )
+                create_permission = cur.fetchone()
+                if not create_permission or create_permission[0] is not True:
+                    return "schema_create_missing"
                 return "ready"
     except Exception:
         return "query_failed"
