@@ -12,7 +12,7 @@ class ModernReply:
 
 def answer(question, *, context=None, state=None, history=(),
            consent=False, generative_enabled=False, budget_reserved=False,
-           provider=None):
+           provider=None, mode="portal"):
     local, next_state = answer_parent_dialogue(
         question, context=context,
         state=state if isinstance(state, DialogueState) else DialogueState()
@@ -22,6 +22,6 @@ def answer(question, *, context=None, state=None, history=(),
     final, route = respond(
         question, local, history=history, consent=consent,
         enabled=generative_enabled, budget_reserved=budget_reserved,
-        provider=provider,
+        provider=provider, mode=mode,
     )
     return ModernReply(final, next_state, route)
