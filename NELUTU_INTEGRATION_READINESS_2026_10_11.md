@@ -46,3 +46,15 @@
 | UI E2E desktop și mobil | Nicio dovadă în documentele consultate | NECONFIRMAT | Audit istoric înainte de retest |
 
 Regulă: înainte de a propune orice test, se caută întâi dovezile din istoricul GitHub și conversații. „Neconfirmat” nu înseamnă „neexecutat”.
+
+## Audit de cablare reală — 11.10, fără reluarea testelor trecute
+
+Cod inspectat: `nelutu_preview_deploy/app.py`, `nelutu_gemini_preview.py`, `nelutu_streamlit_lab_budget.py`, `nelutu_streamlit_lab_gate.py`, `nelutu_optional_integration_adapter.py`, `nelutu_unified_orchestrator.py`.
+
+**Constatare verificabilă:** entrypoint-ul Streamlit lansează `nelutu_gemini_preview.py` și apoi afișează diagnosticul read-only Neon. Funcția `reserve_gemini_attempt()` din preview folosește `DurableBudget` (mod SQLite opt-in), `DemoBudget` și `InstanceBudget`; nu utilizează `IsolatedLabBudget` și nici `lab_reserve()`. Prin urmare, succesul diagnosticului Neon nu înseamnă că bugetul Gemini este deja cablat la Neon. Nu se afirmă contrariul.
+
+**Limitare suplimentară:** `nelutu_integration_gate.py` permite doar întrebări publice demonstrative prestabilite. Aceasta nu demonstrează dialogul generativ liber solicitat pentru producție. `nelutu_unified_orchestrator.py` are callback opțional, dar nu constituie dovada integrării în portal.
+
+**Ordinea corectă, fără teste duplicate:** (a) păstrarea dovezilor Neon 8/3/5 și CI; (b) proiectarea separată a conexiunii la contorul persistent cu rol minim și acces privat; (c) teste strict noi pentru persistență/restart și integrare reală; (d) validarea confidențialității, a costurilor și UI; (e) acord explicit pentru modificările în aplicația activă.
+
+**Verdict tehnic:** fundament experimental verificat parțial, dar cablarea persistentă Streamlit–Neon în fluxul de răspuns și dialogul liber în portal nu sunt implementări demonstrate de codul inspectat. Nu se face merge și nu se activează furnizorul.
