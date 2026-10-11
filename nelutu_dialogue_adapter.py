@@ -52,6 +52,9 @@ def answer_parent_dialogue(question, context=None, state=None, mode="auto"):
         return social, social_state
     # The parent's explicit guide selection replaces lexical ambiguity guessing.
     # Keep privacy, safety and authentication guards above this point unchanged.
+    if mode == "chat":
+        from nelutu_assistant import NelutuAnswer
+        return NelutuAnswer("fallback", "Conversatie libera."), DialogueState()
     if mode == "portal":
         # Authenticated facts take precedence over generic tutorial passages.
         from nelutu_assistant import answer_with_context
