@@ -554,6 +554,21 @@ for _role, _message in st.session_state["nelutu_unified_public_history"]:
     with st.chat_message("assistant" if _role == "model" else "user"):
         st.write(_message)
 
+# This preview is publicly reachable: live free-form calls require operator access.
+# No configured operator code means no free-form provider calls.
+import hmac as _hmac
+_unified_operator_code = st.text_input(
+    "Cod de acces pentru testul generativ (operator)",
+    type="password", key="nelutu_unified_operator_code",
+)
+_unified_expected_code = st.secrets.get("NELUTU_UNIFIED_ACCESS_CODE", "")
+_unified_operator_authorized = (
+    isinstance(_unified_expected_code, str)
+    and len(_unified_expected_code) >= 16
+    and isinstance(_unified_operator_code, str)
+    and _hmac.compare_digest(_unified_operator_code, _unified_expected_code)
+)
+
 with st.form("nelutu_unified_live_form", clear_on_submit=False):
     unified_question = st.text_input(
         "Întreabă-l pe Neluțu (maximum 600 de caractere)",
@@ -580,6 +595,9 @@ if unified_submit:
             st.markdown(local_answer.text)
         elif not (durable_mode and durable_budget is not None):
             st.warning("Dialogul extern este blocat: lipsește bugetul persistent.")
+            st.markdown(local_answer.text)
+        elif not _unified_operator_authorized:
+            st.warning("Accesul la testul generativ este restricționat operatorului.")
             st.markdown(local_answer.text)
         elif not st.secrets.get("NELUTU_UNIFIED_LIVE_ENABLED", False) is True:
             st.warning("Dialogul generativ experimental nu este activat de operator.")
