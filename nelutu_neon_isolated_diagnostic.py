@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from importlib.util import find_spec
+from urllib.parse import urlsplit, unquote
 
 from nelutu_neon_isolated_health import TEST_ROLE, TEST_SCHEMA
 
@@ -14,11 +15,24 @@ def diagnose_isolated_neon(dsn: str | None) -> str:
         return "invalid_scheme"
     if find_spec("psycopg") is None:
         return "missing_driver"
+    # Check only the structure of the private DSN; never expose its contents.
+    try:
+        parsed = urlsplit(dsn)
+        if not parsed.hostname or not parsed.username or not parsed.password or not parsed.path.strip("/"):
+            return "incomplete_dsn"
+        if unquote(parsed.username) != TEST_ROLE:
+            return "dsn_wrong_role"
+    except (ValueError, AttributeError):
+        return "incomplete_dsn"
     try:
         import psycopg
         conn = psycopg.connect(dsn, connect_timeout=5)
-    except Exception:
-        return "connection_failed"
+    except Exception as exc:
+        # Classify using driver exception classes only, not exception text:
+        # error messages may contain private hostnames, usernames or DSN fragments.
+        if isinstance(exc, psycopg.OperationalError):
+            return "connection_operational_failure"
+        return "connection_other_failure"
     try:
         with conn:
             with conn.cursor() as cur:
