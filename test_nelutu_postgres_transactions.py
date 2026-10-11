@@ -81,8 +81,14 @@ class AdapterTests(unittest.TestCase):
         self.assertFalse(any(sql.startswith(('CREATE', 'INSERT', 'DROP', 'ALTER')) for sql, _ in cursor.calls))
         updates = [(sql, params) for sql, params in cursor.calls if sql.startswith("UPDATE")]
         self.assertEqual(len(updates), 3)
-        self.assertTrue(all("UPDATE public.nelutu_gemini_budget SET used" in sql and "used < %s RETURNING used" in sql for sql, _ in updates))
+        self.assertTrue(all("UPDATE public.nelutu_gemini_budget SET used" in sql and "used >= 0 AND used < %s RETURNING used" in sql for sql, _ in updates))
         self.assertTrue(all(params == (2,) for _, params in updates))
+
+    def test_corrupt_counter_is_not_reported_as_remaining_quota(self):
+        for used in (-1, 13):
+            with self.subTest(used=used):
+                with self._driver(Connection(Cursor(used=used))):
+                    self.assertEqual(PostgreSQLBudget("postgresql://fake").remaining(), 0)
 
     def test_failed_transaction_denies_reservation(self):
         cursor = Cursor(fail_at="UPDATE")
