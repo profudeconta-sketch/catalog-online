@@ -18,7 +18,7 @@ def choose_reply_route(question, *, existing_intent=None, consent=False, history
     """
     if not isinstance(question, str) or not question.strip():
         return "local_only", ""
-    if existing_intent not in (None, "fallback", "clarification"):
+    if existing_intent not in (None, "fallback", "clarification", "smalltalk", "smalltalk_followup"):
         return "existing", ""
     guide = tutorial_context(question)
     if guide:
