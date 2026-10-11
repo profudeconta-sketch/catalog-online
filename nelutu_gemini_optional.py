@@ -60,9 +60,9 @@ def _normalize(value: str) -> str:
 # This is not an unrestricted semantic classifier: personal/school identifiers,
 # health, credentials and other protected terms remain fail-closed.
 _PUBLIC_SENSES = (
-    re.compile(r"\\bburs(?:a|e|ei|ele)\\s+de\\s+(?:marfuri|valori|energie|cereale)\\b"),
-    re.compile(r"\\bdosar(?:ul|e|ele)?\\s+(?:plic|cu\\s+sina|cu\\s+șină|cu\\s+elastic)\\b"),
-    re.compile(r"\\bdosar(?:ul|e|ele)?\\s+(?:plic|cu\\s+sina)\\b"),
+    re.compile(r"\bburs(?:a|e|ei|ele)\s+de\s+(?:marfuri|valori|energie|cereale)\b"),
+    re.compile(r"\bdosar(?:ul|e|ele)?\s+(?:plic|cu\s+sina|cu\s+șină|cu\s+elastic)\b"),
+    re.compile(r"\bdosar(?:ul|e|ele)?\s+(?:plic|cu\s+sina)\b"),
 )
 _PROTECTED_CONTEXT = (
     "elev", "eleva", "copilul meu", "fiul meu", "fiica mea",
