@@ -613,6 +613,9 @@ if unified_submit:
         elif not (shared_budget.allowed() and instance_budget.allowed()):
             st.warning("Limita locală a testului a fost atinsă.")
             st.markdown(local_answer.text)
+        elif not (isinstance(st.secrets.get("NELUTU_NEON_DSN", ""), str) and st.secrets.get("NELUTU_NEON_DSN", "").startswith(("postgresql://", "postgres://"))):
+            st.warning("Conexiunea Neon nu este configurată pentru test.")
+            st.markdown(local_answer.text)
         elif not PostgreSQLBudget(st.secrets.get("NELUTU_NEON_DSN", "")).reserve():
             st.warning("Neon nu a confirmat rezervarea cotei. Gemini nu a fost apelat.")
             st.markdown(local_answer.text)
