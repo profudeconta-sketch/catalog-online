@@ -18,8 +18,14 @@ def diagnose_isolated_neon(dsn: str | None) -> str:
     # Check only the structure of the private DSN; never expose its contents.
     try:
         parsed = urlsplit(dsn)
-        if not parsed.hostname or not parsed.username or not parsed.password or not parsed.path.strip("/"):
-            return "incomplete_dsn"
+        if not parsed.hostname:
+            return "dsn_missing_host"
+        if not parsed.username:
+            return "dsn_missing_user"
+        if not parsed.path.strip("/"):
+            return "dsn_missing_database"
+        if not parsed.password or parsed.password == "****":
+            return "dsn_missing_password"
         if unquote(parsed.username) != TEST_ROLE:
             return "dsn_wrong_role"
     except (ValueError, AttributeError):
