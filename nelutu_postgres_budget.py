@@ -76,3 +76,30 @@ class PostgreSQLBudget:
                     return max(0, self.limit - row[0]) if row[1] == row[2] else self.limit
         except Exception:
             return 0
+
+    def status(self):
+        """Read-only counters; None means unavailable, never guess zero."""
+        try:
+            import psycopg
+            with psycopg.connect(self._dsn, connect_timeout=5) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT used, budget_day, minute_used, minute_window,
+                               (now() AT TIME ZONE 'America/Los_Angeles')::date,
+                               date_trunc('minute', now())
+                        FROM public.nelutu_gemini_budget WHERE id = 1
+                        """
+                    )
+                    row = cur.fetchone()
+                    if not row or any(type(row[i]) is not int or row[i] < 0 for i in (0, 2)):
+                        return None
+                    used = row[0] if row[1] == row[4] else 0
+                    minute_used = row[2] if row[3] == row[5] else 0
+                    if used > self.limit or minute_used > MAX_PER_MINUTE:
+                        return None
+                    return {"used": used, "remaining": self.limit - used,
+                            "daily_limit": self.limit, "minute_used": minute_used,
+                            "minute_limit": MAX_PER_MINUTE, "budget_day": str(row[4])}
+        except Exception:
+            return None
