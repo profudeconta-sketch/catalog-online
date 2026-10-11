@@ -66,3 +66,43 @@ if st.button("Diagnostic Neon: rol și schemă", key="nelutu_lab_setup_diagnosti
             "Pentru execuția contorului, acest drept trebuie eliminat "
             "după pregătirea tabelei, de către administratorul Neon."
         )
+
+st.caption("Verificare detaliată a tabelei de laborator — numai citire.")
+if st.button("Verifică tabela și drepturile Neon", key="nelutu_lab_table_rights"):
+    _dsn = st.secrets.get("NELUTU_TEST_DATABASE_URL", "")
+    if not isinstance(_dsn, str) or not _dsn.startswith(("postgresql://", "postgres://")):
+        st.warning("Conexiunea de laborator lipsește sau este invalidă.")
+    else:
+        try:
+            import psycopg
+            with psycopg.connect(_dsn, connect_timeout=5) as _conn:
+                with _conn.cursor() as _cur:
+                    _cur.execute(
+                        "SELECT current_user = %s, "
+                        "to_regclass('nelutu_test_concurenta.nelutu_streamlit_lab_budget') IS NOT NULL, "
+                        "has_schema_privilege(current_user, 'nelutu_test_concurenta', 'USAGE'), "
+                        "has_schema_privilege(current_user, 'nelutu_test_concurenta', 'CREATE')",
+                        ("nelutu_test_runner",),
+                    )
+                    _role_ok, _table_exists, _usage, _create = _cur.fetchone()
+                    if _table_exists:
+                        _cur.execute(
+                            "SELECT has_table_privilege(current_user, "
+                            "'nelutu_test_concurenta.nelutu_streamlit_lab_budget', 'SELECT'), "
+                            "has_table_privilege(current_user, "
+                            "'nelutu_test_concurenta.nelutu_streamlit_lab_budget', 'UPDATE')"
+                        )
+                        _select, _update = _cur.fetchone()
+                    else:
+                        _select, _update = False, False
+            st.write({
+                "Rol de test corect": bool(_role_ok),
+                "Tabela de laborator există": bool(_table_exists),
+                "Drept USAGE": bool(_usage),
+                "Drept SELECT": bool(_select),
+                "Drept UPDATE": bool(_update),
+                "Drept CREATE încă prezent": bool(_create),
+            })
+            st.caption("Verificare exclusiv SELECT; fără modificări sau apeluri Gemini.")
+        except Exception:
+            st.warning("Verificarea tabelei a eșuat; nu s-a efectuat nicio modificare.")
