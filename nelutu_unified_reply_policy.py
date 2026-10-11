@@ -27,7 +27,8 @@ def choose_reply_route(question, *, existing_intent=None, consent=False, history
         if prepare_public_dialogue(history, question, consent=consent) is not None:
             return "generative_eligible", ""
         return "local_only", ""
-    guide = tutorial_context(question)
+    from nelutu_contextual_intent import asks_about_portal
+    guide = tutorial_context(question) if asks_about_portal(question) else ""
     if guide:
         return "tutorial", guide
     if prepare_public_dialogue(history, question, consent=consent) is not None:
