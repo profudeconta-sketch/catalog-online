@@ -56,13 +56,54 @@ def _normalize(value: str) -> str:
     return "".join(c for c in text if not unicodedata.combining(c)).lower()
 
 
+# Only unmistakably public senses can bypass a shared *menu-word* block.
+# This is not an unrestricted semantic classifier: personal/school identifiers,
+# health, credentials and other protected terms remain fail-closed.
+_PUBLIC_SENSES = (
+    re.compile(r"\\bburs(?:a|e|ei|ele)\\s+de\\s+(?:marfuri|valori|energie|cereale)\\b"),
+    re.compile(r"\\bdosar(?:ul|e|ele)?\\s+(?:plic|cu\\s+sina|cu\\s+șină|cu\\s+elastic)\\b"),
+    re.compile(r"\\bdosar(?:ul|e|ele)?\\s+(?:plic|cu\\s+sina)\\b"),
+)
+_PROTECTED_CONTEXT = (
+    "elev", "eleva", "copilul meu", "fiul meu", "fiica mea",
+    "parinte", "catalog", "nota", "notele", "medie", "absent",
+    "invoir", "scutir", "dirigint", "profesor", "scoala", "clasa",
+    "matricol", "pin", "parola", "contul", "telefon", "adresa",
+    "email", "cnp", "serie", "buletin", "diagnostic", "medical",
+    "autism", "ces", "boala", "tratament", "suicid", "sinucid",
+    "omor", "lovit", "violenta", "abuz",
+    "cerere", "incarc", "trimit", "depun", "bursa sociala",
+    "bursa de merit", "dosar personal", "dosar de bursa",
+)
+
+
+def is_unambiguously_public_topic(message: str) -> bool:
+    """Conservative public-meaning exception for terms shared with the menu."""
+    if not isinstance(message, str) or not 1 <= len(message.strip()) <= MAX_CHARS:
+        return False
+    norm = _normalize(message)
+    if _EMAIL.search(message) or _PHONE.search(message) or _LONG_DIGITS.search(message):
+        return False
+    if any(term in norm for term in _PROTECTED_CONTEXT):
+        return False
+    # All shared menu terms must be accounted for by a recognized public sense.
+    stripped = norm
+    matched = False
+    for pattern in _PUBLIC_SENSES:
+        stripped, count = pattern.subn(" ", stripped)
+        matched = matched or count > 0
+    if not matched:
+        return False
+    return not any(term in stripped for term in _BLOCKED)
+
+
 def is_public_general_chat(message: str) -> bool:
     """Conservative boundary, not a guarantee of personal-data detection."""
     if not isinstance(message, str) or not 1 <= len(message.strip()) <= MAX_CHARS:
         return False
     norm = _normalize(message)
     if any(term in norm for term in _BLOCKED):
-        return False
+        return is_unambiguously_public_topic(message)
     if _EMAIL.search(message) or _PHONE.search(message) or _LONG_DIGITS.search(message):
         return False
     return True
