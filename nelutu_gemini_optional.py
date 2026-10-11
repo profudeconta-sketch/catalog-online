@@ -66,6 +66,7 @@ _PUBLIC_SENSES = (
     # Public dictionary/product/library meanings, never a school record.
     re.compile(r"\bcatalog(?:ul|ului|e|ele)?\s+(?:de\s+)?(?:produse|producte|biblioteca|biblioteci|carti|arta|muzeu|stele|galaxii|astronomic|comercial)\b"),
     re.compile(r"\b(?:cuvantul|termenul|sensul\s+cuvantului)\s+catalog\b"),
+    re.compile(r"\b(?:ce\s+(?:este|inseamna)\s+(?:un\s+)?catalog(?:ul)?|explica(?:\s+mi)?\s+(?:ce\s+este\s+)?catalogul)\b"),
     re.compile(r"\bcatalog(?:ul)?\s+(?:in\s+sens\s+general|la\s+modul\s+general|ca\s+termen\s+general)\b"),
 )
 _PROTECTED_CONTEXT = (
