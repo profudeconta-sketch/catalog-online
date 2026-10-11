@@ -43,7 +43,7 @@ def _nelutu_answer_compat(question, context, mode='portal'):
                 state=previous if isinstance(previous, _NelutuDialogueState) else _NelutuDialogueState(),
             )
             provider, reserved = _nelutu_optional_provider(
-                question, "fallback", consent=True, history=public_history,
+                question, local.intent, consent=True, history=public_history,
             )
         result = _nelutu_modern_answer(
             question, context=context,
