@@ -50,12 +50,37 @@ def answer_parent_dialogue(question, context=None, state=None):
     social, social_state = local_reply(question, state)
     if social is not None and social.intent == "smalltalk":
         return social, social_state
-    # Disambiguate obvious non-portal contexts first; do not interfere with
-    # existing educational, safety, or established school workflows.
-    from nelutu_contextual_intent import is_clearly_general
-    if is_clearly_general(question):
+    # Decide from the full question before any legacy substring router.
+    # The privacy and safety guards above still take precedence.
+    from nelutu_contextual_intent import classify_context
+    context_kind = classify_context(question)
+    if context_kind == "ambiguous":
         from nelutu_assistant import NelutuAnswer
-        return NelutuAnswer("fallback", "No, sa continuam discutia despre subiectul tau. 🤠"), DialogueState()
+        return NelutuAnswer(
+            "clarification",
+            "No, te referi la o sectiune sau functionalitate din portalul nostru, "
+            "ori intrebi despre sensul general al acestui subiect? 🤠",
+        ), DialogueState()
+    if context_kind == "general":
+        # Existing educational/subject and conversational continuations retain priority.
+        if state.topic:
+            continuation, continuation_state = local_reply(question, state)
+            if continuation is not None and continuation.intent not in ("fallback", "clarification"):
+                return continuation, continuation_state
+        subject = subject_reply(question)
+        if subject is not None:
+            return subject, DialogueState()
+        school = _school_topic(question)
+        if school is not None:
+            return school, DialogueState()
+        educational = educational_reply(question)
+        if educational is not None:
+            return educational, DialogueState()
+        from nelutu_assistant import NelutuAnswer
+        return NelutuAnswer(
+            "fallback",
+            "No, hai sa discutam despre intrebarea ta generala. 🤠",
+        ), DialogueState()
     # Întrebările explicite despre plafonul de 40 de ore primesc întâi
     # explicația regulii, nu instrucțiunile generale pentru formular.
     normalized = _norm(question)
