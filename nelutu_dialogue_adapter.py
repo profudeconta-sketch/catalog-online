@@ -2,6 +2,7 @@
 from __future__ import annotations
 import re
 from nelutu_parent_guide import answer_parent
+from nelutu_system_tutorial_context import tutorial_context
 from nelutu_parent_flows import answer as parent_flow_guidance
 from nelutu_local_dialogue import DialogueState, reply as local_reply, _norm
 from nelutu_education_dialogue import educational_reply
@@ -101,6 +102,12 @@ def answer_parent_dialogue(question, context=None, state=None):
     if local is not None:
         return local, next_state
     if base.intent in ('fallback', 'clarification'):
+        # Whole-system tutorial is consulted only after existing safety and
+        # established answers; never replace a verified response.
+        guide = tutorial_context(question)
+        if guide:
+            from nelutu_assistant import NelutuAnswer
+            return NelutuAnswer('system_tutorial', 'No, uite ce spune ghidul întregului sistem:\n\n' + guide), DialogueState()
         from nelutu_assistant import NelutuAnswer
         return NelutuAnswer('clarification', 'No io n-am priceput nimic din ce vrei să mă întrebi. Reformulează, te rog, că nu vreau să vorbesc prostii! 🤠'), DialogueState()
     return base, DialogueState()
