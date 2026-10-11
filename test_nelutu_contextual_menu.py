@@ -52,6 +52,36 @@ class ContextualMenuTests(unittest.TestCase):
                     "parent_flow_leave", "portal_component",
                 ))
 
+    def test_public_senses_are_eligible_for_general_conversation(self):
+        from nelutu_gemini_optional import is_public_general_chat
+        from nelutu_unified_reply_policy import choose_reply_route
+        examples = (
+            "Ce este bursa de marfuri?",
+            "Cum functioneaza bursa de valori?",
+            "Care-i mai bun dosarul plic sau dosarul cu sina?",
+        )
+        for question in examples:
+            with self.subTest(question=question):
+                self.assertTrue(is_public_general_chat(question))
+                self.assertEqual(classify_context(question), "general")
+                answer, _ = answer_parent_dialogue(question)
+                self.assertEqual(answer.intent, "fallback")
+                route, _ = choose_reply_route(question, existing_intent=answer.intent, consent=True)
+                self.assertEqual(route, "generative_eligible")
+
+    def test_public_sense_never_overrides_private_context(self):
+        from nelutu_gemini_optional import is_public_general_chat
+        examples = (
+            "Ce bursa de marfuri are elevul cu CNP 1234567890123?",
+            "Ce bursa de valori primesc elevii din catalog?",
+            "Trimite dosarul cu sina pentru elev.",
+            "Dosarul cu sina al copilului meu contine diagnostic medical.",
+            "Ce este bursa sociala?",
+        )
+        for question in examples:
+            with self.subTest(question=question):
+                self.assertFalse(is_public_general_chat(question))
+
     def test_explicit_portal_requests_remain_local(self):
         for question in (
             "Cum trimit cererea de motivare a absentelor?",
