@@ -16,6 +16,7 @@ from whatsapp_delivery import teacher_phone, whatsapp_link
 from nelutu_assistant import QUICK_TOPICS as _NELUTU_BASE_TOPICS
 from nelutu_parent_guide import TUTORIAL_TOPIC as NELUTU_TUTORIAL_TOPIC, TUTORIAL_TEXT as NELUTU_TUTORIAL_TEXT, answer_parent as nelutu_answer
 from nelutu_dialogue_adapter import answer_parent_dialogue as _nelutu_v2_answer
+from nelutu_modern_core import answer as _nelutu_modern_answer
 from nelutu_local_dialogue import DialogueState as _NelutuDialogueState
 
 # Comutator de revenire imediată la Neluțu clasic, fără intervenții asupra datelor.
@@ -25,6 +26,13 @@ def _nelutu_answer_compat(question, context):
     if not _NELUTU_V2_ENABLED:
         return nelutu_answer(question, context)
     previous = st.session_state.get("nelutu_v2_dialogue_state")
+    if os.environ.get("NELUTU_MODERN_ENABLED", "0") == "1":
+        result = _nelutu_modern_answer(
+            question, context=context,
+            state=previous if isinstance(previous, _NelutuDialogueState) else _NelutuDialogueState(),
+        )
+        st.session_state["nelutu_v2_dialogue_state"] = result.state
+        return result.answer
     answer, next_state = _nelutu_v2_answer(
         question, context=context,
         state=previous if isinstance(previous, _NelutuDialogueState) else _NelutuDialogueState(),
