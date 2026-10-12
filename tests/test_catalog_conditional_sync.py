@@ -99,6 +99,25 @@ class ConditionalSyncTests(unittest.TestCase):
             self.assertTrue(self.sync())
         self.assertEqual(Path(self.filename).read_bytes(), b"remote-v1")
 
+    def test_remote_change_replaces_previous_version(self):
+        import base64
+        first = json.dumps({"content": base64.b64encode(b"remote-v1").decode()}).encode()
+        second = json.dumps({"content": base64.b64encode(b"remote-v2").decode()}).encode()
+        requests = []
+
+        def fetch(request, timeout):
+            requests.append(request)
+            if len(requests) == 1:
+                return Response(first, '"version-1"')
+            self.assertEqual(request.headers.get("If-none-match"), '"version-1"')
+            return Response(second, '"version-2"')
+
+        with patch.object(urllib.request, "urlopen", side_effect=fetch):
+            self.assertTrue(self.sync())
+            self.assertTrue(self.sync())
+        self.assertEqual(Path(self.filename).read_bytes(), b"remote-v2")
+        self.assertEqual(self.st.session_state["_catalog_etag"], '"version-2"')
+
     def test_unexpected_network_error_fails_closed(self):
         with patch.object(urllib.request, "urlopen", side_effect=OSError("offline")):
             self.assertFalse(self.sync())
