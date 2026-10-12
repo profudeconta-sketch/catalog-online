@@ -2555,135 +2555,145 @@ def _restore_manual_backup(path, backup):
 
 # --- TAB 1: NOTĂ ---
 with tab1:
-    st.subheader("Adăugare Notă Nouă (Sloturi N1 - N10)")
-    col1, col2 = st.columns(2)
-    with col1:
-        elev_idx_n = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_n")
-        cat_n = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_n")
-    with col2:
-        materii = [d[0] for d in DISCIPLINE_CG] if cat_n == "Cultură Generală" else [m[0] for m in MODULE_TH]
-        mat_idx_n = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii)), format_func=lambda i: materii[i], key="mat_n")
-        nota_val = st.number_input("Notă (1 - 10):", min_value=1, max_value=10, value=10, step=1)
-        data_nota = st.text_input("Data Notei (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_n")
-        
-    if st.button("💾 Salvează Nota în Catalog", type="primary", use_container_width=True):
-        if not os.path.exists(selected_file):
-            st.error(f"Fișierul {selected_file} nu există!")
-        else:
-            backup = None
-            wb = None
-            try:
-                data_nota = _normalize_manual_ddmm(data_nota)
-                backup = selected_file + ".manual.bak"
-                shutil.copy2(selected_file, backup)
-                wb = openpyxl.load_workbook(selected_file)
-                sheet_name = "Cultură Generală" if cat_n == "Cultură Generală" else "Module Tehnologice"
-                ws = wb[sheet_name]
-                student_row = resolve_student_row(wb, ELEVI[elev_idx_n])
-                start_col = DISCIPLINE_CG[mat_idx_n][1] if cat_n == "Cultură Generală" else MODULE_TH[mat_idx_n][1]
-                
-                slot_found = False
-                for k in range(10):
-                    n_col = start_col + (k * 2)
-                    d_col = n_col + 1
-                    cell_n = ws.cell(row=student_row, column=n_col)
-                    cell_d = ws.cell(row=student_row, column=d_col)
-                    existing_date = str(cell_d.value or "").strip()
-                    if existing_date == data_nota:
-                        if str(cell_n.value).strip() == str(int(nota_val)):
-                            raise ValueError(f"Nota {nota_val} din {data_nota} există deja; nu a fost duplicată.")
-                        raise ValueError(f"Există deja nota {cell_n.value} în data {data_nota}; salvarea este blocată.")
-                    if cell_n.value is None or str(cell_n.value).strip() == "":
-                        cell_n.value = int(nota_val)
-                        cell_d.value = str(data_nota)
-                        cell_d.number_format = '@'
-                        slot_found = True
-                        slot_num = k + 1
-                        break
-                if slot_found:
-                    wb.save(selected_file)
-                    if not update_excel_computed_values(selected_file):
-                        _restore_manual_backup(selected_file, backup)
-                        raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
-                    if push_to_github(selected_file):
-                        st.success(f"✅ Notă salvată și sincronizată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
-                        st.rerun()
+    @st.fragment
+    def _render_manual_grade():
+        st.subheader("Adăugare Notă Nouă (Sloturi N1 - N10)")
+        col1, col2 = st.columns(2)
+        with col1:
+            elev_idx_n = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_n")
+            cat_n = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_n")
+        with col2:
+            materii = [d[0] for d in DISCIPLINE_CG] if cat_n == "Cultură Generală" else [m[0] for m in MODULE_TH]
+            mat_idx_n = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii)), format_func=lambda i: materii[i], key="mat_n")
+            nota_val = st.number_input("Notă (1 - 10):", min_value=1, max_value=10, value=10, step=1)
+            data_nota = st.text_input("Data Notei (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_n")
+            
+        if st.button("💾 Salvează Nota în Catalog", type="primary", use_container_width=True):
+            if not os.path.exists(selected_file):
+                st.error(f"Fișierul {selected_file} nu există!")
+            else:
+                backup = None
+                wb = None
+                try:
+                    data_nota = _normalize_manual_ddmm(data_nota)
+                    backup = selected_file + ".manual.bak"
+                    shutil.copy2(selected_file, backup)
+                    wb = openpyxl.load_workbook(selected_file)
+                    sheet_name = "Cultură Generală" if cat_n == "Cultură Generală" else "Module Tehnologice"
+                    ws = wb[sheet_name]
+                    student_row = resolve_student_row(wb, ELEVI[elev_idx_n])
+                    start_col = DISCIPLINE_CG[mat_idx_n][1] if cat_n == "Cultură Generală" else MODULE_TH[mat_idx_n][1]
+                    
+                    slot_found = False
+                    for k in range(10):
+                        n_col = start_col + (k * 2)
+                        d_col = n_col + 1
+                        cell_n = ws.cell(row=student_row, column=n_col)
+                        cell_d = ws.cell(row=student_row, column=d_col)
+                        existing_date = str(cell_d.value or "").strip()
+                        if existing_date == data_nota:
+                            if str(cell_n.value).strip() == str(int(nota_val)):
+                                raise ValueError(f"Nota {nota_val} din {data_nota} există deja; nu a fost duplicată.")
+                            raise ValueError(f"Există deja nota {cell_n.value} în data {data_nota}; salvarea este blocată.")
+                        if cell_n.value is None or str(cell_n.value).strip() == "":
+                            cell_n.value = int(nota_val)
+                            cell_d.value = str(data_nota)
+                            cell_d.number_format = '@'
+                            slot_found = True
+                            slot_num = k + 1
+                            break
+                    if slot_found:
+                        wb.save(selected_file)
+                        if not update_excel_computed_values(selected_file):
+                            _restore_manual_backup(selected_file, backup)
+                            raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
+                        if push_to_github(selected_file):
+                            st.success(f"✅ Notă salvată și sincronizată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
+                            st.rerun()
+                        else:
+                            _restore_manual_backup(selected_file, backup)
+                            raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
                     else:
-                        _restore_manual_backup(selected_file, backup)
-                        raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
-                else:
-                    st.error("❌ Toate cele 10 sloturi de note sunt pline pentru această disciplină!")
-                wb.close()
-            except Exception as ex:
-                if wb is not None:
-                    try: wb.close()
-                    except Exception: pass
-                _restore_manual_backup(selected_file, backup)
-                st.error(f"Eroare la salvare: {ex}")
+                        st.error("❌ Toate cele 10 sloturi de note sunt pline pentru această disciplină!")
+                    wb.close()
+                except Exception as ex:
+                    if wb is not None:
+                        try: wb.close()
+                        except Exception: pass
+                    _restore_manual_backup(selected_file, backup)
+                    st.error(f"Eroare la salvare: {ex}")
+
+
+    _render_manual_grade()
 
 # --- TAB 2: ABSENȚĂ ---
 with tab2:
-    st.subheader("Adăugare Absență (Sloturi A1 - A30)")
-    col1, col2 = st.columns(2)
-    with col1:
-        elev_idx_a = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_a")
-        cat_a = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_a")
-    with col2:
-        materii_a = [d[0] for d in DISCIPLINE_CG] if cat_a == "Cultură Generală" else [m[0] for m in MODULE_TH]
-        mat_idx_a = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii_a)), format_func=lambda i: materii_a[i], key="mat_a")
-        data_abs = st.text_input("Data Absenței (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_a")
-        is_mot = st.checkbox("Absență Motivată (adaugă 'm')", value=False)
-        
-    if st.button("💾 Salvează Absența în Catalog", type="primary", use_container_width=True):
-        if not os.path.exists(selected_file):
-            st.error(f"Fișierul {selected_file} nu există!")
-        else:
-            backup = None
-            wb = None
-            try:
-                data_abs = _normalize_manual_ddmm(data_abs)
-                backup = selected_file + ".manual.bak"
-                shutil.copy2(selected_file, backup)
-                wb = openpyxl.load_workbook(selected_file)
-                sheet_name = "Cultură Generală" if cat_a == "Cultură Generală" else "Module Tehnologice"
-                ws = wb[sheet_name]
-                student_row = resolve_student_row(wb, ELEVI[elev_idx_a])
-                start_col = DISCIPLINE_CG[mat_idx_a][1] if cat_a == "Cultură Generală" else MODULE_TH[mat_idx_a][1]
-                
-                abs_val = f"{data_abs.strip()}m" if is_mot else data_abs.strip()
-                
-                slot_found = False
-                for k in range(30):
-                    a_col = start_col + 21 + k
-                    cell_a = ws.cell(row=student_row, column=a_col)
-                    existing_abs = str(cell_a.value or "").strip()
-                    if existing_abs.lower().rstrip("m") == data_abs:
-                        requested = f"{data_abs}m" if is_mot else data_abs
-                        if existing_abs.lower() == requested.lower():
-                            raise ValueError(f"Absența din {data_abs} există deja; nu a fost duplicată.")
-                        raise ValueError(f"Absența din {data_abs} există deja cu altă stare de motivare; salvarea este blocată.")
-                    if cell_a.value is None or str(cell_a.value).strip() == "":
-                        cell_a.value = abs_val
-                        cell_a.number_format = '@'
-                        slot_found = True
-                        slot_num = k + 1
-                        break
-                if slot_found:
-                    wb.save(selected_file)
-                    if not update_excel_computed_values(selected_file):
-                        _restore_manual_backup(selected_file, backup)
-                        raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
-                    if push_to_github(selected_file):
-                        st.success(f"✅ Absență salvată și sincronizată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
-                        st.rerun()
+    @st.fragment
+    def _render_manual_absence():
+        st.subheader("Adăugare Absență (Sloturi A1 - A30)")
+        col1, col2 = st.columns(2)
+        with col1:
+            elev_idx_a = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_a")
+            cat_a = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_a")
+        with col2:
+            materii_a = [d[0] for d in DISCIPLINE_CG] if cat_a == "Cultură Generală" else [m[0] for m in MODULE_TH]
+            mat_idx_a = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii_a)), format_func=lambda i: materii_a[i], key="mat_a")
+            data_abs = st.text_input("Data Absenței (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_a")
+            is_mot = st.checkbox("Absență Motivată (adaugă 'm')", value=False)
+            
+        if st.button("💾 Salvează Absența în Catalog", type="primary", use_container_width=True):
+            if not os.path.exists(selected_file):
+                st.error(f"Fișierul {selected_file} nu există!")
+            else:
+                backup = None
+                wb = None
+                try:
+                    data_abs = _normalize_manual_ddmm(data_abs)
+                    backup = selected_file + ".manual.bak"
+                    shutil.copy2(selected_file, backup)
+                    wb = openpyxl.load_workbook(selected_file)
+                    sheet_name = "Cultură Generală" if cat_a == "Cultură Generală" else "Module Tehnologice"
+                    ws = wb[sheet_name]
+                    student_row = resolve_student_row(wb, ELEVI[elev_idx_a])
+                    start_col = DISCIPLINE_CG[mat_idx_a][1] if cat_a == "Cultură Generală" else MODULE_TH[mat_idx_a][1]
+                    
+                    abs_val = f"{data_abs.strip()}m" if is_mot else data_abs.strip()
+                    
+                    slot_found = False
+                    for k in range(30):
+                        a_col = start_col + 21 + k
+                        cell_a = ws.cell(row=student_row, column=a_col)
+                        existing_abs = str(cell_a.value or "").strip()
+                        if existing_abs.lower().rstrip("m") == data_abs:
+                            requested = f"{data_abs}m" if is_mot else data_abs
+                            if existing_abs.lower() == requested.lower():
+                                raise ValueError(f"Absența din {data_abs} există deja; nu a fost duplicată.")
+                            raise ValueError(f"Absența din {data_abs} există deja cu altă stare de motivare; salvarea este blocată.")
+                        if cell_a.value is None or str(cell_a.value).strip() == "":
+                            cell_a.value = abs_val
+                            cell_a.number_format = '@'
+                            slot_found = True
+                            slot_num = k + 1
+                            break
+                    if slot_found:
+                        wb.save(selected_file)
+                        if not update_excel_computed_values(selected_file):
+                            _restore_manual_backup(selected_file, backup)
+                            raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
+                        if push_to_github(selected_file):
+                            st.success(f"✅ Absență salvată și sincronizată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
+                            st.rerun()
+                        else:
+                            _restore_manual_backup(selected_file, backup)
+                            raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
                     else:
-                        _restore_manual_backup(selected_file, backup)
-                        raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
-                else:
-                    st.error("❌ Toate cele 30 de sloturi de absențe sunt pline pentru această disciplină!")
-                wb.close()
-            except Exception as ex:
-                st.error(f"Eroare la salvare: {ex}")
+                        st.error("❌ Toate cele 30 de sloturi de absențe sunt pline pentru această disciplină!")
+                    wb.close()
+                except Exception as ex:
+                    st.error(f"Eroare la salvare: {ex}")
+
+
+    _render_manual_absence()
 
 # --- TAB 3: MOTIVARE ---
 with tab3:
