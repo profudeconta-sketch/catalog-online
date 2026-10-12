@@ -1446,11 +1446,14 @@ MODULE_TH = [
 
 # --- RECALCULARE ȘI SCRIERE ÎN EXCEL (PENTRU PERSISTENȚĂ STRUCTURATĂ) ---
 @_timed_catalog_call("excel_recalculation")
-def update_excel_computed_values(file_path):
+def update_excel_computed_values(file_path, workbook=None):
     if not os.path.exists(file_path):
         return
+    wb = workbook
+    owns_workbook = workbook is None
     try:
-        wb = openpyxl.load_workbook(file_path)
+        if owns_workbook:
+            wb = openpyxl.load_workbook(file_path)
         ws_cg = wb['Cultură Generală']
         ws_th = wb['Module Tehnologice']
         ws_abs = wb['Absențe & Purtare']
@@ -1573,13 +1576,15 @@ def update_excel_computed_values(file_path):
                 ws_cent.cell(row=s['row'], column=12).value = None
 
         wb.save(file_path)
-        wb.close()
+        if owns_workbook:
+            wb.close()
         return True
     except Exception as ex:
-        try:
-            wb.close()
-        except Exception:
-            pass
+        if owns_workbook and wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
         st.error(f"Eroare la recalcularea valorilor din catalog: {ex}")
         return False
 
@@ -2603,8 +2608,7 @@ with tab1:
                             slot_num = k + 1
                             break
                     if slot_found:
-                        wb.save(selected_file)
-                        if not update_excel_computed_values(selected_file):
+                        if not update_excel_computed_values(selected_file, workbook=wb):
                             _restore_manual_backup(selected_file, backup)
                             raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
                         if push_to_github(selected_file):
@@ -2676,8 +2680,7 @@ with tab2:
                             slot_num = k + 1
                             break
                     if slot_found:
-                        wb.save(selected_file)
-                        if not update_excel_computed_values(selected_file):
+                        if not update_excel_computed_values(selected_file, workbook=wb):
                             _restore_manual_backup(selected_file, backup)
                             raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
                         if push_to_github(selected_file):
