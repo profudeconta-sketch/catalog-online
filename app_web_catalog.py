@@ -2562,6 +2562,7 @@ def _restore_manual_backup(path, backup):
 # --- TAB 1: NOTĂ ---
 with tab1:
     @st.fragment
+    @_timed_catalog_call("grade_fragment_render")
     def _render_manual_grade():
         st.subheader("Adăugare Notă Nouă (Sloturi N1 - N10)")
         col1, col2 = st.columns(2)
@@ -2636,6 +2637,7 @@ with tab1:
 # --- TAB 2: ABSENȚĂ ---
 with tab2:
     @st.fragment
+    @_timed_catalog_call("absence_fragment_render")
     def _render_manual_absence():
         st.subheader("Adăugare Absență (Sloturi A1 - A30)")
         col1, col2 = st.columns(2)
@@ -2763,6 +2765,7 @@ with tab3:
 # --- TAB 4: ȘTERGERE NOTĂ / ABSENȚĂ ---
 with tab_del:
     @st.fragment
+    @_timed_catalog_call("delete_fragment_render")
     def _render_manual_delete():
         st.subheader("🗑️ Ștergere Notă sau Absență Introduse")
         col1, col2 = st.columns(2)
