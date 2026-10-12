@@ -2614,7 +2614,7 @@ with tab1:
                             raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
                         if push_to_github(selected_file):
                             st.success(f"✅ Notă salvată și sincronizată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
-                            st.rerun()
+                            st.rerun(scope="fragment")
                         else:
                             _restore_manual_backup(selected_file, backup)
                             raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
@@ -2686,7 +2686,7 @@ with tab2:
                             raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
                         if push_to_github(selected_file):
                             st.success(f"✅ Absență salvată și sincronizată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
-                            st.rerun()
+                            st.rerun(scope="fragment")
                         else:
                             _restore_manual_backup(selected_file, backup)
                             raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
@@ -2758,91 +2758,96 @@ with tab3:
 
 # --- TAB 4: ȘTERGERE NOTĂ / ABSENȚĂ ---
 with tab_del:
-    st.subheader("🗑️ Ștergere Notă sau Absență Introduse")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        elev_idx_del = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_del")
-        cat_del = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_del")
-        tip_del = st.radio("Ce doriți să ștergeți?", ["Notă", "Absență"], key="tip_del")
+    @st.fragment
+    def _render_manual_delete():
+        st.subheader("🗑️ Ștergere Notă sau Absență Introduse")
+        col1, col2 = st.columns(2)
         
-    with col2:
-        materii_del = [d[0] for d in DISCIPLINE_CG] if cat_del == "Cultură Generală" else [m[0] for m in MODULE_TH]
-        mat_idx_del = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii_del)), format_func=lambda i: materii_del[i], key="mat_del")
-        
-        existing_items = []
-        item_coords = []
-        
-        if os.path.exists(selected_file):
-            try:
-                wb = openpyxl.load_workbook(selected_file, data_only=True)
-                sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
-                ws = wb[sheet_name]
-                student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
-                start_col = DISCIPLINE_CG[mat_idx_del][1] if cat_del == "Cultură Generală" else MODULE_TH[mat_idx_del][1]
-                
-                if tip_del == "Notă":
-                    for k in range(10):
-                        n_col = start_col + (k * 2)
-                        d_col = n_col + 1
-                        n_val = ws.cell(row=student_row, column=n_col).value
-                        d_val = ws.cell(row=student_row, column=d_col).value
-                        if n_val is not None and str(n_val).strip() != "":
-                            d_str = f" din data {d_val}" if d_val else ""
-                            existing_items.append(f"Slot N{k+1}: Notă {n_val}{d_str}")
-                            item_coords.append((n_col, d_col))
-                else:
-                    for k in range(30):
-                        a_col = start_col + 21 + k
-                        a_val = ws.cell(row=student_row, column=a_col).value
-                        if a_val is not None and str(a_val).strip() != "":
-                            existing_items.append(f"Slot A{k+1}: Absență '{a_val}'")
-                            item_coords.append((a_col, None))
-                wb.close()
-            except Exception as ex:
-                st.error(f"Eroare la citire: {ex}")
-
-        if existing_items:
-            item_selected_idx = st.selectbox(f"Selectează {tip_del} de șters:", range(len(existing_items)), format_func=lambda i: existing_items[i], key="item_del_sel")
+        with col1:
+            elev_idx_del = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_del")
+            cat_del = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_del")
+            tip_del = st.radio("Ce doriți să ștergeți?", ["Notă", "Absență"], key="tip_del")
             
-            if st.button(f"🗑️ Șterge {tip_del} Selectată", type="primary", use_container_width=True):
-                backup = None
-                wb = None
+        with col2:
+            materii_del = [d[0] for d in DISCIPLINE_CG] if cat_del == "Cultură Generală" else [m[0] for m in MODULE_TH]
+            mat_idx_del = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii_del)), format_func=lambda i: materii_del[i], key="mat_del")
+            
+            existing_items = []
+            item_coords = []
+            
+            if os.path.exists(selected_file):
                 try:
-                    backup = selected_file + ".manual.bak"
-                    shutil.copy2(selected_file, backup)
-                    wb = _measure_catalog_operation("delete_write_workbook_open", lambda: openpyxl.load_workbook(selected_file))
+                    wb = openpyxl.load_workbook(selected_file, data_only=True)
                     sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
                     ws = wb[sheet_name]
                     student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
-                    c1, c2 = item_coords[item_selected_idx]
-                    expected = existing_items[item_selected_idx]
-                    actual = ws.cell(row=student_row, column=c1).value
+                    start_col = DISCIPLINE_CG[mat_idx_del][1] if cat_del == "Cultură Generală" else MODULE_TH[mat_idx_del][1]
+                    
                     if tip_del == "Notă":
-                        date_val = ws.cell(row=student_row, column=c2).value
-                        actual_label = f"Slot N{(c1 - start_col) // 2 + 1}: Notă {actual}" + (f" din data {date_val}" if date_val else "")
+                        for k in range(10):
+                            n_col = start_col + (k * 2)
+                            d_col = n_col + 1
+                            n_val = ws.cell(row=student_row, column=n_col).value
+                            d_val = ws.cell(row=student_row, column=d_col).value
+                            if n_val is not None and str(n_val).strip() != "":
+                                d_str = f" din data {d_val}" if d_val else ""
+                                existing_items.append(f"Slot N{k+1}: Notă {n_val}{d_str}")
+                                item_coords.append((n_col, d_col))
                     else:
-                        actual_label = f"Slot A{c1 - start_col - 20}: Absență '{actual}'"
-                    if actual_label != expected:
-                        raise RuntimeError("Înregistrarea s-a modificat între selectare și ștergere; operația a fost blocată.")
-                    ws.cell(row=student_row, column=c1).value = None
-                    if c2 is not None:
-                        ws.cell(row=student_row, column=c2).value = None
-                    if not update_excel_computed_values(selected_file, workbook=wb):
-                        raise RuntimeError("Recalcularea a eșuat; ștergerea a fost anulată.")
-                    if not push_to_github(selected_file):
-                        raise RuntimeError("Sincronizarea privată a eșuat; ștergerea locală a fost anulată.")
-                    st.success(f"✅ {expected} a fost ștearsă și sincronizată cu succes din catalog!")
+                        for k in range(30):
+                            a_col = start_col + 21 + k
+                            a_val = ws.cell(row=student_row, column=a_col).value
+                            if a_val is not None and str(a_val).strip() != "":
+                                existing_items.append(f"Slot A{k+1}: Absență '{a_val}'")
+                                item_coords.append((a_col, None))
                     wb.close()
-                    st.rerun()
                 except Exception as ex:
-                    if wb is not None:
-                        try: wb.close()
-                        except Exception: pass
-                    _restore_manual_backup(selected_file, backup)
-                    st.error(f"Eroare la ștergere: {ex}")
-        else:
-            st.info(f"ℹ️ Nu există nicio {tip_del.lower()} înregistrată pentru elevul selectat la {materii_del[mat_idx_del]}.")
+                    st.error(f"Eroare la citire: {ex}")
+
+            if existing_items:
+                item_selected_idx = st.selectbox(f"Selectează {tip_del} de șters:", range(len(existing_items)), format_func=lambda i: existing_items[i], key="item_del_sel")
+                
+                if st.button(f"🗑️ Șterge {tip_del} Selectată", type="primary", use_container_width=True):
+                    backup = None
+                    wb = None
+                    try:
+                        backup = selected_file + ".manual.bak"
+                        shutil.copy2(selected_file, backup)
+                        wb = _measure_catalog_operation("delete_write_workbook_open", lambda: openpyxl.load_workbook(selected_file))
+                        sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
+                        ws = wb[sheet_name]
+                        student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
+                        c1, c2 = item_coords[item_selected_idx]
+                        expected = existing_items[item_selected_idx]
+                        actual = ws.cell(row=student_row, column=c1).value
+                        if tip_del == "Notă":
+                            date_val = ws.cell(row=student_row, column=c2).value
+                            actual_label = f"Slot N{(c1 - start_col) // 2 + 1}: Notă {actual}" + (f" din data {date_val}" if date_val else "")
+                        else:
+                            actual_label = f"Slot A{c1 - start_col - 20}: Absență '{actual}'"
+                        if actual_label != expected:
+                            raise RuntimeError("Înregistrarea s-a modificat între selectare și ștergere; operația a fost blocată.")
+                        ws.cell(row=student_row, column=c1).value = None
+                        if c2 is not None:
+                            ws.cell(row=student_row, column=c2).value = None
+                        if not update_excel_computed_values(selected_file, workbook=wb):
+                            raise RuntimeError("Recalcularea a eșuat; ștergerea a fost anulată.")
+                        if not push_to_github(selected_file):
+                            raise RuntimeError("Sincronizarea privată a eșuat; ștergerea locală a fost anulată.")
+                        st.success(f"✅ {expected} a fost ștearsă și sincronizată cu succes din catalog!")
+                        wb.close()
+                        st.rerun(scope="fragment")
+                    except Exception as ex:
+                        if wb is not None:
+                            try: wb.close()
+                            except Exception: pass
+                        _restore_manual_backup(selected_file, backup)
+                        st.error(f"Eroare la ștergere: {ex}")
+            else:
+                st.info(f"ℹ️ Nu există nicio {tip_del.lower()} înregistrată pentru elevul selectat la {materii_del[mat_idx_del]}.")
+
+
+    _render_manual_delete()
 
 def generate_parent_access_pdf(elev_idx, file_path):
     """Generează în memorie fișa individuală de acces pentru părintele/reprezentantul legal."""
