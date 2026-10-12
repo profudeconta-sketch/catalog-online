@@ -1,0 +1,22 @@
+name: Catalog conditional sync safety
+
+on:
+  pull_request:
+    paths:
+      - 'app_web_catalog.py'
+      - 'tests/test_catalog_conditional_sync.py'
+      - '.github/workflows/catalog-conditional-sync.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compile catalog
+        run: python -m py_compile app_web_catalog.py
+      - name: Run isolated sync safety tests
+        run: python -m unittest discover -s tests -p 'test_catalog_conditional_sync.py' -v
