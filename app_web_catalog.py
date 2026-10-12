@@ -1813,8 +1813,81 @@ with st.sidebar:
     if st.button("🚪 Deconectare (Logout)", use_container_width=True):
         st.session_state["authenticated"] = False
         st.session_state.pop("nelutu_admin_verified", None)
+        st.session_state.pop("parent_history_verified", None)
+        st.session_state.pop("parent_history_rows", None)
         st.rerun()
         
+    # Istoric autentificări părinți: doar dirigintele, citire fără efecte asupra catalogului.
+    with st.expander("🔐 Istoric autentificări părinți"):
+        import hmac as _history_hmac
+        import requests as _history_requests
+
+        def _history_secret(name):
+            try:
+                value = st.secrets.get(name, "")
+                return str(value) if value else ""
+            except Exception:
+                return os.environ.get(name, "")
+
+        _history_password = _history_secret("PARENT_PORTAL_TEACHER_PASSWORD")
+        _history_api_key = _history_secret("PARENT_LOGIN_HISTORY_API_KEY")
+        _history_url = _history_secret("PARENT_LOGIN_HISTORY_URL")
+        if not all((_history_password, _history_api_key, _history_url)):
+            st.info("Istoricul nu este configurat. Sunt necesare PARENT_PORTAL_TEACHER_PASSWORD, PARENT_LOGIN_HISTORY_API_KEY și PARENT_LOGIN_HISTORY_URL în Secrets.")
+        else:
+            if not st.session_state.get("parent_history_verified", False):
+                with st.form("parent_history_login"):
+                    _history_input = st.text_input("Parola dirigintelui", type="password")
+                    _history_submit = st.form_submit_button("Deschide istoricul")
+                if _history_submit:
+                    if _history_hmac.compare_digest(_history_input, _history_password):
+                        st.session_state["parent_history_verified"] = True
+                        st.rerun()
+                    else:
+                        st.error("Parolă incorectă.")
+            else:
+                if st.button("Închide istoricul", key="parent_history_logout"):
+                    st.session_state.pop("parent_history_verified", None)
+                    st.session_state.pop("parent_history_rows", None)
+                    st.rerun()
+                if st.button("📋 Afișează / actualizează istoricul", key="parent_history_refresh"):
+                    try:
+                        if not _history_url.startswith("https://script.google.com/macros/s/"):
+                            raise ValueError("Adresa serviciului de istoric nu este validă.")
+                        _history_response = _history_requests.post(
+                            _history_url,
+                            json={"action": "history", "key": _history_api_key},
+                            timeout=20,
+                            allow_redirects=True,
+                        )
+                        _history_response.raise_for_status()
+                        _history_data = _history_response.json()
+                        if not isinstance(_history_data, dict) or _history_data.get("status") != "ok":
+                            raise ValueError("Serviciul nu a confirmat citirea istoricului.")
+                        _history_rows = _history_data.get("rows")
+                        if not isinstance(_history_rows, list) or len(_history_rows) > 10000:
+                            raise ValueError("Răspunsul istoricului este invalid sau prea mare.")
+                        _history_clean = []
+                        for _entry in _history_rows:
+                            if not isinstance(_entry, dict):
+                                raise ValueError("Înregistrare invalidă în istoric.")
+                            _date = str(_entry.get("data_ora", ""))[:32]
+                            _name = str(_entry.get("elev", ""))[:160]
+                            _matr = str(_entry.get("matricol", ""))[:40]
+                            if _date and _name:
+                                _history_clean.append({"Data și ora": _date, "Elev": _name, "Nr. matricol": _matr})
+                        st.session_state["parent_history_rows"] = _history_clean
+                    except (ValueError, _history_requests.RequestException) as _history_error:
+                        st.session_state.pop("parent_history_rows", None)
+                        st.error("Istoricul nu a putut fi citit în siguranță. Verificați configurația și disponibilitatea serviciului.")
+                if "parent_history_rows" in st.session_state:
+                    _rows = st.session_state["parent_history_rows"]
+                    st.caption(f"Înregistrări disponibile: {len(_rows)}. Afișare: cele mai recente primele.")
+                    if _rows:
+                        st.dataframe(_rows, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("Nu există autentificări înregistrate.")
+
     # Administrare Neluțu: independentă de parola comună a profesorilor.
     with st.expander("🤠 Administrare Neluțu — administrator"):
         import hmac
