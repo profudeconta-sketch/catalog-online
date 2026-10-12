@@ -241,11 +241,32 @@ def load_gestiune_data():
         except (OSError, ValueError, UnicodeError, TypeError):
             fresh = False
     if not fresh and not sync_gestiune_from_private_repo():
-        st.error(
-            "Datele elevilor nu au putut fi sincronizate și validate din sursa privată. "
-            "Aplicația a fost oprită pentru protejarea integrității datelor."
-        )
-        st.stop()
+        # Read-only fallback for this session: only bytes previously verified
+        # against the private repository may be reused. Never trust an
+        # unverified local file after restart or after local modifications.
+        fallback_ok = False
+        if isinstance(verified, dict) and verified.get("digest"):
+            try:
+                with open(GESTIUNE_FILE, "rb") as f:
+                    fallback_raw = f.read()
+                if hashlib.sha256(fallback_raw).hexdigest() == verified["digest"]:
+                    _validate_gestiune_data(json.loads(fallback_raw.decode("utf-8")))
+                    fallback_ok = True
+            except (OSError, ValueError, UnicodeError, TypeError):
+                pass
+        if fallback_ok:
+            fresh = True
+            st.warning(
+                "GitHub nu răspunde la sincronizarea registrului elevilor. "
+                "Se utilizează copia validată anterior în această sesiune. "
+                "Modificările datelor elevilor necesită reconectare."
+            )
+        else:
+            st.error(
+                "Datele elevilor nu au putut fi sincronizate și validate din sursa privată. "
+                "Aplicația a fost oprită pentru protejarea integrității datelor."
+            )
+            st.stop()
 
     if os.path.exists(GESTIUNE_FILE):
         try:
