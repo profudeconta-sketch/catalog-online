@@ -2812,7 +2812,7 @@ with tab_del:
                 item_selected_idx = st.selectbox(f"Selectează {tip_del} de șters:", range(len(existing_items)), format_func=lambda i: existing_items[i], key="item_del_sel")
                 
                 if st.button(f"🗑️ Șterge {tip_del} Selectată", type="primary", use_container_width=True):
-                _manual_action_started = time.perf_counter()
+                    _manual_action_started = time.perf_counter()
                     backup = None
                     wb = None
                     try:
