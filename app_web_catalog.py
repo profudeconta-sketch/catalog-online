@@ -239,7 +239,7 @@ def sync_conduct_registry_from_private_repo():
 def load_gestiune_data():
     verified = st.session_state.get("_student_registry_verified")
     fresh = False
-    if isinstance(verified, dict) and time.monotonic() - verified.get("at", 0) < 30:
+    if isinstance(verified, dict) and time.monotonic() - verified.get("at", 0) < 3600:
         try:
             with open(GESTIUNE_FILE, "rb") as f:
                 raw = f.read()
