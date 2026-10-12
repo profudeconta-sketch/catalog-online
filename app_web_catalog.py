@@ -2575,6 +2575,7 @@ with tab1:
             data_nota = st.text_input("Data Notei (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_n")
             
         if st.button("💾 Salvează Nota în Catalog", type="primary", use_container_width=True):
+            _manual_action_started = time.perf_counter()
             if not os.path.exists(selected_file):
                 st.error(f"Fișierul {selected_file} nu există!")
             else:
@@ -2583,7 +2584,7 @@ with tab1:
                 try:
                     data_nota = _normalize_manual_ddmm(data_nota)
                     backup = selected_file + ".manual.bak"
-                    shutil.copy2(selected_file, backup)
+                    _measure_catalog_operation("grade_backup", lambda: shutil.copy2(selected_file, backup))
                     wb = _measure_catalog_operation("grade_workbook_open", lambda: openpyxl.load_workbook(selected_file))
                     sheet_name = "Cultură Generală" if cat_n == "Cultură Generală" else "Module Tehnologice"
                     ws = wb[sheet_name]
@@ -2614,6 +2615,7 @@ with tab1:
                             raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
                         if push_to_github(selected_file):
                             st.success(f"✅ Notă salvată și sincronizată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
+                            print(f"[catalog-performance] grade_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
                             st.rerun(scope="fragment")
                         else:
                             _restore_manual_backup(selected_file, backup)
@@ -2647,6 +2649,7 @@ with tab2:
             is_mot = st.checkbox("Absență Motivată (adaugă 'm')", value=False)
             
         if st.button("💾 Salvează Absența în Catalog", type="primary", use_container_width=True):
+            _manual_action_started = time.perf_counter()
             if not os.path.exists(selected_file):
                 st.error(f"Fișierul {selected_file} nu există!")
             else:
@@ -2655,7 +2658,7 @@ with tab2:
                 try:
                     data_abs = _normalize_manual_ddmm(data_abs)
                     backup = selected_file + ".manual.bak"
-                    shutil.copy2(selected_file, backup)
+                    _measure_catalog_operation("absence_backup", lambda: shutil.copy2(selected_file, backup))
                     wb = _measure_catalog_operation("absence_workbook_open", lambda: openpyxl.load_workbook(selected_file))
                     sheet_name = "Cultură Generală" if cat_a == "Cultură Generală" else "Module Tehnologice"
                     ws = wb[sheet_name]
@@ -2686,6 +2689,7 @@ with tab2:
                             raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
                         if push_to_github(selected_file):
                             st.success(f"✅ Absență salvată și sincronizată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
+                            print(f"[catalog-performance] absence_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
                             st.rerun(scope="fragment")
                         else:
                             _restore_manual_backup(selected_file, backup)
@@ -2808,11 +2812,12 @@ with tab_del:
                 item_selected_idx = st.selectbox(f"Selectează {tip_del} de șters:", range(len(existing_items)), format_func=lambda i: existing_items[i], key="item_del_sel")
                 
                 if st.button(f"🗑️ Șterge {tip_del} Selectată", type="primary", use_container_width=True):
+                    _manual_action_started = time.perf_counter()
                     backup = None
                     wb = None
                     try:
                         backup = selected_file + ".manual.bak"
-                        shutil.copy2(selected_file, backup)
+                        _measure_catalog_operation("delete_backup", lambda: shutil.copy2(selected_file, backup))
                         wb = _measure_catalog_operation("delete_write_workbook_open", lambda: openpyxl.load_workbook(selected_file))
                         sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
                         ws = wb[sheet_name]
@@ -2836,6 +2841,7 @@ with tab_del:
                             raise RuntimeError("Sincronizarea privată a eșuat; ștergerea locală a fost anulată.")
                         st.success(f"✅ {expected} a fost ștearsă și sincronizată cu succes din catalog!")
                         wb.close()
+                        print(f"[catalog-performance] delete_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
                         st.rerun(scope="fragment")
                     except Exception as ex:
                         if wb is not None:
