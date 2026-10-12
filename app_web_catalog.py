@@ -2775,7 +2775,7 @@ with tab_del:
         
         if os.path.exists(selected_file):
             try:
-                wb = openpyxl.load_workbook(selected_file, data_only=True)
+                wb = _measure_catalog_operation("delete_list_workbook_open", lambda: openpyxl.load_workbook(selected_file, data_only=True))
                 sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
                 ws = wb[sheet_name]
                 student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
@@ -2807,7 +2807,7 @@ with tab_del:
             
             if st.button(f"🗑️ Șterge {tip_del} Selectată", type="primary", use_container_width=True):
                 try:
-                    wb = openpyxl.load_workbook(selected_file)
+                    wb = _measure_catalog_operation("delete_write_workbook_open", lambda: openpyxl.load_workbook(selected_file))
                     sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
                     ws = wb[sheet_name]
                     student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
@@ -2817,7 +2817,7 @@ with tab_del:
                     if c2 is not None:
                         ws.cell(row=student_row, column=c2).value = None
                         
-                    wb.save(selected_file)
+                    _measure_catalog_operation("delete_first_excel_save", lambda: wb.save(selected_file))
                     if not update_excel_computed_values(selected_file):
                         st.warning("⚠️ Modificarea a fost salvată, dar recalcularea valorilor derivate nu a fost confirmată.")
                     if push_to_github(selected_file):
