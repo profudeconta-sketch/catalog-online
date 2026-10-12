@@ -229,7 +229,18 @@ def sync_conduct_registry_from_private_repo():
 
 
 def load_gestiune_data():
-    if not sync_gestiune_from_private_repo():
+    verified = st.session_state.get("_student_registry_verified")
+    fresh = False
+    if isinstance(verified, dict) and time.monotonic() - verified.get("at", 0) < 30:
+        try:
+            with open(GESTIUNE_FILE, "rb") as f:
+                raw = f.read()
+            fresh = hashlib.sha256(raw).hexdigest() == verified.get("digest")
+            if fresh:
+                _validate_gestiune_data(json.loads(raw.decode("utf-8")))
+        except (OSError, ValueError, UnicodeError, TypeError):
+            fresh = False
+    if not fresh and not sync_gestiune_from_private_repo():
         st.error(
             "Datele elevilor nu au putut fi sincronizate și validate din sursa privată. "
             "Aplicația a fost oprită pentru protejarea integrității datelor."
@@ -246,6 +257,10 @@ def load_gestiune_data():
                 data = json.load(f)
 
             _validate_gestiune_data(data)
+            if not fresh:
+                with open(GESTIUNE_FILE, "rb") as f:
+                    digest = hashlib.sha256(f.read()).hexdigest()
+                st.session_state["_student_registry_verified"] = {"digest": digest, "at": time.monotonic()}
             return data
 
         except Exception:
@@ -271,6 +286,7 @@ def save_gestiune_data(data):
         if os.path.exists(GESTIUNE_FILE):
             shutil.copy2(GESTIUNE_FILE, backup_file)
         os.replace(temp_file, GESTIUNE_FILE)
+        st.session_state.pop("_student_registry_verified", None)
         if not push_to_github(GESTIUNE_FILE):
             st.warning("Datele au fost salvate local, dar sincronizarea GitHub nu a fost confirmată.")
             return False
