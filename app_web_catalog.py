@@ -1218,6 +1218,7 @@ st.set_page_config(
 
 # --- SINCRONIZARE AUTOMATĂ PE GITHUB VIA API ---
 @_timed_catalog_call("github_write")
+@_timed_catalog_call("github_push")
 def push_to_github(file_path):
     token = os.environ.get("GITHUB_TOKEN") or ""
     try:
@@ -2583,7 +2584,7 @@ with tab1:
                     data_nota = _normalize_manual_ddmm(data_nota)
                     backup = selected_file + ".manual.bak"
                     shutil.copy2(selected_file, backup)
-                    wb = openpyxl.load_workbook(selected_file)
+                    wb = _measure_catalog_operation("grade_workbook_open", lambda: openpyxl.load_workbook(selected_file))
                     sheet_name = "Cultură Generală" if cat_n == "Cultură Generală" else "Module Tehnologice"
                     ws = wb[sheet_name]
                     student_row = resolve_student_row(wb, ELEVI[elev_idx_n])
@@ -2655,7 +2656,7 @@ with tab2:
                     data_abs = _normalize_manual_ddmm(data_abs)
                     backup = selected_file + ".manual.bak"
                     shutil.copy2(selected_file, backup)
-                    wb = openpyxl.load_workbook(selected_file)
+                    wb = _measure_catalog_operation("absence_workbook_open", lambda: openpyxl.load_workbook(selected_file))
                     sheet_name = "Cultură Generală" if cat_a == "Cultură Generală" else "Module Tehnologice"
                     ws = wb[sheet_name]
                     student_row = resolve_student_row(wb, ELEVI[elev_idx_a])
