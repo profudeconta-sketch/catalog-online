@@ -64,6 +64,15 @@ def _measure_catalog_operation(label, fn):
         print(f"[catalog-performance] {label}: {elapsed:.3f}s", flush=True)
 
 
+def _timed_catalog_call(label):
+    """Measure calls without changing return values or error handling."""
+    def decorate(fn):
+        def wrapped(*args, **kwargs):
+            return _measure_catalog_operation(label, lambda: fn(*args, **kwargs))
+        return wrapped
+    return decorate
+
+
 GESTIUNE_FILE = "gestiune_elevi.json"
 
 
@@ -77,6 +86,7 @@ def _validate_gestiune_data(data):
             raise ValueError("Structură invalidă în fișierul de gestiune.")
 
 
+@_timed_catalog_call("student_registry_sync")
 def sync_gestiune_from_private_repo():
     token = os.environ.get("GITHUB_TOKEN") or ""
 
@@ -1148,6 +1158,7 @@ st.set_page_config(
 )
 
 # --- SINCRONIZARE AUTOMATĂ PE GITHUB VIA API ---
+@_timed_catalog_call("github_write")
 def push_to_github(file_path):
     token = os.environ.get("GITHUB_TOKEN") or ""
     try:
