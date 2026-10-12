@@ -54,6 +54,25 @@ from catalog_photo_import import (
 )
 
 
+def _measure_catalog_operation(label, fn):
+    """Record elapsed time in Streamlit server logs without exposing student data."""
+    started = time.perf_counter()
+    try:
+        return fn()
+    finally:
+        elapsed = time.perf_counter() - started
+        print(f"[catalog-performance] {label}: {elapsed:.3f}s", flush=True)
+
+
+def _timed_catalog_call(label):
+    """Measure calls without changing return values or error handling."""
+    def decorate(fn):
+        def wrapped(*args, **kwargs):
+            return _measure_catalog_operation(label, lambda: fn(*args, **kwargs))
+        return wrapped
+    return decorate
+
+
 GESTIUNE_FILE = "gestiune_elevi.json"
 
 
@@ -67,6 +86,7 @@ def _validate_gestiune_data(data):
             raise ValueError("Structură invalidă în fișierul de gestiune.")
 
 
+@_timed_catalog_call("student_registry_sync")
 def sync_gestiune_from_private_repo():
     token = os.environ.get("GITHUB_TOKEN") or ""
 
@@ -1138,6 +1158,7 @@ st.set_page_config(
 )
 
 # --- SINCRONIZARE AUTOMATĂ PE GITHUB VIA API ---
+@_timed_catalog_call("github_write")
 def push_to_github(file_path):
     token = os.environ.get("GITHUB_TOKEN") or ""
     try:
@@ -1365,6 +1386,7 @@ MODULE_TH = [
 ]
 
 # --- RECALCULARE ȘI SCRIERE ÎN EXCEL (PENTRU PERSISTENȚĂ STRUCTURATĂ) ---
+@_timed_catalog_call("excel_recalculation")
 def update_excel_computed_values(file_path):
     if not os.path.exists(file_path):
         return
@@ -1713,11 +1735,27 @@ def sync_excel_from_private_repo():
     }
 
     temp_file = filename + ".download.xlsx"
+    etag = st.session_state.get("_catalog_etag")
+    digest = st.session_state.get("_catalog_digest")
+    local_ok = False
+    if etag and digest and os.path.isfile(filename):
+        with open(filename, "rb") as handle:
+            local_ok = hashlib.sha256(handle.read()).hexdigest() == digest
+        if local_ok:
+            headers["If-None-Match"] = etag
 
     try:
         req = urllib.request.Request(url, headers=headers)
 
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        try:
+            response = urllib.request.urlopen(req, timeout=5)
+        except urllib.error.HTTPError as err:
+            if err.code == 304 and local_ok:
+                err.close()
+                return True
+            raise
+        with response as resp:
+            remote_etag = resp.headers.get("ETag")
             if resp.status != 200:
                 raise RuntimeError(
                     f"GitHub a răspuns cu status {resp.status}."
@@ -1751,6 +1789,8 @@ def sync_excel_from_private_repo():
             )
 
         os.replace(temp_file, filename)
+        st.session_state["_catalog_etag"] = remote_etag
+        st.session_state["_catalog_digest"] = hashlib.sha256(content).hexdigest()
 
         return True
 
@@ -1769,7 +1809,7 @@ def sync_excel_from_private_repo():
         return False
 
 
-if not sync_excel_from_private_repo():
+if not _measure_catalog_operation("excel_sync", sync_excel_from_private_repo):
     st.error(
         "Catalogul Excel nu a putut fi sincronizat și validat din sursa privată. "
         "Aplicația a fost oprită pentru protejarea integrității datelor."
