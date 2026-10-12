@@ -97,6 +97,7 @@ def sync_gestiune_from_private_repo():
         pass
 
     if not token:
+        print("[student-sync] failed: missing GitHub token", flush=True)
         return False
 
     url = (
@@ -119,6 +120,7 @@ def sync_gestiune_from_private_repo():
 
         with urllib.request.urlopen(req, timeout=5) as resp:
             if resp.status != 200:
+                print(f"[student-sync] failed: HTTP {resp.status}", flush=True)
                 return False
 
             payload = json.loads(resp.read().decode("utf-8"))
@@ -126,6 +128,7 @@ def sync_gestiune_from_private_repo():
         content_b64 = payload.get("content", "")
 
         if not content_b64:
+            print("[student-sync] failed: empty GitHub content", flush=True)
             return False
 
         content = base64.b64decode(content_b64)
@@ -149,7 +152,18 @@ def sync_gestiune_from_private_repo():
         os.replace(temp_file, GESTIUNE_FILE)
         return True
 
-    except Exception:
+    except Exception as exc:
+        if isinstance(exc, urllib.error.HTTPError):
+            reason = f"HTTP {exc.code}"
+        elif isinstance(exc, urllib.error.URLError):
+            reason = "network connection error"
+        elif isinstance(exc, (ValueError, KeyError, TypeError)):
+            reason = "JSON or registry validation error"
+        elif isinstance(exc, (OSError, TimeoutError)):
+            reason = "local file or network timeout error"
+        else:
+            reason = type(exc).__name__
+        print(f"[student-sync] failed: {reason}", flush=True)
         try:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
