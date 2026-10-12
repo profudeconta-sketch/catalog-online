@@ -54,6 +54,16 @@ from catalog_photo_import import (
 )
 
 
+def _measure_catalog_operation(label, fn):
+    """Record elapsed time in Streamlit server logs without exposing student data."""
+    started = time.perf_counter()
+    try:
+        return fn()
+    finally:
+        elapsed = time.perf_counter() - started
+        print(f"[catalog-performance] {label}: {elapsed:.3f}s", flush=True)
+
+
 GESTIUNE_FILE = "gestiune_elevi.json"
 
 
@@ -1769,7 +1779,7 @@ def sync_excel_from_private_repo():
         return False
 
 
-if not sync_excel_from_private_repo():
+if not _measure_catalog_operation("excel_sync", sync_excel_from_private_repo):
     st.error(
         "Catalogul Excel nu a putut fi sincronizat și validat din sursa privată. "
         "Aplicația a fost oprită pentru protejarea integrității datelor."
