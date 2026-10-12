@@ -154,7 +154,15 @@ def sync_gestiune_from_private_repo():
 
     except Exception as exc:
         if isinstance(exc, urllib.error.HTTPError):
-            reason = f"HTTP {exc.code}"
+            remaining = exc.headers.get("X-RateLimit-Remaining", "unknown")
+            limit = exc.headers.get("X-RateLimit-Limit", "unknown")
+            retry_after = exc.headers.get("Retry-After", "unknown")
+            category = "primary rate limit" if remaining == "0" else "access restriction or secondary rate limit"
+            reason = (
+                f"HTTP {exc.code}; category={category}; "
+                f"rate_remaining={remaining}; rate_limit={limit}; "
+                f"retry_after={retry_after}"
+            )
         elif isinstance(exc, urllib.error.URLError):
             reason = "network connection error"
         elif isinstance(exc, (ValueError, KeyError, TypeError)):
