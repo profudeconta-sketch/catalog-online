@@ -1386,6 +1386,7 @@ MODULE_TH = [
 ]
 
 # --- RECALCULARE ȘI SCRIERE ÎN EXCEL (PENTRU PERSISTENȚĂ STRUCTURATĂ) ---
+@_timed_catalog_call("excel_recalculation")
 def update_excel_computed_values(file_path):
     if not os.path.exists(file_path):
         return
