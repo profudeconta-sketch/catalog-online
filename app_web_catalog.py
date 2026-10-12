@@ -2806,28 +2806,40 @@ with tab_del:
             item_selected_idx = st.selectbox(f"Selectează {tip_del} de șters:", range(len(existing_items)), format_func=lambda i: existing_items[i], key="item_del_sel")
             
             if st.button(f"🗑️ Șterge {tip_del} Selectată", type="primary", use_container_width=True):
+                backup = None
+                wb = None
                 try:
-                    wb = openpyxl.load_workbook(selected_file)
+                    backup = selected_file + ".manual.bak"
+                    shutil.copy2(selected_file, backup)
+                    wb = _measure_catalog_operation("delete_write_workbook_open", lambda: openpyxl.load_workbook(selected_file))
                     sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
                     ws = wb[sheet_name]
                     student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
-                    
                     c1, c2 = item_coords[item_selected_idx]
+                    expected = existing_items[item_selected_idx]
+                    actual = ws.cell(row=student_row, column=c1).value
+                    if tip_del == "Notă":
+                        date_val = ws.cell(row=student_row, column=c2).value
+                        actual_label = f"Slot N{(c1 - start_col) // 2 + 1}: Notă {actual}" + (f" din data {date_val}" if date_val else "")
+                    else:
+                        actual_label = f"Slot A{c1 - start_col - 20}: Absență '{actual}'"
+                    if actual_label != expected:
+                        raise RuntimeError("Înregistrarea s-a modificat între selectare și ștergere; operația a fost blocată.")
                     ws.cell(row=student_row, column=c1).value = None
                     if c2 is not None:
                         ws.cell(row=student_row, column=c2).value = None
-                        
-                    wb.save(selected_file)
-                    if not update_excel_computed_values(selected_file):
-                        st.warning("⚠️ Modificarea a fost salvată, dar recalcularea valorilor derivate nu a fost confirmată.")
-                    if push_to_github(selected_file):
-                        st.success(f"✅ {existing_items[item_selected_idx]} a fost ștearsă și sincronizată cu succes din catalog!")
-                        wb.close()
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ Ștergerea a fost aplicată local, dar sincronizarea cu repository-ul privat nu a fost confirmată.")
-                        wb.close()
+                    if not update_excel_computed_values(selected_file, workbook=wb):
+                        raise RuntimeError("Recalcularea a eșuat; ștergerea a fost anulată.")
+                    if not push_to_github(selected_file):
+                        raise RuntimeError("Sincronizarea privată a eșuat; ștergerea locală a fost anulată.")
+                    st.success(f"✅ {expected} a fost ștearsă și sincronizată cu succes din catalog!")
+                    wb.close()
+                    st.rerun()
                 except Exception as ex:
+                    if wb is not None:
+                        try: wb.close()
+                        except Exception: pass
+                    _restore_manual_backup(selected_file, backup)
                     st.error(f"Eroare la ștergere: {ex}")
         else:
             st.info(f"ℹ️ Nu există nicio {tip_del.lower()} înregistrată pentru elevul selectat la {materii_del[mat_idx_del]}.")
