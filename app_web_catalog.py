@@ -73,6 +73,100 @@ def _timed_catalog_call(label):
     return decorate
 
 
+
+def generate_excel_monitorizare_das(gest_data):
+    """Export DAS: numai elevii cu o situație de monitorizare declarată."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Tabel monitorizare DAS"
+    ws.sheet_view.showGridLines = False
+    ws.merge_cells("A1:M1")
+    ws["A1"] = "DENUMIRE UNITATE DE ÎNVĂȚĂMÂNT: ______________________________"
+    ws.merge_cells("A2:M2")
+    ws["A2"] = ("Monitorizare copii cu părinți plecați la muncă în străinătate sau copii "
+                "reveniți în țară după o perioadă de ședere în străinătate alături de părinți "
+                "mai mare de 1 an, an școlar 2026-2027")
+    for area, label in [("A5:A7", "Nr. Crt."), ("B5:E5", "Date despre copil"),
+                        ("F5:H5", "Date despre părinți"),
+                        ("I5:K5", "Situație părinți plecați"),
+                        ("L5:M5", "Persoana care îngrijește copilul")]:
+        ws.merge_cells(area)
+        ws[area.split(":")[0]] = label
+    headers = {
+        "B6:B7": "Nume Prenume", "C6:C7": "CNP",
+        "D6:D7": "Adresa unde locuiește efectiv",
+        "E6:E7": "Copil revenit în țară după o perioadă de ședere în străinătate mai mare de 1 an — Da/Nu",
+        "F6:F7": "TATA — Nume Prenume", "G6:G7": "MAMA — Nume Prenume",
+        "H6:H7": "Domiciliu părinți (dacă diferă: întâi tatăl, apoi mama)",
+        "I6:I7": "Ambii părinți plecați — Da/Nu",
+        "J6:J7": "Părinte unic susținător plecat — Da/Nu",
+        "K6:K7": "Un singur părinte plecat — Tata/Mama",
+        "L6:L7": "Nume Prenume", "M6:M7": "Tel. contact",
+    }
+    for area, label in headers.items():
+        ws.merge_cells(area)
+        ws[area.split(":")[0]] = label
+    widths = [11, 32, 19, 43, 32, 28, 28, 40, 20, 24, 23, 30, 20]
+    for i, width in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = width
+    ws.row_dimensions[2].height = 42
+    ws.row_dimensions[5].height = 34
+    ws.row_dimensions[6].height = 90
+    ws.row_dimensions[7].height = 22
+    header_fill = PatternFill("solid", fgColor="DCE9F4")
+    edge = Side(style="thin", color="8798A5")
+    for row in ws.iter_rows(min_row=5, max_row=7, max_col=13):
+        for cell in row:
+            cell.fill = header_fill
+            cell.border = Border(left=edge, right=edge, top=edge, bottom=edge)
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.font = Font(name="Calibri", size=10, bold=True)
+    for cell in (ws["A1"], ws["A2"]):
+        cell.font = Font(name="Calibri", size=12, bold=True)
+        cell.alignment = Alignment(vertical="center", wrap_text=True)
+    def address(d):
+        return ", ".join(str(v).strip() for v in [
+            d.get("localitate"), d.get("judet"),
+            ("str. " + str(d.get("strada", "")).strip()) if d.get("strada") else "",
+            ("nr. " + str(d.get("numar_strada", "")).strip()) if d.get("numar_strada") else "",
+            ("bl. " + str(d.get("bloc", "")).strip()) if d.get("bloc") else "",
+            ("ap. " + str(d.get("apartament", "")).strip()) if d.get("apartament") else "",
+        ] if v)
+    relevant = [d for d in gest_data if
+                d.get("mama_plecata") or d.get("tata_plecat") or
+                d.get("revenit_strainatate_peste_un_an") or
+                d.get("parinte_unic_sustinator_plecat")]
+    for idx, d in enumerate(relevant, 1):
+        mama = bool(d.get("mama_plecata"))
+        tata = bool(d.get("tata_plecat"))
+        single = "Tata" if tata and not mama else "Mama" if mama and not tata else ""
+        values = [idx, d.get("nume_complet", ""), d.get("cnp", ""),
+                  address(d),
+                  "Da" if d.get("revenit_strainatate_peste_un_an") else "Nu",
+                  d.get("nume_tata", ""), d.get("nume_mama", ""),
+                  "",  # Domiciliul părinților nu este colectat separat.
+                  "Da" if mama and tata else "Nu",
+                  "Da" if d.get("parinte_unic_sustinator_plecat") else "Nu",
+                  single, d.get("ingrijitor_nume", ""), d.get("ingrijitor_telefon", "")]
+        rowno = idx + 7
+        for col, value in enumerate(values, 1):
+            cell = ws.cell(rowno, col, value)
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+            cell.border = Border(left=edge, right=edge, top=edge, bottom=edge)
+        ws.row_dimensions[rowno].height = 42
+    ws.freeze_panes = "B8"
+    ws.print_options.horizontalCentered = True
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.paperSize = ws.PAPERSIZE_A3
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.print_title_rows = "1:7"
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()
+
+
 GESTIUNE_FILE = "gestiune_elevi.json"
 
 
@@ -3483,6 +3577,9 @@ with tab7:
                 with p2:
                     e_ingrijitor_telefon = st.text_input("Telefon de contact persoană care îngrijește copilul:", value=st_curr.get("ingrijitor_telefon", ""))
 
+                e_revenit_strainatate = st.checkbox("Copil revenit în țară după o ședere în străinătate mai mare de un an", value=st_curr.get("revenit_strainatate_peste_un_an", False))
+                e_parinte_unic_plecat = st.checkbox("Părinte unic susținător plecat în străinătate", value=st_curr.get("parinte_unic_sustinator_plecat", False))
+
                 st.markdown("#### 4. 🩺 Situații Speciale, Burse & CES (Bife)")
                 b1, b2, b3 = st.columns(3)
                 with b1:
@@ -3540,6 +3637,8 @@ with tab7:
                         "tara_tata": e_tara_t.strip(),
                         "ingrijitor_nume": e_ingrijitor_nume.strip(),
                         "ingrijitor_telefon": e_ingrijitor_telefon.strip(),
+                        "revenit_strainatate_peste_un_an": e_revenit_strainatate,
+                        "parinte_unic_sustinator_plecat": e_parinte_unic_plecat,
                         "ces": e_ces,
                         "orfan": e_orfan,
                         "plasament": e_plas,
@@ -3613,6 +3712,8 @@ with tab7:
                         "tara_tata": "",
                         "ingrijitor_nume": "",
                         "ingrijitor_telefon": "",
+                        "revenit_strainatate_peste_un_an": False,
+                        "parinte_unic_sustinator_plecat": False,
                         "nationalitate": add_nat.strip(),
                         "etnie": add_etn.strip(),
                         "ces": False,
@@ -3775,6 +3876,22 @@ with tab7:
                                 "⚠️ Excel a fost sincronizat, dar JSON nu a fost confirmat. "
                                 "Gestiunea elevilor va fi blocată la următoarea verificare de consistență."
                             )
+
+    st.divider()
+    st.markdown("#### 📋 Monitorizare copii cu părinți plecați / reveniți din străinătate")
+    st.caption("Raport conform structurii modelului DAS 2026–2027. Sunt incluse numai cazurile relevante; informațiile neînregistrate rămân necompletate.")
+    try:
+        raport_das = generate_excel_monitorizare_das(gest_data)
+        st.download_button(
+            "📥 Descarcă Tabel monitorizare DAS 2026–2027 (.xlsx)",
+            data=raport_das,
+            file_name="Tabel_monitorizare_DAS_2026-2027.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            key="download_monitorizare_das",
+        )
+    except Exception as ex:
+        st.error(f"Eroare la generarea tabelului de monitorizare: {ex}")
 
     st.divider()
     st.markdown("#### 📊 Export Registru & Statistică Clasă (Excel)")
