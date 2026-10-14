@@ -3476,6 +3476,13 @@ with tab7:
                     e_t_plec = st.checkbox("Tată plecat în străinătate", value=st_curr.get("tata_plecat", False))
                     e_tara_t = st.text_input("Țara unde este plecat tatăl:", value=st_curr.get("tara_tata", ""))
 
+                st.markdown("##### 👤 Persoana care îngrijește copilul")
+                p1, p2 = st.columns(2)
+                with p1:
+                    e_ingrijitor_nume = st.text_input("Nume și prenume persoană care îngrijește copilul:", value=st_curr.get("ingrijitor_nume", ""))
+                with p2:
+                    e_ingrijitor_telefon = st.text_input("Telefon de contact persoană care îngrijește copilul:", value=st_curr.get("ingrijitor_telefon", ""))
+
                 st.markdown("#### 4. 🩺 Situații Speciale, Burse & CES (Bife)")
                 b1, b2, b3 = st.columns(3)
                 with b1:
@@ -3531,6 +3538,8 @@ with tab7:
                         "telefon_tata": e_tel_t.strip(),
                         "tata_plecat": e_t_plec,
                         "tara_tata": e_tara_t.strip(),
+                        "ingrijitor_nume": e_ingrijitor_nume.strip(),
+                        "ingrijitor_telefon": e_ingrijitor_telefon.strip(),
                         "ces": e_ces,
                         "orfan": e_orfan,
                         "plasament": e_plas,
@@ -3602,6 +3611,8 @@ with tab7:
                         "telefon_tata": "",
                         "tata_plecat": False,
                         "tara_tata": "",
+                        "ingrijitor_nume": "",
+                        "ingrijitor_telefon": "",
                         "nationalitate": add_nat.strip(),
                         "etnie": add_etn.strip(),
                         "ces": False,
