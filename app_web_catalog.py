@@ -135,18 +135,25 @@ def generate_excel_monitorizare_das(gest_data):
     relevant = [d for d in gest_data if
                 d.get("mama_plecata") or d.get("tata_plecat") or
                 d.get("revenit_strainatate_peste_un_an") or
-                d.get("parinte_unic_sustinator_plecat")]
+                d.get("parinte_unic_sustinator_plecat") or
+                d.get("parinte_unic_sustinator_plecat_tip") in ("Mama", "Tata", "Nespecificat")]
     for idx, d in enumerate(relevant, 1):
         mama = bool(d.get("mama_plecata"))
         tata = bool(d.get("tata_plecat"))
         single = "Tata" if tata and not mama else "Mama" if mama and not tata else ""
+        unic_tip = d.get("parinte_unic_sustinator_plecat_tip", "")
+        unic_plecat = (unic_tip not in ("", "Nu")) if unic_tip else bool(d.get("parinte_unic_sustinator_plecat"))
+        domiciliu = address(d)
+        locuieste = d.get("locuieste_cu", "Nespecificat")
+        if locuieste not in ("", "Nespecificat"):
+            domiciliu = f"{domiciliu} ({locuieste})" if domiciliu else f"({locuieste})"
         values = [idx, d.get("nume_complet", ""), d.get("cnp", ""),
                   address(d),
                   "Da" if d.get("revenit_strainatate_peste_un_an") else "Nu",
                   d.get("nume_tata", ""), d.get("nume_mama", ""),
-                  "",  # Domiciliul părinților nu este colectat separat.
+                  domiciliu,
                   "Da" if mama and tata else "Nu",
-                  "Da" if d.get("parinte_unic_sustinator_plecat") else "Nu",
+                  unic_tip if unic_tip in ("Mama", "Tata") else ("Da" if unic_plecat else "Nu"),
                   single, d.get("ingrijitor_nume", ""), d.get("ingrijitor_telefon", "")]
         rowno = idx + 7
         for col, value in enumerate(values, 1):
@@ -3578,7 +3585,29 @@ with tab7:
                     e_ingrijitor_telefon = st.text_input("Telefon de contact persoană care îngrijește copilul:", value=st_curr.get("ingrijitor_telefon", ""))
 
                 e_revenit_strainatate = st.checkbox("Copil revenit în țară după o ședere în străinătate mai mare de un an", value=st_curr.get("revenit_strainatate_peste_un_an", False))
-                e_parinte_unic_plecat = st.checkbox("Părinte unic susținător plecat în străinătate", value=st_curr.get("parinte_unic_sustinator_plecat", False))
+                opt_parinte_unic = ["Nu", "Mama", "Tata"]
+                valoare_unic = st_curr.get("parinte_unic_sustinator_plecat_tip", "Nu")
+                if valoare_unic not in opt_parinte_unic:
+                    valoare_unic = "Nespecificat" if st_curr.get("parinte_unic_sustinator_plecat") else "Nu"
+                opt_parinte_unic_ui = opt_parinte_unic + (["Nespecificat"] if valoare_unic == "Nespecificat" else [])
+                e_parinte_unic_tip = st.selectbox(
+                    "Părinte unic susținător plecat în străinătate:",
+                    opt_parinte_unic_ui,
+                    index=opt_parinte_unic_ui.index(valoare_unic),
+                    help="Nespecificat păstrează o bifă veche până la identificarea părintelui, fără a inventa Mama/Tata.",
+                )
+                opt_stare = ["Căsătoriți", "Divorțați", "Văduvie"]
+                stare_curenta = st_curr.get("stare_civila_parinti", "Căsătoriți")
+                e_stare_civila = st.selectbox(
+                    "Starea civilă a părinților:",
+                    opt_stare, index=opt_stare.index(stare_curenta) if stare_curenta in opt_stare else 0,
+                )
+                opt_locuire = ["Nespecificat", "Mama", "Tata", "Bunici", "Rude până la gradul IV", "Plasament", "Pe cont propriu"]
+                locuire_curenta = st_curr.get("locuieste_cu", "Nespecificat")
+                e_locuieste_cu = st.selectbox(
+                    "În momentul de față copilul locuiește cu:",
+                    opt_locuire, index=opt_locuire.index(locuire_curenta) if locuire_curenta in opt_locuire else 0,
+                )
 
                 st.markdown("#### 4. 🩺 Situații Speciale, Burse & CES (Bife)")
                 b1, b2, b3 = st.columns(3)
@@ -3638,7 +3667,10 @@ with tab7:
                         "ingrijitor_nume": e_ingrijitor_nume.strip(),
                         "ingrijitor_telefon": e_ingrijitor_telefon.strip(),
                         "revenit_strainatate_peste_un_an": e_revenit_strainatate,
-                        "parinte_unic_sustinator_plecat": e_parinte_unic_plecat,
+                        "parinte_unic_sustinator_plecat": e_parinte_unic_tip != "Nu",
+                        "parinte_unic_sustinator_plecat_tip": e_parinte_unic_tip,
+                        "stare_civila_parinti": e_stare_civila,
+                        "locuieste_cu": e_locuieste_cu,
                         "ces": e_ces,
                         "orfan": e_orfan,
                         "plasament": e_plas,
@@ -3714,6 +3746,9 @@ with tab7:
                         "ingrijitor_telefon": "",
                         "revenit_strainatate_peste_un_an": False,
                         "parinte_unic_sustinator_plecat": False,
+                        "parinte_unic_sustinator_plecat_tip": "Nu",
+                        "stare_civila_parinti": "Căsătoriți",
+                        "locuieste_cu": "Nespecificat",
                         "nationalitate": add_nat.strip(),
                         "etnie": add_etn.strip(),
                         "ces": False,
