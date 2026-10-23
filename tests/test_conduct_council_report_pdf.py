@@ -44,7 +44,7 @@ class ConductMinutesPdfTests(unittest.TestCase):
         )
         self.assertTrue(pdf.startswith(b"%PDF-"))
         reader = PdfReader(io.BytesIO(pdf))
-        self.assertGreaterEqual(len(reader.pages), 2)
+        self.assertEqual(len(reader.pages), 2, 'Modelul trebuie să încapă pe exact două pagini A4')
         text = "\n".join(page.extract_text() or "" for page in reader.pages)
         self.assertIn("Elev Exemplu 01", text)
         self.assertIn("Elev Exemplu 32", text)
