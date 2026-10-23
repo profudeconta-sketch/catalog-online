@@ -2020,6 +2020,12 @@ with st.sidebar:
     st.divider()
     if st.button("🚪 Deconectare (Logout)", use_container_width=True):
         st.session_state["authenticated"] = False
+        for _pv_session_key in list(st.session_state):
+            if str(_pv_session_key).startswith((
+                "pv_conduct_file_", "pv_conduct_hash_", "pv_reason_",
+                "pv_registration_", "pv_doc_", "pv_teacher_list_",
+            )):
+                st.session_state.pop(_pv_session_key, None)
         st.session_state.pop("nelutu_admin_verified", None)
         st.session_state.pop("parent_history_verified", None)
         st.session_state.pop("parent_history_rows", None)
@@ -4599,6 +4605,21 @@ with tab9:
                                 if _pv_receipt_id and _pv_confirmation is not None:
                                     _pv_item["confirmation_id"] = _pv_receipt_id
                             _pv_details[_pv_student_key] = _pv_item
+            _pv_fingerprint_inputs = {
+                "interval": interval.number,
+                "students": [[str(e[1]), str(e[3])] for e in ELEVI],
+                "grades": [
+                    [str(record.get("student_key")), record.get("interval_number"), record.get("grade"),
+                     str(record.get("awarded_on"))]
+                    for record in registry.get("grades", [])
+                    if record.get("interval_number") == interval.number
+                ],
+                "teachers": _pv_teacher_names,
+                "details": _pv_details,
+            }
+            _pv_fingerprint = hashlib.sha256(
+                json.dumps(_pv_fingerprint_inputs, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            ).hexdigest()
             _pv_filename = (
                 f"PV_note_purtare_IX_TH_interval_{interval.number}_"
                 f"{interval.end_date.strftime('%Y-%m-%d')}.pdf"
@@ -4619,15 +4640,18 @@ with tab9:
                         teacher_names=_pv_teacher_names,
                     )
                     st.session_state[f"pv_conduct_file_{interval.number}"] = _pv_bytes
+                    st.session_state[f"pv_conduct_hash_{interval.number}"] = _pv_fingerprint
                     st.success(
                         f"PDF pentru intervalul {interval.number} a fost generat. "
                         "Verifică rubricile incomplete înainte de semnare."
                     )
                 except (ConductReportError, ValueError) as ex:
                     st.session_state.pop(f"pv_conduct_file_{interval.number}", None)
+                    st.session_state.pop(f"pv_conduct_hash_{interval.number}", None)
                     st.error(f"Raportul nu poate fi generat: {ex}")
             _pv_ready = st.session_state.get(f"pv_conduct_file_{interval.number}")
-            if _pv_ready:
+            _pv_same_input = st.session_state.get(f"pv_conduct_hash_{interval.number}") == _pv_fingerprint
+            if _pv_ready and _pv_same_input:
                 st.download_button(
                     f"⬇️ Descarcă Raport PDF — intervalul {interval.number}",
                     data=_pv_ready,
@@ -4636,6 +4660,8 @@ with tab9:
                     key=f"download_pv_conduct_{interval.number}",
                     use_container_width=True,
                 )
+            elif _pv_ready and not _pv_same_input:
+                st.info("Datele raportului s-au schimbat. Apasă din nou Generare Raport pentru o versiune actualizată.")
             st.divider()
             current = existing.get(interval.number)
             label = (
@@ -4692,6 +4718,8 @@ with tab9:
                                 "Sincronizarea privată nu a fost confirmată; "
                                 "registrul local a fost readus la versiunea anterioară."
                             )
+                        st.session_state.pop(f"pv_conduct_file_{interval.number}", None)
+                        st.session_state.pop(f"pv_conduct_hash_{interval.number}", None)
                         st.success("Nota la purtare a fost salvată și sincronizată.")
                         print(f"[catalog-performance] conduct_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
                         st.rerun(scope="fragment")
