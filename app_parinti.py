@@ -13,6 +13,7 @@ from document_storage import DOCUMENT_CATEGORIES, SCHOLARSHIP_TYPES, DocumentSto
 from parent_excuse_pdf import generate_parent_excuse_pdf
 from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_parent_source_read, reconcile_parent_inbox
 from whatsapp_delivery import teacher_phone, whatsapp_link
+from conduct_view import ConductViewError, CONDUCT_ANNUAL_NOTICE, conduct_interval_rows, fetch_private_conduct_registry
 from nelutu_assistant import QUICK_TOPICS as _NELUTU_BASE_TOPICS
 from nelutu_parent_guide import TUTORIAL_TOPIC as NELUTU_TUTORIAL_TOPIC, TUTORIAL_TEXT as NELUTU_TUTORIAL_TEXT, answer_parent as nelutu_answer
 from nelutu_dialogue_adapter import answer_parent_dialogue as _nelutu_v2_answer
@@ -1416,12 +1417,10 @@ else:
                 all_abs.append((e_item[3], tot_abs_val, t_nem))
                 
                 if str(e_item[3]).strip().lower() == str(student_found[3]).strip().lower():
-                    purtare_val = max(1, 10 - int(t_nem / 20))
                     student_specific_data = {
                         'mcg': mcg_val,
                         'mth': mth_val,
                         'mg': mg_val,
-                        'purtare': purtare_val,
                         'tot_abs': tot_abs_val,
                         'abs_nem': t_nem,
                         'abs_mot': t_mot
@@ -1443,10 +1442,31 @@ else:
             col_kpi1.metric("Media Cultură Gen.", safe_float_str(student_specific_data['mcg']))
             col_kpi2.metric("Media Module TH.", safe_float_str(student_specific_data['mth']))
             col_kpi3.metric("Media Generală", safe_float_str(student_specific_data['mg']), help=rank_mg_str)
-            col_kpi4.metric("Nota la Purtare", str(student_specific_data['purtare']))
+            col_kpi4.metric(
+                "Media anuală la purtare", "Neîncheiată",
+                help="Se stabilește la finalul anului școlar din cele 5 note pe intervale, apoi se aplică regulile privind absențele nemotivate.",
+            )
             col_kpi5.metric("Total Absențe", f"{student_specific_data['tot_abs']} ({student_specific_data['abs_nem']} nem. / {student_specific_data['abs_mot']} mot.)", help=rank_abs_str)
 
             st.info(f"🏆 **Poziție Școlară Elev în Clasă**: **{rank_mg_str}** în clasamentul mediilor generale | **{rank_abs_str}** în clasamentul numărului de absențe ({student_specific_data['tot_abs']} absențe din care {student_specific_data['abs_nem']} nemotivate).")
+
+            st.markdown("#### 🧭 Note la purtare — cele 5 intervale de cursuri")
+            try:
+                _conduct_token = os.environ.get("GITHUB_TOKEN") or ""
+                try:
+                    if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+                        _conduct_token = _conduct_token or str(st.secrets["GITHUB_TOKEN"])
+                except Exception:
+                    pass
+                _conduct_registry = fetch_private_conduct_registry(_conduct_token)
+                _student_conduct_rows = conduct_interval_rows(_conduct_registry, student_found[3])
+                st.dataframe(_student_conduct_rows, use_container_width=True, hide_index=True)
+            except ConductViewError:
+                st.warning(
+                    "Notele la purtare nu pot fi confirmate momentan din sursa privată. "
+                    "Pentru protecția datelor nu afișăm note locale posibil învechite."
+                )
+            st.info(CONDUCT_ANNUAL_NOTICE)
 
             st.divider()
 
