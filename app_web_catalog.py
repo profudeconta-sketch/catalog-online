@@ -25,6 +25,7 @@ import time
 import copy
 from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, normalize_student_key, parent_excuse_usage, read_registered_document, read_registered_document_by_student_key, store_new_document
 from conduct_storage import ConductStorageError, conduct_grades_for_student, load_conduct_registry, save_conduct_grade
+from conduct_view import ConductViewError, CONDUCT_ANNUAL_NOTICE, conduct_interval_rows, fetch_private_conduct_registry
 from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, IX_TH_2026_2027_CLASS_CDEOS_HOURS, build_annual_closure_snapshot, build_student_subject_inputs, preview_annual_closure
 from annual_closure_storage import AnnualClosureStorageError, load_private_annual_closure_snapshots, persist_private_annual_closure_batch_once
 from official_catalog_pdf import (
@@ -2375,8 +2376,19 @@ with tab_photo:
             st.error(f"Importul a fost oprit fără scriere: {type(ex).__name__}: {ex}")
 
 
+def _read_conduct_for_student(student_key):
+    """Doar afișare: ultimele note confirmate de sursa privată."""
+    token = os.environ.get("GITHUB_TOKEN") or ""
+    try:
+        if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+            token = token or str(st.secrets["GITHUB_TOKEN"])
+    except Exception:
+        pass
+    return conduct_interval_rows(fetch_private_conduct_registry(token), student_key)
+
+
 # --- GENERATOARE PDF ---
-def generate_pdf_student(student_idx, file_path):
+def generate_pdf_student(student_idx, file_path, conduct_rows=None):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     story = []
@@ -2469,6 +2481,35 @@ def generate_pdf_student(student_idx, file_path):
             story.append(Spacer(1, 8))
             
         wb.close()
+
+    story.append(Paragraph(clean_pdf_text("PURTARE PE CELE 5 INTERVALE DE CURSURI"), heading_style))
+    if conduct_rows is None:
+        story.append(Paragraph(clean_pdf_text(
+            "Notele la purtare nu pot fi confirmate momentan din registrul privat."
+        ), cell_style))
+    else:
+        rows_pdf = [[
+            Paragraph(clean_pdf_text("<b>Interval</b>"), cell_bold),
+            Paragraph(clean_pdf_text("<b>Perioada</b>"), cell_bold),
+            Paragraph(clean_pdf_text("<b>Notă</b>"), cell_bold),
+            Paragraph(clean_pdf_text("<b>Data acordării</b>"), cell_bold),
+        ]]
+        for record in conduct_rows:
+            rows_pdf.append([
+                Paragraph(clean_pdf_text(record["Interval de cursuri"]), cell_style),
+                Paragraph(clean_pdf_text(record["Perioada"]), cell_style),
+                Paragraph(clean_pdf_text(record["Nota la purtare"]), cell_bold),
+                Paragraph(clean_pdf_text(record["Data acordării"]), cell_style),
+            ])
+        table_conduct = Table(rows_pdf, colWidths=[110, 185, 65, 140], repeatRows=1)
+        table_conduct.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#2B6CB0")),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
+            ('PADDING', (0, 0), (-1, -1), 5),
+        ]))
+        story.append(table_conduct)
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(clean_pdf_text(CONDUCT_ANNUAL_NOTICE), cell_style))
 
     story.append(Spacer(1, 15))
     story.append(Paragraph(clean_pdf_text("<b>Profesor Diriginte:</b> ___________________________   |   <b>Semnătură:</b> ___________"), cell_style))
@@ -3069,11 +3110,16 @@ with tab4:
     col_v1, col_v2, col_v3 = st.columns([3, 1, 1])
     with col_v1:
         elev_idx_v = st.selectbox("Alege Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_v")
+    _student_conduct_rows = None
+    try:
+        _student_conduct_rows = _read_conduct_for_student(ELEVI[elev_idx_v][3])
+    except ConductViewError:
+        st.warning("Notele la purtare nu pot fi confirmate momentan din registrul privat. Nu se afișează valori locale posibil învechite.")
     with col_v2:
         st.write("")
         st.write("")
         try:
-            pdf_bytes = generate_pdf_student(elev_idx_v, selected_file)
+            pdf_bytes = generate_pdf_student(elev_idx_v, selected_file, conduct_rows=_student_conduct_rows)
             st.download_button("🖨️ Descarcă Fișă PDF", data=pdf_bytes, file_name=f"Fisa_Elev_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
         except Exception as ex:
             st.error(f"Eroare PDF: {ex}")
@@ -3139,6 +3185,13 @@ with tab4:
                     })
                 st.dataframe(rows_data, use_container_width=True, hide_index=True)
                 _academic_payload.extend(rows_data)
+            st.markdown("#### 🧭 Purtare pe intervalele de cursuri")
+            if _student_conduct_rows is not None:
+                st.dataframe(_student_conduct_rows, use_container_width=True, hide_index=True)
+                _academic_payload.append({"purtare_intervale": _student_conduct_rows})
+            else:
+                st.info("Notarea pe intervale nu este disponibilă pentru afișare în acest moment.")
+            st.info(CONDUCT_ANNUAL_NOTICE)
             _academic_fingerprint=hashlib.sha256(
                 json.dumps(_academic_payload,ensure_ascii=False,sort_keys=True).encode("utf-8")
             ).hexdigest()
