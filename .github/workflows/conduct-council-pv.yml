@@ -20,3 +20,21 @@ jobs:
         run: python -m py_compile app_web_catalog.py conduct_council_report_pdf.py
       - name: Run isolated synthetic-data PDF tests
         run: python -m unittest discover -s tests -p test_conduct_council_report_pdf.py -v
+      - name: Generate synthetic PDF for visual QA
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from runpy import run_path
+          from conduct_council_report_pdf import generate_conduct_council_pdf
+          students, grades, teachers, details = run_path("tests/test_conduct_council_report_pdf.py")["fixtures"]()
+          data = generate_conduct_council_pdf(
+              interval_number=1, students=students, conduct_records=grades,
+              teacher_names=teachers, details_by_student=details,
+          )
+          Path("PV_purtare_demo_sintetic.pdf").write_bytes(data)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pv-purtare-synthetic-preview
+          path: PV_purtare_demo_sintetic.pdf
+          retention-days: 1
