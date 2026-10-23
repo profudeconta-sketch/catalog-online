@@ -4405,7 +4405,7 @@ with tab9:
                 "Registrul notelor la purtare nu a putut fi sincronizat din sursa privată. "
                 "Acordarea notelor este blocată pentru protejarea datelor."
             )
-            return
+            st.stop()
         st.caption(
             "Nota este acordată de diriginte după consultarea consiliului clasei. "
             "Absențele nu generează automat nota pe interval; diminuarea pentru "
