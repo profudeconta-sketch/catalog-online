@@ -87,7 +87,8 @@ class ConductVisibilityTests(unittest.TestCase):
 
     def test_remote_read_only_and_no_stale_fallback(self):
         record_bytes = json.dumps(sample_registry()).encode("utf-8")
-        payload = json.dumps({"content": base64.b64encode(record_bytes).decode("ascii")}).encode()
+        encoded = base64.b64encode(record_bytes).decode("ascii")
+        payload = json.dumps({"content": encoded[:20] + "\n" + encoded[20:]}).encode()
         requests = []
         def fake_open(req, timeout):
             requests.append((req, timeout))
