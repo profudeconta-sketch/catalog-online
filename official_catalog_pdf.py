@@ -890,6 +890,36 @@ class OfficialCatalogError(RuntimeError):
     """Eroare fail-closed a generatorului catalogului oficial."""
 
 
+def unique_class_council_professors() -> tuple[str, ...]:
+    """Aceeași sursă cu pagina PROFESORI a catalogului printabil, fără repetiții.
+
+    Nu mută și nu scrie date; păstrează ortografia și ordinea primelor apariții.
+    O disciplină lipsă sau un profesor fără nume blochează raportarea.
+    """
+    if (
+        len(PROFESSORS) != len(OFFICIAL_SUBJECT_NAMES)
+        or set(PROFESSORS) != set(OFFICIAL_SUBJECT_NAMES.values())
+    ):
+        raise OfficialCatalogError(
+            "Lista profesorilor nu corespunde disciplinelor din catalogul oficial."
+        )
+    unique = []
+    seen = set()
+    for professor in PROFESSORS.values():
+        if not isinstance(professor, str) or not professor.strip():
+            raise OfficialCatalogError(
+                "Catalogul oficial conține o disciplină fără profesor."
+            )
+        display = " ".join(professor.split())
+        identity = display.casefold()
+        if identity not in seen:
+            unique.append(display)
+            seen.add(identity)
+    if not unique:
+        raise OfficialCatalogError("Catalogul oficial nu conține profesori.")
+    return tuple(unique)
+
+
 def _norm(value) -> str:
     return " ".join(str(value or "").split())
 
