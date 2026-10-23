@@ -23,9 +23,10 @@ import io
 import shutil
 import time
 import copy
-from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, normalize_student_key, parent_excuse_usage, read_registered_document, read_registered_document_by_student_key, store_new_document
+from document_storage import DocumentStorageError, build_document_record, get_parent_excuse_for_document, list_student_documents, load_registry, normalize_student_key, parent_excuse_usage, read_registered_document, read_registered_document_by_student_key, store_new_document
 from conduct_storage import ConductStorageError, conduct_grades_for_student, load_conduct_registry, save_conduct_grade
 from conduct_view import ConductViewError, CONDUCT_ANNUAL_NOTICE, conduct_interval_rows, fetch_private_conduct_registry
+from conduct_council_report_pdf import ConductReportError, generate_conduct_council_pdf
 from annual_closure_engine import AnnualClosureError, CLJ_2026_2027_COURSE_INTERVALS, IX_TH_2026_2027_CLASS_CDEOS_HOURS, build_annual_closure_snapshot, build_student_subject_inputs, preview_annual_closure
 from annual_closure_storage import AnnualClosureStorageError, load_private_annual_closure_snapshots, persist_private_annual_closure_batch_once
 from official_catalog_pdf import (
@@ -2019,6 +2020,12 @@ with st.sidebar:
     st.divider()
     if st.button("🚪 Deconectare (Logout)", use_container_width=True):
         st.session_state["authenticated"] = False
+        for _pv_session_key in list(st.session_state):
+            if str(_pv_session_key).startswith((
+                "pv_conduct_file_", "pv_conduct_hash_", "pv_reason_",
+                "pv_registration_", "pv_doc_", "pv_teacher_list_",
+            )):
+                st.session_state.pop(_pv_session_key, None)
         st.session_state.pop("nelutu_admin_verified", None)
         st.session_state.pop("parent_history_verified", None)
         st.session_state.pop("parent_history_rows", None)
@@ -4479,7 +4486,183 @@ with tab9:
             if str(item.get("student_key", "")).strip() == student_key
         }
 
+        st.divider()
+        st.markdown("#### 📄 Procese-verbale pe intervale — documente pentru conducere / ISJ")
+        st.caption(
+            "Modelul atașat: tabel nominal, propuneri sub 7 și semnături. "
+            "PDF-ul este doar un proiect până la verificarea datelor și semnarea lui. "
+            "Data de referință se completează automat cu ultima zi a intervalului."
+        )
+        _pv_teachers_default = os.environ.get("IX_TH_CLASS_COUNCIL_TEACHERS", "")
+        try:
+            if hasattr(st, "secrets") and "IX_TH_CLASS_COUNCIL_TEACHERS" in st.secrets:
+                _pv_teachers_default = _pv_teachers_default or str(st.secrets["IX_TH_CLASS_COUNCIL_TEACHERS"])
+        except Exception:
+            pass
+        _pv_teacher_text = st.text_area(
+            "Colectiv profesoral (câte un nume pe rând; poate fi configurat permanent în Secrets)",
+            value=_pv_teachers_default,
+            key="pv_teacher_list_2026_2027",
+            height=115,
+        )
+        _pv_teacher_names = [line.strip() for line in _pv_teacher_text.splitlines() if line.strip()]
+        st.caption(
+            "În registrul actual nu există o listă structurată a profesorilor. "
+            "Câmpurile necompletate rămân libere pentru verificare."
+        )
+
+        _pv_document_registry = None
+        _pv_document_registry_error = None
+        if any(st.session_state.get(f"pv_show_sources_{i.number}", False) for i in CLJ_2026_2027_COURSE_INTERVALS):
+            try:
+                _pv_document_registry, _ = load_registry()
+            except DocumentStorageError:
+                _pv_document_registry_error = (
+                    "Registrul documentelor private nu a putut fi citit. "
+                    "Asocierea documentelor este blocată."
+                )
+        _pv_confirmations = {}
+        if _pv_document_registry is not None:
+            for _pv_doc in _pv_document_registry.get("documents", []):
+                if _pv_doc.get("category") == "CONFIRMARE_PRIMIRE":
+                    _pv_key = (_pv_doc.get("source_document_id"), _pv_doc.get("student_key"))
+                    if _pv_key in _pv_confirmations:
+                        _pv_document_registry_error = "Au fost identificate confirmări duplicate."
+                    else:
+                        _pv_confirmations[_pv_key] = _pv_doc
+
         for interval in CLJ_2026_2027_COURSE_INTERVALS:
+            st.markdown(
+                f"**Intervalul {interval.number}** — "
+                f"{interval.start_date.strftime('%d.%m.%Y')} – {interval.end_date.strftime('%d.%m.%Y')}"
+            )
+            _pv_details = {}
+            _pv_select_sources = st.checkbox(
+                f"Completează motivarea scăderii și asociază înștiințările — intervalul {interval.number}",
+                key=f"pv_show_sources_{interval.number}",
+            )
+            if _pv_select_sources:
+                if _pv_document_registry_error:
+                    st.error(_pv_document_registry_error)
+                elif _pv_document_registry is None:
+                    st.info("Deschide din nou secțiunea pentru încărcarea documentelor private.")
+                else:
+                    for _pv_student in ELEVI:
+                        _pv_student_key = str(_pv_student[3]).strip()
+                        _pv_grade = next(
+                            (
+                                record.get("grade")
+                                for record in registry.get("grades", [])
+                                if str(record.get("student_key", "")).strip() == _pv_student_key
+                                and record.get("interval_number") == interval.number
+                            ),
+                            None,
+                        )
+                        if type(_pv_grade) is not int or _pv_grade >= 10:
+                            continue
+                        with st.expander(f"{_pv_student[1]} — nota {_pv_grade}", expanded=False):
+                            _pv_reason = st.text_input(
+                                "Motivul scăderii (exact cum apare în PV-ul consiliului clasei)",
+                                key=f"pv_reason_{interval.number}_{_pv_student[0]}",
+                            )
+                            _pv_registration = st.text_input(
+                                "Numărul oficial al înștiințării (dacă există în document)",
+                                key=f"pv_registration_{interval.number}_{_pv_student[0]}",
+                            )
+                            _pv_hash = normalize_student_key(_pv_student[3])
+                            _pv_sent = [
+                                doc for doc in _pv_document_registry.get("documents", [])
+                                if doc.get("student_key") == _pv_hash
+                                and doc.get("school_year") == "2026-2027"
+                                and doc.get("direction") == "SCOALA_PARINTE"
+                                and doc.get("document_type") in ("INSTIINTARE", "DOCUMENT_SCOALA")
+                            ]
+                            _pv_by_id = {doc["id"]: doc for doc in _pv_sent}
+                            _pv_choice = st.selectbox(
+                                "Document transmis asociat acestei note",
+                                [""] + [doc["id"] for doc in _pv_sent],
+                                format_func=lambda did: (
+                                    "— neasociat —" if not did else
+                                    f"{_pv_by_id[did].get('original_filename', '')} | "
+                                    f"{str(_pv_by_id[did].get('created_at_utc') or '')[:10]} | ID {did}"
+                                ),
+                                key=f"pv_doc_{interval.number}_{_pv_student[0]}",
+                            )
+                            _pv_item = {"reason": _pv_reason, "registration_number": _pv_registration}
+                            if _pv_choice:
+                                _pv_source = _pv_by_id[_pv_choice]
+                                _pv_item["document_id"] = _pv_choice
+                                _pv_item["sent_at_utc"] = _pv_source.get("created_at_utc")
+                                _pv_item["received_at_utc"] = _pv_source.get("first_accessed_at_utc")
+                                _pv_receipt_id = _pv_source.get("confirmation_document_id")
+                                _pv_confirmation = _pv_confirmations.get((_pv_choice, _pv_hash))
+                                if _pv_receipt_id and (
+                                    _pv_confirmation is None or _pv_confirmation.get("id") != _pv_receipt_id
+                                ):
+                                    _pv_document_registry_error = (
+                                        "Confirmarea de primire nu corespunde înștiințării."
+                                    )
+                                if _pv_receipt_id and _pv_confirmation is not None:
+                                    _pv_item["confirmation_id"] = _pv_receipt_id
+                            _pv_details[_pv_student_key] = _pv_item
+            _pv_fingerprint_inputs = {
+                "interval": interval.number,
+                "students": [[str(e[1]), str(e[3])] for e in ELEVI],
+                "grades": [
+                    [str(record.get("student_key")), record.get("interval_number"), record.get("grade"),
+                     str(record.get("awarded_on"))]
+                    for record in registry.get("grades", [])
+                    if record.get("interval_number") == interval.number
+                ],
+                "teachers": _pv_teacher_names,
+                "details": _pv_details,
+            }
+            _pv_fingerprint = hashlib.sha256(
+                json.dumps(_pv_fingerprint_inputs, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            ).hexdigest()
+            _pv_filename = (
+                f"PV_note_purtare_IX_TH_interval_{interval.number}_"
+                f"{interval.end_date.strftime('%Y-%m-%d')}.pdf"
+            )
+            if st.button(
+                "📄 Generare Raport",
+                key=f"generate_pv_conduct_{interval.number}",
+                use_container_width=True,
+            ):
+                try:
+                    if _pv_document_registry_error:
+                        raise ConductReportError(_pv_document_registry_error)
+                    _pv_bytes = generate_conduct_council_pdf(
+                        interval_number=interval.number,
+                        students=ELEVI,
+                        conduct_records=registry.get("grades", []),
+                        details_by_student=_pv_details,
+                        teacher_names=_pv_teacher_names,
+                    )
+                    st.session_state[f"pv_conduct_file_{interval.number}"] = _pv_bytes
+                    st.session_state[f"pv_conduct_hash_{interval.number}"] = _pv_fingerprint
+                    st.success(
+                        f"PDF pentru intervalul {interval.number} a fost generat. "
+                        "Verifică rubricile incomplete înainte de semnare."
+                    )
+                except (ConductReportError, ValueError) as ex:
+                    st.session_state.pop(f"pv_conduct_file_{interval.number}", None)
+                    st.session_state.pop(f"pv_conduct_hash_{interval.number}", None)
+                    st.error(f"Raportul nu poate fi generat: {ex}")
+            _pv_ready = st.session_state.get(f"pv_conduct_file_{interval.number}")
+            _pv_same_input = st.session_state.get(f"pv_conduct_hash_{interval.number}") == _pv_fingerprint
+            if _pv_ready and _pv_same_input:
+                st.download_button(
+                    f"⬇️ Descarcă Raport PDF — intervalul {interval.number}",
+                    data=_pv_ready,
+                    file_name=_pv_filename,
+                    mime="application/pdf",
+                    key=f"download_pv_conduct_{interval.number}",
+                    use_container_width=True,
+                )
+            elif _pv_ready and not _pv_same_input:
+                st.info("Datele raportului s-au schimbat. Apasă din nou Generare Raport pentru o versiune actualizată.")
+            st.divider()
             current = existing.get(interval.number)
             label = (
                 f"Intervalul {interval.number}: "
@@ -4535,6 +4718,8 @@ with tab9:
                                 "Sincronizarea privată nu a fost confirmată; "
                                 "registrul local a fost readus la versiunea anterioară."
                             )
+                        st.session_state.pop(f"pv_conduct_file_{interval.number}", None)
+                        st.session_state.pop(f"pv_conduct_hash_{interval.number}", None)
                         st.success("Nota la purtare a fost salvată și sincronizată.")
                         print(f"[catalog-performance] conduct_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
                         st.rerun(scope="fragment")
