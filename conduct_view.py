@@ -118,7 +118,9 @@ def fetch_private_conduct_registry(token):
         encoded = payload.get("content")
         if not isinstance(encoded, str) or not encoded:
             raise ConductViewError("Registrul privat este gol.")
-        data = json.loads(base64.b64decode(encoded, validate=True).decode("utf-8"))
+        # GitHub Contents API inserează rânduri noi în șirul base64.
+        clean_encoded = encoded.replace("\\n", "").replace("\\r", "")
+        data = json.loads(base64.b64decode(clean_encoded, validate=True).decode("utf-8"))
         return validate_conduct_registry_for_view(data)
     except ConductViewError:
         raise
