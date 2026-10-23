@@ -4,6 +4,7 @@ on:
     paths:
       - "app_web_catalog.py"
       - "conduct_council_report_pdf.py"
+      - "conduct_council_header_assets.py"
       - "tests/test_conduct_council_report_pdf.py"
       - ".github/workflows/conduct-council-pv.yml"
 jobs:
