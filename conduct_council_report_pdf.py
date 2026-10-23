@@ -190,6 +190,12 @@ def generate_conduct_council_pdf(
             'validarea deciziilor și semnăturile membrilor consiliului.</b>',
             styles['body'],
         ))
+    else:
+        story.append(Paragraph(
+            '<b>Document generat automat pentru verificare și semnare. '
+            'Semnăturile și validările instituționale nu sunt generate automat.</b>',
+            styles['body'],
+        ))
 
     table_rows = [[p('Nr. crt.', 'bold'), p('Nume prenume elev', 'bold'),
                    p('Nota la purtare', 'bold'), p('Observații', 'bold')]]
