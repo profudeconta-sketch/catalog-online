@@ -2,10 +2,17 @@
 import datetime
 import io
 import unittest
+from unittest.mock import patch
 
 from pypdf import PdfReader
 from annual_closure_engine import CLJ_2026_2027_COURSE_INTERVALS
 from conduct_council_report_pdf import ConductReportError, generate_conduct_council_pdf
+from official_catalog_pdf import (
+    OFFICIAL_SUBJECT_NAMES,
+    PROFESSORS,
+    OfficialCatalogError,
+    unique_class_council_professors,
+)
 
 
 def fixtures():
@@ -66,6 +73,44 @@ class ConductMinutesPdfTests(unittest.TestCase):
         self.assertIn("PROIECT", text)
         self.assertIn("Notă neacordată", text)
         self.assertIn("22.12.2026", text)
+
+    def test_professors_from_printable_catalog_are_unique_and_complete(self):
+        unique = unique_class_council_professors()
+        self.assertEqual(len(PROFESSORS), 20)
+        self.assertEqual(len(OFFICIAL_SUBJECT_NAMES), 20)
+        self.assertEqual(len(unique), 18)
+        self.assertEqual(len(set(x.casefold() for x in unique)), len(unique))
+        self.assertEqual(unique[0], list(PROFESSORS.values())[0])
+        self.assertEqual(unique.count("LECHINȚAN COSMIN"), 1)
+        # Source is not mutated and the duplicate name remains legitimately
+        # attached to all its original modules in the printed catalog.
+        self.assertEqual(
+            sum(name == "LECHINȚAN COSMIN" for name in PROFESSORS.values()),
+            3,
+        )
+
+    def test_missing_subject_or_professor_blocks_autofill(self):
+        first = next(iter(PROFESSORS))
+        with patch.dict(PROFESSORS, {first: ""}):
+            with self.assertRaises(OfficialCatalogError):
+                unique_class_council_professors()
+        with patch.dict(PROFESSORS, {}, clear=True):
+            with self.assertRaises(OfficialCatalogError):
+                unique_class_council_professors()
+
+    def test_pdf_with_all_18_real_teacher_names_stays_two_pages(self):
+        students, grades, _, details = fixtures()
+        teachers = unique_class_council_professors()
+        pdf = generate_conduct_council_pdf(
+            interval_number=1, students=students, conduct_records=grades,
+            teacher_names=teachers, details_by_student=details,
+        )
+        reader = PdfReader(io.BytesIO(pdf))
+        self.assertEqual(len(reader.pages), 2, "Colectivul trebuie să rămână pe pagina a doua.")
+        second_page = reader.pages[1].extract_text() or ""
+        for teacher in teachers:
+            self.assertIn(teacher, second_page)
+        self.assertEqual(second_page.count("LECHINȚAN COSMIN"), 1)
 
     def test_duplicate_grade_fails_closed(self):
         students, grades, teachers, details = fixtures()
