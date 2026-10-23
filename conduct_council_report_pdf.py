@@ -6,6 +6,7 @@ până la asumare, semnare și validarea instituțională corespunzătoare.
 """
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import io
 import os
@@ -14,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
@@ -21,6 +23,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from annual_closure_engine import CLJ_2026_2027_COURSE_INTERVALS
+from conduct_council_header_assets import CREST_JPEG_B64, MINISTRY_JPEG_B64
 
 
 class ConductReportError(ValueError):
@@ -112,13 +115,18 @@ def _validate_inputs(interval_number, students, conduct_records, details_by_stud
 def _draw_header(canvas, doc, regular, bold):
     canvas.saveState()
     pw, ph = A4
-    canvas.setFont(bold, 8.5)
-    canvas.drawString(14 * mm, ph - 15 * mm, SCHOOL_NAME)
-    canvas.setFont(regular, 7)
+    # Siglele sunt extrase din modelul Word atașat, nu redesenate sau inventate.
+    emblem = ImageReader(io.BytesIO(base64.b64decode(CREST_JPEG_B64, validate=True)))
+    ministry = ImageReader(io.BytesIO(base64.b64decode(MINISTRY_JPEG_B64, validate=True)))
+    canvas.drawImage(emblem, 14 * mm, ph - 31 * mm,
+                     width=20 * mm, height=22 * mm, mask='auto')
+    canvas.drawImage(ministry, pw - 76 * mm, ph - 25 * mm,
+                     width=62 * mm, height=16 * mm, mask='auto')
+    canvas.setFont(bold, 8)
+    canvas.drawString(37 * mm, ph - 15 * mm, SCHOOL_NAME)
+    canvas.setFont(regular, 6.7)
     for index, line in enumerate(SCHOOL_CONTACT):
-        canvas.drawString(14 * mm, ph - (20 + 4 * index) * mm, line)
-    canvas.setFont(bold, 11)
-    canvas.drawRightString(pw - 14 * mm, ph - 17 * mm, 'MINISTERUL EDUCAȚIEI')
+        canvas.drawString(37 * mm, ph - (20 + 4 * index) * mm, line)
     canvas.setStrokeColor(colors.HexColor('#64748b'))
     canvas.setLineWidth(0.4)
     canvas.line(14 * mm, ph - 34 * mm, pw - 14 * mm, ph - 34 * mm)
