@@ -23,7 +23,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from annual_closure_engine import CLJ_2026_2027_COURSE_INTERVALS
-from conduct_council_header_assets import CREST_JPEG_B64, MINISTRY_JPEG_B64
+from conduct_council_header_assets import CREST_JPEG_B64
 
 
 class ConductReportError(ValueError):
@@ -117,11 +117,12 @@ def _draw_header(canvas, doc, regular, bold):
     pw, ph = A4
     # Siglele sunt extrase din modelul Word atașat, nu redesenate sau inventate.
     emblem = ImageReader(io.BytesIO(base64.b64decode(CREST_JPEG_B64, validate=True)))
-    ministry = ImageReader(io.BytesIO(base64.b64decode(MINISTRY_JPEG_B64, validate=True)))
     canvas.drawImage(emblem, 14 * mm, ph - 31 * mm,
                      width=20 * mm, height=22 * mm, mask='auto')
-    canvas.drawImage(ministry, pw - 76 * mm, ph - 25 * mm,
-                     width=62 * mm, height=16 * mm, mask='auto')
+    # Sigla ministerului extrasă nu este încă verificată; pentru un document
+    # oficial preferăm textul instituțional unui JPEG potențial corupt.
+    canvas.setFont(bold, 10)
+    canvas.drawRightString(pw - 14 * mm, ph - 17 * mm, 'MINISTERUL EDUCAȚIEI')
     canvas.setFont(bold, 8)
     canvas.drawString(37 * mm, ph - 15 * mm, SCHOOL_NAME)
     canvas.setFont(regular, 6.7)
