@@ -2808,60 +2808,74 @@ with tab2:
 
 # --- TAB 3: MOTIVARE ---
 with tab3:
-    st.subheader("Motivare Absență Existentă")
-    col1, col2 = st.columns(2)
-    with col1:
-        elev_idx_m = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_m")
-        cat_m = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_m")
-    with col2:
-        materii_m = [d[0] for d in DISCIPLINE_CG] if cat_m == "Cultură Generală" else [m[0] for m in MODULE_TH]
-        mat_idx_m = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii_m)), format_func=lambda i: materii_m[i], key="mat_m")
-        data_mot = st.text_input("Data de motivat (ex: 21.09):", key="data_mot")
-        
-    if st.button("✅ Motivează Absența", type="primary", use_container_width=True):
-        if not os.path.exists(selected_file):
-            st.error(f"Fișierul {selected_file} nu există!")
-        elif not data_mot.strip():
-            st.warning("Vă rugăm să introduceți data absenței!")
-        else:
-            try:
-                wb = openpyxl.load_workbook(selected_file)
-                sheet_name = "Cultură Generală" if cat_m == "Cultură Generală" else "Module Tehnologice"
-                ws = wb[sheet_name]
-                student_row = resolve_student_row(wb, ELEVI[elev_idx_m])
-                start_col = DISCIPLINE_CG[mat_idx_m][1] if cat_m == "Cultură Generală" else MODULE_TH[mat_idx_m][1]
-                
-                target_d = data_mot.strip()
-                found = False
-                for k in range(30):
-                    a_col = start_col + 21 + k
-                    cell_a = ws.cell(row=student_row, column=a_col)
-                    val = str(cell_a.value).strip() if cell_a.value else ""
-                    if val == target_d:
+    @st.fragment
+    @_timed_catalog_call("motivation_fragment_render")
+    def _render_manual_motivation():
+        st.subheader("Motivare Absență Existentă")
+        col1, col2 = st.columns(2)
+        with col1:
+            elev_idx_m = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_m")
+            cat_m = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_m")
+        with col2:
+            materii_m = [d[0] for d in DISCIPLINE_CG] if cat_m == "Cultură Generală" else [m[0] for m in MODULE_TH]
+            mat_idx_m = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii_m)), format_func=lambda i: materii_m[i], key="mat_m")
+            data_mot = st.text_input("Data de motivat (ex: 21.09):", key="data_mot")
+
+        if st.button("✅ Motivează Absența", type="primary", use_container_width=True):
+            _manual_action_started = time.perf_counter()
+            if not os.path.exists(selected_file):
+                st.error(f"Fișierul {selected_file} nu există!")
+            elif not data_mot.strip():
+                st.warning("Vă rugăm să introduceți data absenței!")
+            else:
+                wb = None
+                backup = None
+                try:
+                    target_d = data_mot.strip()
+                    wb = _measure_catalog_operation("motivation_workbook_open", lambda: openpyxl.load_workbook(selected_file))
+                    sheet_name = "Cultură Generală" if cat_m == "Cultură Generală" else "Module Tehnologice"
+                    ws = wb[sheet_name]
+                    student_row = resolve_student_row(wb, ELEVI[elev_idx_m])
+                    start_col = DISCIPLINE_CG[mat_idx_m][1] if cat_m == "Cultură Generală" else MODULE_TH[mat_idx_m][1]
+
+                    found = False
+                    already_motivated = False
+                    for k in range(30):
+                        a_col = start_col + 21 + k
+                        cell_a = ws.cell(row=student_row, column=a_col)
+                        val = str(cell_a.value).strip() if cell_a.value else ""
+                        if val == target_d:
+                            found = True
+                            break
+                        if val == f"{target_d}m":
+                            found = True
+                            already_motivated = True
+                            break
+
+                    if not found:
+                        st.warning(f"Nu s-a găsit nicio absență nemotivată cu data '{target_d}'.")
+                    elif already_motivated:
+                        st.info(f"Absența din {target_d} este deja motivată!")
+                    else:
+                        backup = selected_file + ".manual.bak"
+                        _measure_catalog_operation("motivation_backup", lambda: shutil.copy2(selected_file, backup))
                         cell_a.value = f"{target_d}m"
                         cell_a.number_format = '@'
-                        found = True
-                        break
-                    elif val == f"{target_d}m":
-                        st.info(f"Absența din {target_d} este deja motivată!")
-                        wb.close()
-                        found = True
-                        break
-                        
-                if found and cell_a.value == f"{target_d}m":
-                    wb.save(selected_file)
-                    if not update_excel_computed_values(selected_file):
-                        st.warning("⚠️ Modificarea a fost salvată, dar recalcularea valorilor derivate nu a fost confirmată.")
-                    if push_to_github(selected_file):
+                        if not update_excel_computed_values(selected_file, workbook=wb):
+                            raise RuntimeError("Recalcularea a eșuat; motivarea a fost anulată.")
+                        if not push_to_github(selected_file):
+                            raise RuntimeError("Sincronizarea privată a eșuat; motivarea locală a fost anulată.")
                         st.success(f"✅ Absență motivată și sincronizată ('{target_d}m') pentru {ELEVI[elev_idx_m][1]} la {materii_m[mat_idx_m]}")
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ Motivarea a fost salvată local, dar sincronizarea cu repository-ul privat nu a fost confirmată.")
-                elif not found:
-                    st.warning(f"Nu s-a găsit nicio absență nemotivată cu data '{target_d}'.")
-                wb.close()
-            except Exception as ex:
-                st.error(f"Eroare: {ex}")
+                        print(f"[catalog-performance] motivation_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
+                        st.rerun(scope="fragment")
+                except Exception as ex:
+                    _restore_manual_backup(selected_file, backup)
+                    st.error(f"Eroare la motivare: {ex}")
+                finally:
+                    if wb is not None:
+                        wb.close()
+
+    _render_manual_motivation()
 
 # --- TAB 4: ȘTERGERE NOTĂ / ABSENȚĂ ---
 with tab_del:
@@ -4382,84 +4396,102 @@ render_copyright_footer()
 
 # --- TAB 9: PURTARE PE INTERVALE ---
 with tab9:
-    st.subheader("Purtare pe intervalele de cursuri")
-    if not sync_conduct_registry_from_private_repo():
-        st.error(
-            "Registrul notelor la purtare nu a putut fi sincronizat din sursa privată. "
-            "Acordarea notelor este blocată pentru protejarea datelor."
-        )
-        st.stop()
-    st.caption(
-        "Nota este acordată de diriginte după consultarea consiliului clasei. "
-        "Absențele nu generează automat nota pe interval; diminuarea pentru "
-        "nefrecventare se aplică mediei anuale la închiderea anului."
-    )
-    elev_idx_p = st.selectbox(
-        "Selectează elevul:",
-        range(len(ELEVI)),
-        format_func=lambda i: elev_options[i],
-        key="elev_purtare_interval",
-    )
-    today_ro = datetime.datetime.now(ZoneInfo("Europe/Bucharest")).date()
-    registry = load_conduct_registry()
-    student_key = str(ELEVI[elev_idx_p][3]).strip()
-    existing = {
-        int(item["interval_number"]): item
-        for item in registry.get("grades", [])
-        if str(item.get("student_key", "")).strip() == student_key
-    }
-
-    for interval in CLJ_2026_2027_COURSE_INTERVALS:
-        current = existing.get(interval.number)
-        label = (
-            f"Intervalul {interval.number}: "
-            f"{interval.start_date.strftime('%d.%m.%Y')}–{interval.end_date.strftime('%d.%m.%Y')}"
-        )
-        if current:
-            st.success(
-                f"{label} — nota {current['grade']}, acordată la {current['awarded_on']}."
+    @st.fragment
+    @_timed_catalog_call("conduct_fragment_render")
+    def _render_conduct_grades():
+        st.subheader("Purtare pe intervalele de cursuri")
+        if not _measure_catalog_operation("conduct_private_sync", sync_conduct_registry_from_private_repo):
+            st.error(
+                "Registrul notelor la purtare nu a putut fi sincronizat din sursa privată. "
+                "Acordarea notelor este blocată pentru protejarea datelor."
             )
-            continue
-        if today_ro < interval.end_date:
-            st.info(f"{label} — nota poate fi acordată după încheierea intervalului.")
-            continue
+            st.stop()
+        st.caption(
+            "Nota este acordată de diriginte după consultarea consiliului clasei. "
+            "Absențele nu generează automat nota pe interval; diminuarea pentru "
+            "nefrecventare se aplică mediei anuale la închiderea anului."
+        )
+        elev_idx_p = st.selectbox(
+            "Selectează elevul:",
+            range(len(ELEVI)),
+            format_func=lambda i: elev_options[i],
+            key="elev_purtare_interval",
+        )
+        today_ro = datetime.datetime.now(ZoneInfo("Europe/Bucharest")).date()
+        registry = load_conduct_registry()
+        student_key = str(ELEVI[elev_idx_p][3]).strip()
+        existing = {
+            int(item["interval_number"]): item
+            for item in registry.get("grades", [])
+            if str(item.get("student_key", "")).strip() == student_key
+        }
 
-        with st.expander(f"{label} — acordă nota"):
-            nota_p = st.number_input(
-                "Nota la purtare",
-                min_value=1,
-                max_value=10,
-                value=10,
-                step=1,
-                key=f"nota_purtare_{interval.number}_{student_key}",
+        for interval in CLJ_2026_2027_COURSE_INTERVALS:
+            current = existing.get(interval.number)
+            label = (
+                f"Intervalul {interval.number}: "
+                f"{interval.start_date.strftime('%d.%m.%Y')}–{interval.end_date.strftime('%d.%m.%Y')}"
             )
-            if st.button(
-                f"💾 Salvează nota pentru intervalul {interval.number}",
-                key=f"save_purtare_{interval.number}_{student_key}",
-                use_container_width=True,
-            ):
-                try:
-                    wb_check = openpyxl.load_workbook(selected_file, read_only=True, data_only=False)
+            if current:
+                st.success(
+                    f"{label} — nota {current['grade']}, acordată la {current['awarded_on']}."
+                )
+                continue
+            if today_ro < interval.end_date:
+                st.info(f"{label} — nota poate fi acordată după încheierea intervalului.")
+                continue
+
+            with st.expander(f"{label} — acordă nota"):
+                nota_p = st.number_input(
+                    "Nota la purtare",
+                    min_value=1,
+                    max_value=10,
+                    value=10,
+                    step=1,
+                    key=f"nota_purtare_{interval.number}_{student_key}",
+                )
+                if st.button(
+                    f"💾 Salvează nota pentru intervalul {interval.number}",
+                    key=f"save_purtare_{interval.number}_{student_key}",
+                    use_container_width=True,
+                ):
+                    _manual_action_started = time.perf_counter()
+                    wb_check = None
                     try:
-                        resolve_student_row(wb_check, ELEVI[elev_idx_p])
-                    finally:
-                        wb_check.close()
-                    save_conduct_grade(
-                        student_key=student_key,
-                        interval_number=interval.number,
-                        grade=int(nota_p),
-                        awarded_on=today_ro.isoformat(),
-                    )
-                    if not push_to_github("registru_purtare_2026_2027.json"):
-                        st.warning(
-                            "Nota a fost salvată local, dar sincronizarea în sursa privată "
-                            "nu a fost confirmată."
+                        # Normal mode avoids costly repeated random reads in a large read_only workbook.
+                        wb_check = _measure_catalog_operation(
+                            "conduct_workbook_open",
+                            lambda: openpyxl.load_workbook(selected_file, read_only=False, data_only=False),
                         )
-                    else:
+                        resolve_student_row(wb_check, ELEVI[elev_idx_p])
+                        wb_check.close()
+                        wb_check = None
+                        _measure_catalog_operation(
+                            "conduct_registry_save",
+                            lambda: save_conduct_grade(
+                                student_key=student_key,
+                                interval_number=interval.number,
+                                grade=int(nota_p),
+                                awarded_on=today_ro.isoformat(),
+                            ),
+                        )
+                        registry_path = "registru_purtare_2026_2027.json"
+                        if not push_to_github(registry_path):
+                            _restore_manual_backup(registry_path, registry_path + ".bak")
+                            raise RuntimeError(
+                                "Sincronizarea privată nu a fost confirmată; "
+                                "registrul local a fost readus la versiunea anterioară."
+                            )
                         st.success("Nota la purtare a fost salvată și sincronizată.")
-                        st.rerun()
-                except (ConductStorageError, Exception) as ex:
-                    st.error(f"Nota la purtare nu a fost salvată: {ex}")
+                        print(f"[catalog-performance] conduct_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
+                        st.rerun(scope="fragment")
+                    except Exception as ex:
+                        st.error(f"Nota la purtare nu a fost salvată: {ex}")
+                    finally:
+                        if wb_check is not None:
+                            wb_check.close()
+
+    _render_conduct_grades()
 
 
 def build_class_annual_closure_previews(file_path):
