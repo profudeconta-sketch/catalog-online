@@ -34,6 +34,7 @@ from official_catalog_pdf import (
     generate_official_catalog_current,
     generate_official_catalog_final,
     official_catalog_state_from_records,
+    unique_class_council_professors,
 )
 from final_status_storage import FinalStatusStorageError, load_private_final_status_registry, persist_private_final_status_batch_once
 from leave_pass_storage import (
@@ -4493,23 +4494,25 @@ with tab9:
             "PDF-ul este doar un proiect până la verificarea datelor și semnarea lui. "
             "Data de referință se completează automat cu ultima zi a intervalului."
         )
-        _pv_teachers_default = os.environ.get("IX_TH_CLASS_COUNCIL_TEACHERS", "")
+        # O singură sursă: dict-ul PROFESSORS din catalogul oficial printabil.
+        # Păstrăm fiecare profesor o singură dată, chiar dacă predă mai multe module.
         try:
-            if hasattr(st, "secrets") and "IX_TH_CLASS_COUNCIL_TEACHERS" in st.secrets:
-                _pv_teachers_default = _pv_teachers_default or str(st.secrets["IX_TH_CLASS_COUNCIL_TEACHERS"])
-        except Exception:
-            pass
-        _pv_teacher_text = st.text_area(
-            "Colectiv profesoral (câte un nume pe rând; poate fi configurat permanent în Secrets)",
-            value=_pv_teachers_default,
-            key="pv_teacher_list_2026_2027",
-            height=115,
-        )
-        _pv_teacher_names = [line.strip() for line in _pv_teacher_text.splitlines() if line.strip()]
-        st.caption(
-            "În registrul actual nu există o listă structurată a profesorilor. "
-            "Câmpurile necompletate rămân libere pentru verificare."
-        )
+            _pv_teacher_names = list(unique_class_council_professors())
+            st.caption(
+                f"Colectiv profesoral preluat automat din catalogul oficial printabil: "
+                f"{len(_pv_teacher_names)} profesori distincți. "
+                "Numele nu se introduc manual și nu se salvează separat."
+            )
+            with st.expander("👥 Verifică numele profesorilor preluați automat"):
+                st.text("\n".join(
+                    f"{i}. {name}" for i, name in enumerate(_pv_teacher_names, 1)
+                ))
+        except OfficialCatalogError as _pv_teacher_error:
+            _pv_teacher_names = []
+            st.error(
+                "Lista profesorilor din catalogul oficial nu poate fi validată. "
+                f"Generarea procesului-verbal este blocată: {_pv_teacher_error}"
+            )
 
         _pv_document_registry = None
         _pv_document_registry_error = None
@@ -4632,6 +4635,10 @@ with tab9:
                 try:
                     if _pv_document_registry_error:
                         raise ConductReportError(_pv_document_registry_error)
+                    if not _pv_teacher_names:
+                        raise ConductReportError(
+                            "Numele profesorilor nu sunt validate din catalogul oficial."
+                        )
                     _pv_bytes = generate_conduct_council_pdf(
                         interval_number=interval.number,
                         students=ELEVI,

@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - "app_web_catalog.py"
+      - "official_catalog_pdf.py"
       - "conduct_council_report_pdf.py"
       - "conduct_council_header_assets.py"
       - "tests/test_conduct_council_report_pdf.py"
@@ -16,9 +17,9 @@ jobs:
         with:
           python-version: '3.13'
       - name: Install report test dependencies
-        run: python -m pip install --disable-pip-version-check reportlab pypdf
+        run: python -m pip install --disable-pip-version-check reportlab pypdf openpyxl fontpkg-noto-sans==2.15
       - name: Compile current teacher app and new PDF engine
-        run: python -m py_compile app_web_catalog.py conduct_council_report_pdf.py
+        run: python -m py_compile app_web_catalog.py conduct_council_report_pdf.py official_catalog_pdf.py
       - name: Run isolated synthetic-data PDF tests
         run: python -m unittest discover -s tests -p test_conduct_council_report_pdf.py -v
       - name: Generate synthetic PDF for visual QA
