@@ -1,0 +1,33 @@
+name: Purtare visibility safety
+on:
+  pull_request:
+    paths:
+      - "conduct_view.py"
+      - "app_web_catalog.py"
+      - "app_parinti.py"
+      - "tests/test_conduct_visibility.py"
+      - ".github/workflows/conduct-visibility.yml"
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile both apps and visibility helper
+        run: python -m py_compile app_web_catalog.py app_parinti.py conduct_view.py
+      - name: Check read-only conduct visibility without student records or network
+        run: python -m unittest discover -s tests -p test_conduct_visibility.py -v
+      - name: Ensure grade entry flow remains isolated
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          teacher = Path("app_web_catalog.py").read_text(encoding="utf-8")
+          parent = Path("app_parinti.py").read_text(encoding="utf-8")
+          assert "save_conduct_grade(" in teacher
+          assert 'st.rerun(scope="fragment")' in teacher
+          assert "conduct_interval_rows(" in teacher and "conduct_interval_rows(" in parent
+          assert "fetch_private_conduct_registry(" in teacher and "fetch_private_conduct_registry(" in parent
+          assert 'col_kpi4.metric("Nota la Purtare"' not in parent
+          PY
