@@ -30,7 +30,7 @@ class TestISJClujStatistics(unittest.TestCase):
         wb = load_workbook(buffer)
         ws = wb.active
         self.assertEqual(ws.page_setup.orientation, "landscape")
-        self.assertEqual(ws.page_setup.paperSize, ws.PAPERSIZE_A4)
+        self.assertEqual(str(ws.page_setup.paperSize), str(ws.PAPERSIZE_A4))
         self.assertEqual(ws.page_setup.fitToWidth, 1)
         self.assertEqual(ws.page_setup.fitToHeight, 1)
         self.assertIn("AR", str(ws.print_area))
