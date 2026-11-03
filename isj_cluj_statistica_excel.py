@@ -165,11 +165,13 @@ def build_isj_statistica_clasa(gest_data):
     all_known_citizenships = all(p["_cetatenie"] is not None for p in students)
 
     pairs = []
-    pairs.append(_pair(students, lambda p: True))
-    pairs.append(_pair(students, lambda p: p["_first"] is True,
-                       source_complete=all_known_first))
-    pairs.append(_pair(students, lambda p: p["_promotion"] is True,
-                       source_complete=all_known_promotion))
+    initial_enrollment = _pair(students, lambda p: True)
+    pairs.append(initial_enrollment)
+    # Conform instructiunii dirigintelui pentru formularul ISJ Cluj,
+    # ambele rubrici "din care" repeta efectivul de la inceputul anului
+    # (inclusiv numarul de fete). Nu estimam din alte date.
+    pairs.append(initial_enrollment)
+    pairs.append(initial_enrollment)
     for age in AGE_BUCKETS:
         pairs.append(_pair(
             students,
@@ -307,8 +309,8 @@ def build_isj_statistica_clasa(gest_data):
     ws.row_dimensions[9].height = 19
 
     ws.merge_cells("A10:U10")
-    ws["A10"] = "Diriginte: __________________________________"
-    ws["A10"].font = Font(name="Arial", size=7)
+    ws["A10"] = "Diriginte: Gherman Octavian-Theodor"
+    ws["A10"].font = Font(name="Arial", size=8, bold=True)
     ws.row_dimensions[10].height = 21
 
     ws.merge_cells("A12:AR12")
@@ -319,15 +321,29 @@ def build_isj_statistica_clasa(gest_data):
     ws.row_dimensions[12].height = 18
 
     def named_row(row, name, ethnicity, header=False):
+        # Borduri complete pe intreaga latime a fiecarei celule unite:
+        # A:AH = nume, AI:AR = etnie. Doar conturul celulei din stanga
+        # nu este suficient pentru a reda corect liniatura la imprimare.
         ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=34)
         ws.merge_cells(start_row=row, start_column=35, end_row=row, end_column=44)
+        outline = Side(style="medium", color="4B5563")
+        empty = Side(style=None)
+        fill = PatternFill("solid", fgColor=muted if header else "FFFFFF")
+        for col in range(1, 45):
+            cell = ws.cell(row, col)
+            cell.border = Border(
+                left=outline if col in (1, 35) else empty,
+                right=outline if col in (34, 44) else empty,
+                top=outline,
+                bottom=outline,
+            )
+            cell.fill = fill
         for col, value in ((1, name), (35, ethnicity)):
             cell = ws.cell(row, col, value)
-            cell.font = Font(name="Arial", size=7, bold=header)
-            cell.border = thin
-            cell.fill = PatternFill("solid", fgColor=muted if header else "FFFFFF")
+            cell.font = Font(name="Arial", size=8 if header else 7.5,
+                             bold=header)
             cell.alignment = Alignment(vertical="center", horizontal="left", indent=1)
-        ws.row_dimensions[row].height = 15 if header else 13
+        ws.row_dimensions[row].height = 19 if header else 17
 
     named_row(13, "Numele și prenumele elevului", "Etnia", header=True)
     non_romanian = sorted(
@@ -349,7 +365,8 @@ def build_isj_statistica_clasa(gest_data):
     footnote = ws.cell(last_nominal + 2, 1)
     footnote.value = (
         "** doar clasa a IX-a / Anul I postliceal: înscriși pentru prima dată la nivelul respectiv. "
-        "*** promoția 2026. Câmpurile fără date explicite sunt lăsate necompletate, nu estimate."
+        "*** promoția 2026. Conform cerinței școlii, cele două rubrici «din care» preiau "
+        "efectivul inițial. Alte câmpuri fără sursă explicită rămân necompletate."
     )
     footnote.font = Font(name="Arial", size=6, italic=True)
     footnote.alignment = Alignment(wrap_text=True, vertical="center")
@@ -364,8 +381,8 @@ def build_isj_statistica_clasa(gest_data):
         issues.append("etnie necompletată")
     if not all_known_citizenships:
         issues.append("cetățenie/naționalitate necompletată")
-    if not (all_known_first and all_known_promotion and all_known_repeaters):
-        issues.append("prima înscriere/promoția curentă/repetenție fără sursă explicită")
+    if not all_known_repeaters:
+        issues.append("repetenție fără sursă explicită")
     if issues:
         ws.merge_cells(start_row=last_nominal + 3, start_column=1,
                        end_row=last_nominal + 3, end_column=44)
