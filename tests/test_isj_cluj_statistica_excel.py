@@ -22,7 +22,7 @@ class TestISJClujStatistics(unittest.TestCase):
         students = [
             pupil("ELEV A", "5110612123456", "Română"),
             pupil("ELEV B", "6121223123456", "Maghiară"),
-            pupil("ELEV C", "6121224123456", "Romă", "Germană"),
+            pupil("ELEV C", "6121224123456", "Romă", "Germană", cetatenie="Germană"),
         ]
         untouched = copy.deepcopy(students)
         buffer = io.BytesIO(build_isj_statistica_clasa(students))
@@ -38,6 +38,9 @@ class TestISJClujStatistics(unittest.TestCase):
         self.assertEqual(ws["B7"].value, "Tehnician în turism")
         self.assertEqual(ws["C7"].value, 3)
         self.assertEqual(ws["D7"].value, 2)  # doua fete din CNP
+        self.assertEqual((ws["E7"].value, ws["F7"].value), (3, 2))
+        self.assertEqual((ws["G7"].value, ws["H7"].value), (3, 2))
+        self.assertEqual(ws["A10"].value, "Diriginte: Gherman Octavian-Theodor")
         self.assertEqual(ws["K7"].value, 1)  # 15 ani la 01.01.2027
         self.assertEqual(ws["I7"].value, 2)  # 14 ani la 01.01.2027
         self.assertEqual(ws["AG7"].value, 2)  # cetatenie romana
@@ -45,7 +48,13 @@ class TestISJClujStatistics(unittest.TestCase):
         self.assertEqual(ws["AI7"].value, 1)  # etnie romana
         self.assertEqual(ws["AK7"].value, 1)  # etnie maghiara
         self.assertEqual(ws["AM7"].value, 1)  # etnie roma
-        self.assertIsNone(ws["E7"].value)  # prima inscriere fara sursa
+        # Tabelul nominal are contururi si separator vertical vizibile.
+        self.assertEqual(ws["A14"].border.left.style, "medium")
+        self.assertEqual(ws["AH14"].border.right.style, "medium")
+        self.assertEqual(ws["AI14"].border.left.style, "medium")
+        self.assertEqual(ws["AR14"].border.right.style, "medium")
+        self.assertEqual(ws["N14"].border.top.style, "medium")
+        self.assertEqual(ws["N14"].border.bottom.style, "medium")
         self.assertEqual(ws["A14"].value, "ELEV B")
         self.assertEqual(ws["AI14"].value, "Maghiară")
         self.assertEqual(ws["A15"].value, "ELEV C")
@@ -74,9 +83,31 @@ class TestISJClujStatistics(unittest.TestCase):
                         din_promotia_curenta=False,
                         provenit_din_repetentie=True)
         ws = load_workbook(io.BytesIO(build_isj_statistica_clasa([student]))).active
+        # Valoarea explicita a vechilor indicatori nu schimba regula clasei.
         self.assertEqual(ws["E7"].value, 1)
-        self.assertEqual(ws["G7"].value, 0)
+        self.assertEqual(ws["G7"].value, 1)
         self.assertEqual(ws["AE7"].value, 1)
+
+    def test_citizenship_is_distinct_from_nationality(self):
+        # Etnia/nationalitatea maghiara nu implica cetatenie straina.
+        student = pupil("ELEV TEST", "5110612123456", "Maghiară", "Maghiară")
+        ws = load_workbook(io.BytesIO(build_isj_statistica_clasa([student]))).active
+        self.assertEqual(ws["AG7"].value, 1)  # cetatenie romana precompletata
+        self.assertEqual(ws["AQ7"].value, 0)
+        self.assertEqual(ws["AK7"].value, 1)  # etnie maghiara
+        student["cetatenie"] = "Germană"
+        ws2 = load_workbook(io.BytesIO(build_isj_statistica_clasa([student]))).active
+        self.assertEqual(ws2["AG7"].value, 0)
+        self.assertEqual(ws2["AQ7"].value, 1)
+
+    def test_student_management_has_prefilled_citizenship(self):
+        from pathlib import Path
+        source = Path(__file__).resolve().parents[1].joinpath("app_web_catalog.py").read_text(encoding="utf-8")
+        self.assertIn('e_cet = st.text_input(', source)
+        self.assertIn('value=st_curr.get("cetatenie") or "Română"', source)
+        self.assertIn('add_cet = st.text_input(', source)
+        self.assertIn('"cetatenie": e_cet.strip() or "Română"', source)
+        self.assertIn('"cetatenie": add_cet.strip() or "Română"', source)
 
 
 if __name__ == "__main__":
