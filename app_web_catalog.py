@@ -1171,147 +1171,9 @@ def generate_excel_registru_elevi(gest_data):
     return buffer.getvalue()
 
 def generate_excel_statistica_clasa(gest_data):
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Statistica Clasa IX TH"
-    
-    header_fill = PatternFill(start_color="1A365D", end_color="1A365D", fill_type="solid")
-    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    section_fill = PatternFill(start_color="2B6CB0", end_color="2B6CB0", fill_type="solid")
-    section_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    thin_border = Border(
-        left=Side(style='thin', color='CBD5E0'),
-        right=Side(style='thin', color='CBD5E0'),
-        top=Side(style='thin', color='CBD5E0'),
-        bottom=Side(style='thin', color='CBD5E0')
-    )
-    
-    tot_el = len(gest_data)
-    boys = sum(1 for d in gest_data if get_student_sex(d) == "Băiat")
-    girls = sum(1 for d in gest_data if get_student_sex(d) == "Fată")
-    
-    def write_section_header(title, cols_count):
-        ws.append([title])
-        r = ws.max_row
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=cols_count)
-        cell = ws.cell(row=r, column=1)
-        cell.fill = section_fill
-        cell.font = section_font
-        cell.alignment = Alignment(horizontal="left", vertical="center")
-        
-    def write_table_header(headers):
-        ws.append(headers)
-        r = ws.max_row
-        for c_idx in range(1, len(headers) + 1):
-            cell = ws.cell(row=r, column=c_idx)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-            
-    def style_data_row(row_vals):
-        ws.append(row_vals)
-        r = ws.max_row
-        for c_idx in range(1, len(row_vals) + 1):
-            cell = ws.cell(row=r, column=c_idx)
-            cell.border = thin_border
-            if isinstance(cell.value, (int, float)):
-                cell.alignment = Alignment(horizontal="right", vertical="center")
-            else:
-                cell.alignment = Alignment(horizontal="left", vertical="center")
-
-    write_section_header("1. REPARTIZAREA ELEVILOR PE SEX", 4)
-    write_table_header(["Indicator", "Băieți", "Fete", "Total Clasă"])
-    style_data_row(["Număr Elevi", boys, girls, tot_el])
-    style_data_row(["Pondere (%)", f"{(boys/tot_el*100):.1f}%" if tot_el else "0%", f"{(girls/tot_el*100):.1f}%" if tot_el else "0%", "100%"])
-    ws.append([])
-
-    write_section_header("2. GRUPAREA ELEVILOR PE VÂRSTĂ ȘI SEX", 4)
-    write_table_header(["Categorie Vârstă", "Băieți", "Fete", "Total Elevi"])
-    
-    age_groups = {"14 ani": [0,0], "15 ani": [0,0], "16 ani": [0,0], "17+ ani": [0,0]}
-    for d in gest_data:
-        a = get_student_age(d)
-        sex = get_student_sex(d)
-        key = "14 ani" if a <= 14 else "15 ani" if a == 15 else "16 ani" if a == 16 else "17+ ani"
-        if sex == "Băiat": age_groups[key][0] += 1
-        else: age_groups[key][1] += 1
-        
-    for a_label, (b_cnt, g_tot) in age_groups.items():
-        style_data_row([a_label, b_cnt, g_tot, b_cnt + g_tot])
-    ws.append([])
-
-    write_section_header("3. ELEVI DE ALTA ETNIE / NAȚIONALITATE", 4)
-    write_table_header(["Etnie / Naționalitate", "Băieți", "Fete", "Total Elevi"])
-    etn_groups = {}
-    for d in gest_data:
-        etn = d.get("etnie", "Română").strip() or "Română"
-        sex = get_student_sex(d)
-        if etn not in etn_groups: etn_groups[etn] = [0, 0]
-        if sex == "Băiat": etn_groups[etn][0] += 1
-        else: etn_groups[etn][1] += 1
-        
-    for etn_label, (b_cnt, g_tot) in etn_groups.items():
-        style_data_row([etn_label, b_cnt, g_tot, b_cnt + g_tot])
-    ws.append([])
-
-    write_section_header("4. BURSE SOCIALE ȘI CERINȚE EDUCAȚIONALE SPECIALE (CES)", 4)
-    write_table_header(["Tip Bursă / Situație Școlară", "Băieți", "Fete", "Total Elevi"])
-    
-    b_med = [sum(1 for d in gest_data if d.get("bursa_medicala") and get_student_sex(d) == "Băiat"), sum(1 for d in gest_data if d.get("bursa_medicala") and get_student_sex(d) == "Fată")]
-    b_ven = [sum(1 for d in gest_data if d.get("bursa_venit") and get_student_sex(d) == "Băiat"), sum(1 for d in gest_data if d.get("bursa_venit") and get_student_sex(d) == "Fată")]
-    b_ces = [sum(1 for d in gest_data if d.get("ces") and get_student_sex(d) == "Băiat"), sum(1 for d in gest_data if d.get("ces") and get_student_sex(d) == "Fată")]
-    
-    style_data_row(["Bursă Socială Medicală", b_med[0], b_med[1], sum(b_med)])
-    style_data_row(["Bursă Socială pe bază de Venit", b_ven[0], b_ven[1], sum(b_ven)])
-    style_data_row(["Elevi cu CES", b_ces[0], b_ces[1], sum(b_ces)])
-    ws.append([])
-
-    write_section_header("5. ELEVI ORFANI ȘI ELEVI AFLAȚI ÎN PLASAMENT", 4)
-    write_table_header(["Categorie Socială", "Băieți", "Fete", "Total Elevi"])
-    orf = [sum(1 for d in gest_data if d.get("orfan") and get_student_sex(d) == "Băiat"), sum(1 for d in gest_data if d.get("orfan") and get_student_sex(d) == "Fată")]
-    plas = [sum(1 for d in gest_data if d.get("plasament") and get_student_sex(d) == "Băiat"), sum(1 for d in gest_data if d.get("plasament") and get_student_sex(d) == "Fată")]
-    style_data_row(["Elevi Orfani", orf[0], orf[1], sum(orf)])
-    style_data_row(["Elevi în Plasament", plas[0], plas[1], sum(plas)])
-    ws.append([])
-
-    write_section_header("6. ELEVI CU PĂRINȚI PLECAȚI ÎN STRĂINĂTATE (PE ȚĂRI)", 4)
-    write_table_header(["Țară Destinație / Părinte Plecat", "Băieți", "Fete", "Total Elevi"])
-    
-    tari = {}
-    for d in gest_data:
-        sex = get_student_sex(d)
-        if d.get("mama_plecata") and d.get("tara_mama"):
-            tm = d.get("tara_mama").strip()
-            key = f"{tm} (Mamă)"
-            if key not in tari: tari[key] = [0, 0]
-            if sex == "Băiat": tari[key][0] += 1
-            else: tari[key][1] += 1
-            
-        if d.get("tata_plecat") and d.get("tara_tata"):
-            tt = d.get("tara_tata").strip()
-            key = f"{tt} (Tată)"
-            if key not in tari: tari[key] = [0, 0]
-            if sex == "Băiat": tari[key][0] += 1
-            else: tari[key][1] += 1
-            
-    if tari:
-        for t_label, (b_cnt, g_tot) in tari.items():
-            style_data_row([t_label, b_cnt, g_tot, b_cnt + g_tot])
-    else:
-        style_data_row(["Niciun părinte înregistrat ca plecat", 0, 0, 0])
-
-    for col in ws.columns:
-        max_len = 0
-        col_letter = get_column_letter(col[0].column)
-        for cell in col:
-            val_str = str(cell.value or "")
-            if len(val_str) > max_len: max_len = len(val_str)
-        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
-
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    return buffer.getvalue()
+    """Model ISJ Cluj 2026-2027: un singur A4 landscape; date exclusiv read-only."""
+    from isj_cluj_statistica_excel import build_isj_statistica_clasa
+    return build_isj_statistica_clasa(gest_data)
 
 
 st.set_page_config(
@@ -4004,7 +3866,7 @@ with tab7:
         st.error(f"Eroare la generarea tabelului de monitorizare: {ex}")
 
     st.divider()
-    st.markdown("#### 📊 Export Registru & Statistică Clasă (Excel)")
+    st.markdown("#### 📊 Export Registru & Statistică Clasă (Excel — model ISJ Cluj)")
     col_g1, col_g2 = st.columns(2)
     with col_g1:
         try:
@@ -4025,7 +3887,7 @@ with tab7:
             st.download_button(
                 "📊 Descarcă Statistica Clasa (.xlsx)",
                 data=excel_stat_bytes,
-                file_name="Statistica_Clasa_IX_TH.xlsx",
+                file_name="Statistica_Clasa_IX_TH_ISJ_Cluj_A4.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
