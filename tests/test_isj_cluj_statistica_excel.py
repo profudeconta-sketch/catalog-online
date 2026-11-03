@@ -45,11 +45,23 @@ class TestISJClujStatistics(unittest.TestCase):
         self.assertEqual(ws["AI7"].value, 1)  # etnie romana
         self.assertEqual(ws["AK7"].value, 1)  # etnie maghiara
         self.assertEqual(ws["AM7"].value, 1)  # etnie roma
-        self.assertIsNone(ws["E7"].value)  # prima inscriere fara sursa
+        self.assertEqual(ws["E7"].value, ws["C7"].value)
+        self.assertEqual(ws["F7"].value, ws["D7"].value)
+        self.assertEqual(ws["G7"].value, ws["C7"].value)
+        self.assertEqual(ws["H7"].value, ws["D7"].value)
+        self.assertEqual(ws["A10"].value, "Diriginte: Gherman Octavian-Theodor")
         self.assertEqual(ws["A14"].value, "ELEV B")
         self.assertEqual(ws["AI14"].value, "Maghiară")
         self.assertEqual(ws["A15"].value, "ELEV C")
         self.assertEqual(ws["AI15"].value, "Romă")
+        for row in (13, 14, 15):
+            for col in ("A", "B", "AH", "AI", "AJ", "AR"):
+                self.assertEqual(ws[f"{col}{row}"].border.top.style, "medium")
+                self.assertEqual(ws[f"{col}{row}"].border.bottom.style, "medium")
+            self.assertEqual(ws[f"A{row}"].border.left.style, "medium")
+            self.assertEqual(ws[f"AH{row}"].border.right.style, "medium")
+            self.assertEqual(ws[f"AI{row}"].border.left.style, "medium")
+            self.assertEqual(ws[f"AR{row}"].border.right.style, "medium")
         wb.close()
 
     def test_missing_cnp_does_not_guess_gender_or_age(self):
@@ -68,14 +80,14 @@ class TestISJClujStatistics(unittest.TestCase):
         ws = load_workbook(io.BytesIO(build_isj_statistica_clasa([original, later]))).active
         self.assertEqual(ws["C7"].value, 1)
 
-    def test_explicit_indicators_are_used_when_all_known(self):
+    def test_initial_enrollment_is_repeated_in_both_din_care_columns(self):
         student = pupil("ELEV TEST", "5110612123456",
                         prima_inscriere_nivel=True,
                         din_promotia_curenta=False,
                         provenit_din_repetentie=True)
         ws = load_workbook(io.BytesIO(build_isj_statistica_clasa([student]))).active
         self.assertEqual(ws["E7"].value, 1)
-        self.assertEqual(ws["G7"].value, 0)
+        self.assertEqual(ws["G7"].value, 1)
         self.assertEqual(ws["AE7"].value, 1)
 
 
