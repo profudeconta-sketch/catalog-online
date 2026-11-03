@@ -14,6 +14,7 @@ from openpyxl.worksheet.page import PageMargins
 
 SCHOOL_YEAR_START = datetime.date(2026, 9, 7)
 AGE_REFERENCE_DATE = datetime.date(2027, 1, 1)
+CLASS_TEACHER = "Gherman Octavian-Theodor"
 AGE_BUCKETS = tuple(range(14, 24)) + (24,)
 
 
@@ -116,10 +117,12 @@ def _ethnicity(student):
 
 
 def _citizenship(student):
-    val = student.get("cetatenie", student.get("nationalitate", ""))
+    # Cetatenia este distincta de nationalitate si de etnie.
+    # Pentru clasa pilot, dirigintele a confirmat cetatenia romana a elevilor.
+    # Inregistrarile istorice fara campul cetatenie sunt tratate drept "Romana",
+    # fara a modifica JSON-ul privat; valorile explicite au prioritate.
+    val = student.get("cetatenie") or "Română"
     norm = _norm(val)
-    if not norm:
-        return None
     return "romana" if norm in {"romana", "roman", "romania"} else "alta"
 
 
@@ -146,19 +149,11 @@ def build_isj_statistica_clasa(gest_data):
         student["_sex"], student["_age"] = _sex_age(record)
         student["_ethnie"], student["_ethnie_text"] = _ethnicity(record)
         student["_cetatenie"] = _citizenship(record)
-        student["_first"] = _binary_field(
-            record, ("prima_inscriere_nivel", "inscris_pentru_prima_oara", "prima_data_nivel")
-        )
-        student["_promotion"] = _binary_field(
-            record, ("din_promotia_curenta", "promotia_curenta", "absolvent_2026")
-        )
         student["_repeater"] = _binary_field(
             record, ("provenit_din_repetentie", "provenit_repetentie", "repetent_la_inscriere")
         )
         students.append(student)
 
-    all_known_first = all(p["_first"] is not None for p in students)
-    all_known_promotion = all(p["_promotion"] is not None for p in students)
     all_known_repeaters = all(p["_repeater"] is not None for p in students)
     all_known_ages = all(p["_age"] is not None and p["_age"] >= 14 for p in students)
     all_known_ethnicities = all(p["_ethnie"] is not None for p in students)
@@ -166,10 +161,9 @@ def build_isj_statistica_clasa(gest_data):
 
     pairs = []
     pairs.append(_pair(students, lambda p: True))
-    pairs.append(_pair(students, lambda p: p["_first"] is True,
-                       source_complete=all_known_first))
-    pairs.append(_pair(students, lambda p: p["_promotion"] is True,
-                       source_complete=all_known_promotion))
+    # Pentru clasa IX TH, primele doua rubrici "din care" au exact
+    # acelasi efectiv initial si acelasi numar de fete, conform cerintei.
+    pairs.extend((pairs[0], pairs[0]))
     for age in AGE_BUCKETS:
         pairs.append(_pair(
             students,
@@ -307,7 +301,7 @@ def build_isj_statistica_clasa(gest_data):
     ws.row_dimensions[9].height = 19
 
     ws.merge_cells("A10:U10")
-    ws["A10"] = "Diriginte: __________________________________"
+    ws["A10"] = f"Diriginte: {CLASS_TEACHER}"
     ws["A10"].font = Font(name="Arial", size=7)
     ws.row_dimensions[10].height = 21
 
@@ -318,16 +312,28 @@ def build_isj_statistica_clasa(gest_data):
     ws["A12"].alignment = Alignment(vertical="center")
     ws.row_dimensions[12].height = 18
 
+    # Bordurile celulelor imbinate sunt aplicate pe TOATA lungimea,
+    # inclusiv linia verticala dintre numele elevului si etnie.
+    strong_edge = Side(style="medium", color="343434")
+
     def named_row(row, name, ethnicity, header=False):
         ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=34)
         ws.merge_cells(start_row=row, start_column=35, end_row=row, end_column=44)
-        for col, value in ((1, name), (35, ethnicity)):
-            cell = ws.cell(row, col, value)
-            cell.font = Font(name="Arial", size=7, bold=header)
-            cell.border = thin
+        for col in range(1, 45):
+            cell = ws.cell(row, col)
+            cell.border = Border(
+                top=strong_edge,
+                bottom=strong_edge,
+                left=strong_edge if col in (1, 35) else Side(),
+                right=strong_edge if col in (34, 44) else Side(),
+            )
             cell.fill = PatternFill("solid", fgColor=muted if header else "FFFFFF")
+        for col, value in ((1, name), (35, ethnicity)):
+            cell = ws.cell(row, col)
+            cell.value = value
+            cell.font = Font(name="Arial", size=7.5, bold=header)
             cell.alignment = Alignment(vertical="center", horizontal="left", indent=1)
-        ws.row_dimensions[row].height = 15 if header else 13
+        ws.row_dimensions[row].height = 18 if header else 17
 
     named_row(13, "Numele și prenumele elevului", "Etnia", header=True)
     non_romanian = sorted(
@@ -349,7 +355,8 @@ def build_isj_statistica_clasa(gest_data):
     footnote = ws.cell(last_nominal + 2, 1)
     footnote.value = (
         "** doar clasa a IX-a / Anul I postliceal: înscriși pentru prima dată la nivelul respectiv. "
-        "*** promoția 2026. Câmpurile fără date explicite sunt lăsate necompletate, nu estimate."
+        "*** promoția 2026. Rubricile ** și *** preiau efectivul inițial al clasei IX TH; "
+        "celelalte rubrici fără date explicite nu se estimează."
     )
     footnote.font = Font(name="Arial", size=6, italic=True)
     footnote.alignment = Alignment(wrap_text=True, vertical="center")
@@ -364,8 +371,8 @@ def build_isj_statistica_clasa(gest_data):
         issues.append("etnie necompletată")
     if not all_known_citizenships:
         issues.append("cetățenie/naționalitate necompletată")
-    if not (all_known_first and all_known_promotion and all_known_repeaters):
-        issues.append("prima înscriere/promoția curentă/repetenție fără sursă explicită")
+    if not all_known_repeaters:
+        issues.append("repetenție fără sursă explicită")
     if issues:
         ws.merge_cells(start_row=last_nominal + 3, start_column=1,
                        end_row=last_nominal + 3, end_column=44)
