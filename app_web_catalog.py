@@ -3486,6 +3486,10 @@ with tab7:
                     e_tel = st.text_input("Telefon Elev:", value=st_curr.get("telefon", ""))
                 with c3:
                     e_nat = st.text_input("Naționalitate:", value=st_curr.get("nationalitate", "Română"))
+                    e_cet = st.text_input(
+                        "Cetățenie:", value=st_curr.get("cetatenie") or "Română",
+                        help="Distinctă de naționalitate și de etnie; pentru clasa IX TH este precompletată Română.",
+                    )
                     e_etn = st.text_input("Etnie:", value=st_curr.get("etnie", "Română"))
                     e_pin = st.text_input("PIN Acces Părinte:", value=st_curr.get("pin", "1234"))
 
@@ -3585,6 +3589,7 @@ with tab7:
                         "cnp": e_cnp.strip(),
                         "telefon": e_tel.strip(),
                         "nationalitate": e_nat.strip(),
+                        "cetatenie": e_cet.strip() or "Română",
                         "etnie": e_etn.strip(),
                         "pin": e_pin.strip(),
                         "localitate": e_loc.strip(),
@@ -3646,6 +3651,10 @@ with tab7:
             with a3:
                 add_pin = st.text_input("Cod PIN Acces Părinte:", value=str(1000 + next_id))
                 add_nat = st.text_input("Naționalitate:", value="Română")
+                add_cet = st.text_input(
+                    "Cetățenie:", value="Română",
+                    help="Precompletată cu Română; modificați numai dacă elevul are altă cetățenie.",
+                )
                 add_etn = st.text_input("Etnie:", value="Română")
                 
             btn_add = st.form_submit_button("➕ Adaugă Elev în Clasă", type="primary", use_container_width=True)
@@ -3687,6 +3696,7 @@ with tab7:
                         "stare_civila_parinti": "Căsătoriți",
                         "locuieste_cu": "Nespecificat",
                         "nationalitate": add_nat.strip(),
+                        "cetatenie": add_cet.strip() or "Română",
                         "etnie": add_etn.strip(),
                         "ces": False,
                         "orfan": False,
