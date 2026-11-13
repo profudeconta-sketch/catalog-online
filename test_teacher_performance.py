@@ -51,7 +51,11 @@ class TeacherLazyUIContract(unittest.TestCase):
         self.assertIn("approve_leave_request(", block)
         self.assertIn("refuse_leave_request(", block)
         self.assertIn("expected_revision=_leave[\"revision\"]", block)
-        self.assertIn("read_approved_leave_pass(_student_key,_source_id)", block)
+        self.assertIn("read_approved_leave_pass(_leave_rm_pg,_source_id)", block)
+        self.assertIn("student_rm_pg=_leave_rm_pg", block)
+        self.assertNotIn("student_rm_pg=_student_key", block)
+        self.assertNotIn("read_approved_leave_pass(_student_key,_source_id)", block)
+        self.assertIn("_student_rm_pg_by_key.get(_student_key)", block)
         self.assertIn('st.session_state.pop("_teacher_inbox_cache", None)', block)
 
     def test_document_panels_are_opened_explicitly(self):
@@ -59,6 +63,31 @@ class TeacherLazyUIContract(unittest.TestCase):
         for panel in ("doc_leave_panel", "doc_sent_panel", "doc_received_panel"):
             self.assertIn(f"if _{panel}.open:", s)
             self.assertIn(f'key="{panel}", on_change="rerun"', s)
+
+
+class ApprovedLeaveIdentityTests(unittest.TestCase):
+    def test_approved_pdf_read_uses_original_rm_pg_exactly_once(self):
+        """Read-only regression: hashed keys must not be re-hashed."""
+        import hashlib
+        import leave_pass_storage as leave
+        from document_storage import normalize_student_key
+
+        original_rm_pg = "126/TEST"
+        key = normalize_student_key(original_rm_pg)
+        request_id = "1234567890abcdef1234567890abcdef"
+        pdf = b"%PDF-1.4\\nDummy test document"
+        registry = {"schema_version": 1, "requests": [{
+            "id": request_id, "student_key": key, "status": leave.STATUS_APPROVED,
+            "document_path": "documente_scolare/test/approved.pdf",
+            "document_sha256": hashlib.sha256(pdf).hexdigest(),
+        }]}
+        with patch.object(leave, "load_leave_pass_registry", return_value=(registry, "sha")), \\
+             patch.object(leave, "private_read", return_value=(pdf, "sha")):
+            record, content = leave.read_approved_leave_pass(original_rm_pg, request_id)
+            self.assertEqual(record["student_key"], key)
+            self.assertEqual(content, pdf)
+            with self.assertRaises(leave.DocumentStorageError):
+                leave.read_approved_leave_pass(key, request_id)
 
 
 class TeacherReconciliationBatchTests(unittest.TestCase):
