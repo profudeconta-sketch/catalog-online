@@ -2018,71 +2018,155 @@ with st.sidebar:
 if not os.path.exists(selected_file):
     st.warning(f"⚠️ Fișierul catalog '{selected_file}' nu a fost găsit în directorul curent.")
 
-# Inbox global diriginte: derivat din registrele primare, independent de elevul selectat.
+# Inbox global diriginte: un singur instantaneu verificat per 30 de secunde,
+# cu actualizare explicită. Schimbarea elevului nu declanșează zeci de accesări GitHub.
 try:
-    reconcile_teacher_inbox()
+    if st.button("🔄 Actualizează Inbox diriginte", key="refresh_teacher_inbox"):
+        st.session_state.pop("_teacher_inbox_cache", None)
+    _inbox_snapshot = st.session_state.get("_teacher_inbox_cache")
+    if not _inbox_snapshot or time.monotonic() - _inbox_snapshot["at"] > 30:
+        reconcile_teacher_inbox()
+        _teacher_notifications = list_notifications(recipient=RECIPIENT_TEACHER)
+        _teacher_unread = list_notifications(recipient=RECIPIENT_TEACHER,unread_only=True)
+        _inbox_snapshot = {
+            "at": time.monotonic(),
+            "notifications": _teacher_notifications,
+            "unread": _teacher_unread,
+        }
+        st.session_state["_teacher_inbox_cache"] = _inbox_snapshot
+    else:
+        _teacher_notifications = _inbox_snapshot["notifications"]
+        _teacher_unread = _inbox_snapshot["unread"]
+
     _student_name_by_key={normalize_student_key(e[3]): e[1] for e in ELEVI}
-    _teacher_notifications=list_notifications(recipient=RECIPIENT_TEACHER)
-    _teacher_unread=list_notifications(recipient=RECIPIENT_TEACHER,unread_only=True)
-    with st.expander(f"🔔 Inbox diriginte — {len(_teacher_unread)} necitite", expanded=bool(_teacher_unread)):
-        if not _teacher_notifications:
-            st.info("Nu există documente sau solicitări noi de la părinți.")
-        for _n in _teacher_notifications[:100]:
-            _name=_student_name_by_key.get(_n.get("student_key"),"Elev")
-            if _n.get("superseded_at_utc"):
-                _status=f"↪ înlocuită de revizia {_n.get('superseded_by_revision','curentă')}"
-            else:
-                _status="🆕 NECITIT" if not _n.get("read_at_utc") else "✓ văzut"
-            st.markdown(f"**{_status} — {_n.get('title','Notificare')}**  \nElev: **{_name}**  \n{_n.get('message','')}")
-            if _n.get("superseded_at_utc"):
-                st.caption("Această formă rămâne în istoric pentru trasabilitate. Consultați revizia curentă a solicitării.")
+    _inbox_panel = st.expander(
+        f"🔔 Inbox diriginte — {len(_teacher_unread)} necitite",
+        expanded=bool(_teacher_unread),
+        key="teacher_inbox_expander",
+        on_change="rerun",
+    )
+    if _inbox_panel.open:
+        with _inbox_panel:
+            _inbox_message = st.session_state.pop("_inbox_action_message", None)
+            if _inbox_message:
+                st.success(_inbox_message)
+            if not _teacher_notifications:
+                st.info("Nu există documente sau solicitări noi de la părinți.")
+            for _n in _teacher_notifications[:100]:
+                _name=_student_name_by_key.get(_n.get("student_key"),"Elev")
+                if _n.get("superseded_at_utc"):
+                    _status=f"↪ înlocuită de revizia {_n.get('superseded_by_revision','curentă')}"
+                else:
+                    _status="🆕 NECITIT" if not _n.get("read_at_utc") else "✓ văzut"
+                st.markdown(f"**{_status} — {_n.get('title','Notificare')}**  \\nElev: **{_name}**  \\n{_n.get('message','')}")
+                if _n.get("superseded_at_utc"):
+                    st.caption("Această formă rămâne în istoric pentru trasabilitate. Consultați revizia curentă a solicitării.")
+                    st.divider()
+                    continue
+                _source_type=_n.get("source_type")
+                _source_id=_n.get("source_id")
+                _student_key=_n.get("student_key")
+                if _source_type=="DOCUMENT":
+                    if st.button("📄 Deschide documentul", key=f"inbox_show_doc_{_n['id']}"):
+                        st.session_state["_inbox_document_open"] = _n["id"]
+                    if st.session_state.get("_inbox_document_open") == _n["id"]:
+                        try:
+                            _doc_record,_doc_content=read_registered_document_by_student_key(_student_key,_source_id)
+                            _mime=_doc_record.get("mime_type") or "application/octet-stream"
+                            _filename=_doc_record.get("original_filename") or f"document_{_source_id}"
+                            if st.download_button(
+                                "📥 Descarcă documentul verificat",
+                                data=_doc_content,file_name=_filename,mime=_mime,
+                                key=f"inbox_open_doc_{_n['id']}",
+                            ):
+                                mark_notification_read(_n["id"],RECIPIENT_TEACHER)
+                                st.session_state.pop("_teacher_inbox_cache", None)
+                                st.rerun()
+                        except DocumentStorageError as _source_error:
+                            st.error(f"Documentul sursă nu poate fi deschis în siguranță: {_source_error}")
+                elif _source_type=="INVOIRE":
+                    if st.button("📋 Deschide solicitarea de învoire", key=f"inbox_show_leave_{_n['id']}"):
+                        st.session_state["_inbox_leave_open"] = _n["id"]
+                        st.session_state.pop("_inbox_leave_pdf", None)
+                    if st.session_state.get("_inbox_leave_open") == _n["id"]:
+                        try:
+                            _leave_registry,_=load_leave_pass_registry()
+                            _leave_matches=[
+                                item for item in _leave_registry.get("requests",[])
+                                if str(item.get("id"))==str(_source_id)
+                                and item.get("student_key")==str(_student_key)
+                                and str(item.get("revision",1))==str(_n.get("source_revision") or 1)
+                            ]
+                            if len(_leave_matches)!=1:
+                                raise DocumentStorageError("Solicitarea sursă nu există în revizia notificată.")
+                            _leave=dict(_leave_matches[0])
+                            st.write(f"Data: {_leave.get('request_date','-')}")
+                            st.write(f"Ora plecării: {_leave.get('departure_time','-')}")
+                            st.write(f"Motiv: {_leave.get('reason_label','-')}")
+                            st.write(f"Stare: {_leave.get('status','-')}")
+                            if not _n.get("read_at_utc") and st.button(
+                                "Confirmă vizualizarea solicitării",
+                                key=f"inbox_open_leave_{_n['id']}",
+                            ):
+                                mark_notification_read(_n["id"],RECIPIENT_TEACHER)
+                                st.session_state.pop("_teacher_inbox_cache", None)
+                                st.rerun()
+
+                            if _leave.get("status") == LEAVE_STATUS_PENDING:
+                                _approve_col, _refuse_col = st.columns(2)
+                                if _approve_col.button(
+                                    "✅ Aprobă și generează biletul PDF", type="primary",
+                                    key=f"inbox_approve_leave_{_n['id']}",
+                                ):
+                                    _result=approve_leave_request(
+                                        student_rm_pg=_student_key, request_id=_source_id,
+                                        expected_revision=_leave["revision"],
+                                    )
+                                    if _result.get("status")==LEAVE_STATUS_APPROVED:
+                                        st.session_state["_inbox_action_message"]="Învoirea a fost aprobată, iar biletul PDF a fost generat automat."
+                                    else:
+                                        st.session_state["_inbox_action_message"]="Ora solicitată a fost depășită. Învoirea nu a fost aprobată."
+                                    st.session_state.pop("_teacher_inbox_cache", None)
+                                    st.rerun()
+                                if _refuse_col.button(
+                                    "❌ Refuză învoirea", key=f"inbox_refuse_leave_{_n['id']}",
+                                ):
+                                    _result=refuse_leave_request(
+                                        student_rm_pg=_student_key, request_id=_source_id,
+                                        expected_revision=_leave["revision"],
+                                    )
+                                    st.session_state["_inbox_action_message"]=(
+                                        "Învoirea a expirat fără aprobare."
+                                        if _result.get("status")==LEAVE_STATUS_EXPIRED
+                                        else "Refuzul învoirii a fost înregistrat."
+                                    )
+                                    st.session_state.pop("_teacher_inbox_cache", None)
+                                    st.rerun()
+                            elif _leave.get("status") == LEAVE_STATUS_APPROVED:
+                                st.success("Învoire aprobată — biletul de voie este disponibil.")
+                                if st.button("📄 Pregătește descărcarea biletului", key=f"inbox_prepare_leave_{_n['id']}"):
+                                    _, _leave_pdf=read_approved_leave_pass(_student_key,_source_id)
+                                    st.session_state["_inbox_leave_pdf"]={
+                                        "id":_source_id,"revision":_leave["revision"],"data":_leave_pdf,
+                                    }
+                                _prepared_pdf=st.session_state.get("_inbox_leave_pdf") or {}
+                                if _prepared_pdf.get("id")==_source_id and _prepared_pdf.get("revision")==_leave["revision"]:
+                                    st.download_button(
+                                        "📥 Descarcă biletul de voie aprobat",
+                                        data=_prepared_pdf["data"],
+                                        file_name=f"Bilet_de_voie_{_leave['request_date']}.pdf",
+                                        mime="application/pdf",
+                                        key=f"inbox_download_leave_{_n['id']}",
+                                    )
+                            elif _leave.get("status") == LEAVE_STATUS_EXPIRED:
+                                st.warning("Cererea a expirat. Aprobarea retroactivă nu este permisă.")
+                            elif _leave.get("status") == LEAVE_STATUS_REFUSED:
+                                st.warning("Cererea a fost refuzată. Părintele poate formula o nouă solicitare permisă.")
+                        except (DocumentStorageError, ValueError) as _source_error:
+                            st.error(f"Solicitarea sursă nu poate fi procesată în siguranță: {_source_error}")
+                else:
+                    st.warning("Tipul sursei notificării nu este recunoscut; notificarea rămâne necitită.")
                 st.divider()
-                continue
-            _source_type=_n.get("source_type")
-            _source_id=_n.get("source_id")
-            _student_key=_n.get("student_key")
-            if _source_type=="DOCUMENT":
-                try:
-                    _doc_record,_doc_content=read_registered_document_by_student_key(_student_key,_source_id)
-                    _mime=_doc_record.get("mime_type") or "application/octet-stream"
-                    _filename=_doc_record.get("original_filename") or f"document_{_source_id}"
-                    if st.download_button(
-                        "📄 Deschide / descarcă documentul",
-                        data=_doc_content,file_name=_filename,mime=_mime,
-                        key=f"inbox_open_doc_{_n['id']}",
-                    ):
-                        mark_notification_read(_n["id"],RECIPIENT_TEACHER)
-                        st.rerun()
-                except DocumentStorageError as _source_error:
-                    st.error(f"Documentul sursă nu poate fi deschis în siguranță: {_source_error}")
-            elif _source_type=="INVOIRE":
-                try:
-                    _leave_registry,_=load_leave_pass_registry()
-                    _leave_matches=[
-                        item for item in _leave_registry.get("requests",[])
-                        if str(item.get("id"))==str(_source_id)
-                        and item.get("student_key")==str(_student_key)
-                        and str(item.get("revision",1))==str(_n.get("source_revision") or 1)
-                    ]
-                    if len(_leave_matches)!=1:
-                        raise DocumentStorageError("Solicitarea sursă nu există în revizia notificată.")
-                    _leave=dict(_leave_matches[0])
-                    with st.expander("📋 Deschide solicitarea de învoire"):
-                        st.write(f"Data: {_leave.get('request_date','-')}")
-                        st.write(f"Ora plecării: {_leave.get('departure_time','-')}")
-                        st.write(f"Motiv: {_leave.get('reason_label','-')}")
-                        st.write(f"Stare: {_leave.get('status','-')}")
-                        if not _n.get("read_at_utc") and st.button(
-                            "Confirmă vizualizarea solicitării",
-                            key=f"inbox_open_leave_{_n['id']}",
-                        ):
-                            mark_notification_read(_n["id"],RECIPIENT_TEACHER)
-                            st.rerun()
-                except DocumentStorageError as _source_error:
-                    st.error(f"Solicitarea sursă nu poate fi deschisă în siguranță: {_source_error}")
-            else:
-                st.warning("Tipul sursei notificării nu este recunoscut; notificarea rămâne necitită.")
-            st.divider()
 except DocumentStorageError as _inbox_error:
     st.warning(f"Inbox-ul nu a putut fi sincronizat în siguranță: {_inbox_error}")
 
