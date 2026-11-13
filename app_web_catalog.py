@@ -2041,6 +2041,9 @@ try:
         _teacher_unread = _inbox_snapshot["unread"]
 
     _student_name_by_key={normalize_student_key(e[3]): e[1] for e in ELEVI}
+    # Registrul notificărilor păstrează cheia anonimă; operațiile de învoire
+    # primesc RM/PG original și normalizează o singură dată în backend.
+    _student_rm_pg_by_key={normalize_student_key(e[3]): e[3] for e in ELEVI}
     _inbox_panel = st.expander(
         f"🔔 Inbox diriginte — {len(_teacher_unread)} necitite",
         expanded=bool(_teacher_unread),
@@ -2102,6 +2105,11 @@ try:
                             if len(_leave_matches)!=1:
                                 raise DocumentStorageError("Solicitarea sursă nu există în revizia notificată.")
                             _leave=dict(_leave_matches[0])
+                            _leave_rm_pg = _student_rm_pg_by_key.get(_student_key)
+                            if not _leave_rm_pg or normalize_student_key(_leave_rm_pg) != _leave.get("student_key"):
+                                raise DocumentStorageError(
+                                    "Identitatea elevului din solicitare nu poate fi confirmată."
+                                )
                             st.write(f"Data: {_leave.get('request_date','-')}")
                             st.write(f"Ora plecării: {_leave.get('departure_time','-')}")
                             st.write(f"Motiv: {_leave.get('reason_label','-')}")
@@ -2121,7 +2129,7 @@ try:
                                     key=f"inbox_approve_leave_{_n['id']}",
                                 ):
                                     _result=approve_leave_request(
-                                        student_rm_pg=_student_key, request_id=_source_id,
+                                        student_rm_pg=_leave_rm_pg, request_id=_source_id,
                                         expected_revision=_leave["revision"],
                                     )
                                     if _result.get("status")==LEAVE_STATUS_APPROVED:
@@ -2134,7 +2142,7 @@ try:
                                     "❌ Refuză învoirea", key=f"inbox_refuse_leave_{_n['id']}",
                                 ):
                                     _result=refuse_leave_request(
-                                        student_rm_pg=_student_key, request_id=_source_id,
+                                        student_rm_pg=_leave_rm_pg, request_id=_source_id,
                                         expected_revision=_leave["revision"],
                                     )
                                     st.session_state["_inbox_action_message"]=(
@@ -2147,7 +2155,7 @@ try:
                             elif _leave.get("status") == LEAVE_STATUS_APPROVED:
                                 st.success("Învoire aprobată — biletul de voie este disponibil.")
                                 if st.button("📄 Pregătește descărcarea biletului", key=f"inbox_prepare_leave_{_n['id']}"):
-                                    _, _leave_pdf=read_approved_leave_pass(_student_key,_source_id)
+                                    _, _leave_pdf=read_approved_leave_pass(_leave_rm_pg,_source_id)
                                     st.session_state["_inbox_leave_pdf"]={
                                         "id":_source_id,"revision":_leave["revision"],"data":_leave_pdf,
                                     }
