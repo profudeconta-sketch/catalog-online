@@ -2058,7 +2058,7 @@ try:
                     _status=f"↪ înlocuită de revizia {_n.get('superseded_by_revision','curentă')}"
                 else:
                     _status="🆕 NECITIT" if not _n.get("read_at_utc") else "✓ văzut"
-                st.markdown(f"**{_status} — {_n.get('title','Notificare')}**  \\nElev: **{_name}**  \\n{_n.get('message','')}")
+                st.markdown(f"**{_status} — {_n.get('title','Notificare')}**  \nElev: **{_name}**  \n{_n.get('message','')}")
                 if _n.get("superseded_at_utc"):
                     st.caption("Această formă rămâne în istoric pentru trasabilitate. Consultați revizia curentă a solicitării.")
                     st.divider()
@@ -4031,131 +4031,133 @@ if tab8.open:
             f"Elev selectat: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**."
         )
     
-        st.markdown("#### 🚪 Bilet de voie — solicitarea părintelui")
-        try:
-            leave_request = get_leave_request_for_day(doc_student[3])
-            if not leave_request:
-                st.info("Nu există o solicitare de învoire pentru elevul selectat în ziua curentă.")
-            else:
-                leave_status = leave_request.get("status")
-                leave_status_labels = {
-                    LEAVE_STATUS_PENDING: "⏳ ÎN AȘTEPTARE",
-                    LEAVE_STATUS_REFUSED: "❌ REFUZATĂ",
-                    LEAVE_STATUS_EXPIRED: "❌ EXPIRATĂ — CONSIDERATĂ REFUZATĂ",
-                    LEAVE_STATUS_APPROVED: "✅ APROBATĂ",
-                }
-                st.markdown(f"**Stare:** {leave_status_labels.get(leave_status, leave_status)}")
-                st.markdown(
-                    f"**Părinte/Reprezentant legal:** {leave_request.get('parent_name')}  \n"
-                    f"**Data:** {leave_request.get('request_date')}  \n"
-                    f"**Ora solicitată pentru plecare:** {leave_request.get('departure_time')}  \n"
-                    f"**Motiv:** {leave_request.get('reason_label')}  \n"
-                    f"**Revizia solicitării:** {leave_request.get('revision')}"
-                )
-                transmitted_raw = str(leave_request.get("transmitted_at_utc") or "")
-                if transmitted_raw:
-                    try:
-                        transmitted_dt = datetime.datetime.fromisoformat(transmitted_raw.replace("Z", "+00:00"))
-                        if transmitted_dt.tzinfo is None:
-                            transmitted_dt = transmitted_dt.replace(tzinfo=datetime.timezone.utc)
-                        transmitted_display = transmitted_dt.astimezone(
-                            ZoneInfo("Europe/Bucharest")
-                        ).strftime("%d.%m.%Y, ora %H:%M")
-                    except (ValueError, TypeError):
-                        transmitted_display = transmitted_raw
-                    st.caption(f"Ultima formulare transmisă: {transmitted_display}")
-    
-                st.info(
-                    "Biletul de voie permite exclusiv părăsirea unității la data și ora aprobate. "
-                    "Nu reprezintă motivare/scutire și nu modifică automat absențele."
-                )
-    
-                if leave_status == LEAVE_STATUS_PENDING:
-                    col_leave_approve, col_leave_refuse = st.columns(2)
-                    if col_leave_approve.button(
-                        "✅ Aprobă învoirea",
-                        type="primary",
-                        use_container_width=True,
-                        key=f"approve_leave_{leave_request['id']}_{leave_request['revision']}",
-                    ):
-                        try:
-                            result = approve_leave_request(
-                                student_rm_pg=doc_student[3],
-                                request_id=leave_request["id"],
-                                expected_revision=leave_request["revision"],
-                            )
-                            if result.get("status") == LEAVE_STATUS_APPROVED:
-                                st.success("Învoirea a fost aprobată și biletul de voie a fost generat.")
-                            elif result.get("status") == LEAVE_STATUS_EXPIRED:
-                                st.error(
-                                    "Ora solicitată a fost atinsă sau depășită. Solicitarea este "
-                                    "considerată refuzată și nu a fost generat niciun bilet de voie."
-                                )
-                            st.rerun()
-                        except (DocumentStorageError, ValueError) as ex:
-                            st.error(f"Învoirea nu a putut fi aprobată: {ex}")
-    
-                    if col_leave_refuse.button(
-                        "❌ Refuză învoirea",
-                        use_container_width=True,
-                        key=f"refuse_leave_{leave_request['id']}_{leave_request['revision']}",
-                    ):
-                        try:
-                            result = refuse_leave_request(
-                                student_rm_pg=doc_student[3],
-                                request_id=leave_request["id"],
-                                expected_revision=leave_request["revision"],
-                            )
-                            if result.get("status") == LEAVE_STATUS_EXPIRED:
-                                st.error(
-                                    "Ora solicitată a fost atinsă sau depășită; solicitarea este "
-                                    "considerată refuzată prin expirare."
-                                )
-                            else:
-                                st.success("Solicitarea de învoire a fost refuzată.")
-                            st.rerun()
-                        except (DocumentStorageError, ValueError) as ex:
-                            st.error(f"Refuzul nu a putut fi înregistrat: {ex}")
-    
-                elif leave_status == LEAVE_STATUS_REFUSED:
-                    st.warning(
-                        "Solicitarea a fost refuzată. Părintele o poate reformula în aceeași zi "
-                        "pentru o oră viitoare."
-                    )
-                elif leave_status == LEAVE_STATUS_EXPIRED:
-                    st.warning(
-                        "Solicitarea nu a fost aprobată înainte de ora solicitată și este considerată "
-                        "refuzată. Nu poate fi aprobată retroactiv."
-                    )
-                elif leave_status == LEAVE_STATUS_APPROVED:
-                    approved_raw = str(leave_request.get("approved_at_utc") or "")
-                    if approved_raw:
-                        try:
-                            approved_dt = datetime.datetime.fromisoformat(approved_raw.replace("Z", "+00:00"))
-                            if approved_dt.tzinfo is None:
-                                approved_dt = approved_dt.replace(tzinfo=datetime.timezone.utc)
-                            approved_display = approved_dt.astimezone(
-                                ZoneInfo("Europe/Bucharest")
-                            ).strftime("%d.%m.%Y, ora %H:%M")
-                        except (ValueError, TypeError):
-                            approved_display = approved_raw
-                        st.success(f"✅ Învoire aprobată — {approved_display}")
-                    try:
-                        _, leave_pdf = read_approved_leave_pass(
-                            doc_student[3], leave_request["id"]
+        _doc_leave_panel=st.expander("🚪 Bilet de voie — verifică solicitarea", expanded=False, key="doc_leave_panel", on_change="rerun")
+        if _doc_leave_panel.open:
+            with _doc_leave_panel:
+                try:
+                    leave_request = get_leave_request_for_day(doc_student[3])
+                    if not leave_request:
+                        st.info("Nu există o solicitare de învoire pentru elevul selectat în ziua curentă.")
+                    else:
+                        leave_status = leave_request.get("status")
+                        leave_status_labels = {
+                            LEAVE_STATUS_PENDING: "⏳ ÎN AȘTEPTARE",
+                            LEAVE_STATUS_REFUSED: "❌ REFUZATĂ",
+                            LEAVE_STATUS_EXPIRED: "❌ EXPIRATĂ — CONSIDERATĂ REFUZATĂ",
+                            LEAVE_STATUS_APPROVED: "✅ APROBATĂ",
+                        }
+                        st.markdown(f"**Stare:** {leave_status_labels.get(leave_status, leave_status)}")
+                        st.markdown(
+                            f"**Părinte/Reprezentant legal:** {leave_request.get('parent_name')}  \n"
+                            f"**Data:** {leave_request.get('request_date')}  \n"
+                            f"**Ora solicitată pentru plecare:** {leave_request.get('departure_time')}  \n"
+                            f"**Motiv:** {leave_request.get('reason_label')}  \n"
+                            f"**Revizia solicitării:** {leave_request.get('revision')}"
                         )
-                        st.download_button(
-                            "📥 Descarcă biletul de voie aprobat",
-                            data=leave_pdf,
-                            file_name=f"Bilet_de_voie_{leave_request['request_date']}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True,
-                            key=f"teacher_leave_download_{leave_request['id']}",
+                        transmitted_raw = str(leave_request.get("transmitted_at_utc") or "")
+                        if transmitted_raw:
+                            try:
+                                transmitted_dt = datetime.datetime.fromisoformat(transmitted_raw.replace("Z", "+00:00"))
+                                if transmitted_dt.tzinfo is None:
+                                    transmitted_dt = transmitted_dt.replace(tzinfo=datetime.timezone.utc)
+                                transmitted_display = transmitted_dt.astimezone(
+                                    ZoneInfo("Europe/Bucharest")
+                                ).strftime("%d.%m.%Y, ora %H:%M")
+                            except (ValueError, TypeError):
+                                transmitted_display = transmitted_raw
+                            st.caption(f"Ultima formulare transmisă: {transmitted_display}")
+    
+                        st.info(
+                            "Biletul de voie permite exclusiv părăsirea unității la data și ora aprobate. "
+                            "Nu reprezintă motivare/scutire și nu modifică automat absențele."
                         )
-                    except DocumentStorageError as ex:
-                        st.error(f"Biletul de voie nu poate fi deschis în siguranță: {ex}")
-        except (DocumentStorageError, ValueError) as ex:
-            st.error(f"Solicitarea de învoire nu poate fi încărcată în siguranță: {ex}")
+    
+                        if leave_status == LEAVE_STATUS_PENDING:
+                            col_leave_approve, col_leave_refuse = st.columns(2)
+                            if col_leave_approve.button(
+                                "✅ Aprobă învoirea",
+                                type="primary",
+                                use_container_width=True,
+                                key=f"approve_leave_{leave_request['id']}_{leave_request['revision']}",
+                            ):
+                                try:
+                                    result = approve_leave_request(
+                                        student_rm_pg=doc_student[3],
+                                        request_id=leave_request["id"],
+                                        expected_revision=leave_request["revision"],
+                                    )
+                                    if result.get("status") == LEAVE_STATUS_APPROVED:
+                                        st.success("Învoirea a fost aprobată și biletul de voie a fost generat.")
+                                    elif result.get("status") == LEAVE_STATUS_EXPIRED:
+                                        st.error(
+                                            "Ora solicitată a fost atinsă sau depășită. Solicitarea este "
+                                            "considerată refuzată și nu a fost generat niciun bilet de voie."
+                                        )
+                                    st.rerun()
+                                except (DocumentStorageError, ValueError) as ex:
+                                    st.error(f"Învoirea nu a putut fi aprobată: {ex}")
+    
+                            if col_leave_refuse.button(
+                                "❌ Refuză învoirea",
+                                use_container_width=True,
+                                key=f"refuse_leave_{leave_request['id']}_{leave_request['revision']}",
+                            ):
+                                try:
+                                    result = refuse_leave_request(
+                                        student_rm_pg=doc_student[3],
+                                        request_id=leave_request["id"],
+                                        expected_revision=leave_request["revision"],
+                                    )
+                                    if result.get("status") == LEAVE_STATUS_EXPIRED:
+                                        st.error(
+                                            "Ora solicitată a fost atinsă sau depășită; solicitarea este "
+                                            "considerată refuzată prin expirare."
+                                        )
+                                    else:
+                                        st.success("Solicitarea de învoire a fost refuzată.")
+                                    st.rerun()
+                                except (DocumentStorageError, ValueError) as ex:
+                                    st.error(f"Refuzul nu a putut fi înregistrat: {ex}")
+    
+                        elif leave_status == LEAVE_STATUS_REFUSED:
+                            st.warning(
+                                "Solicitarea a fost refuzată. Părintele o poate reformula în aceeași zi "
+                                "pentru o oră viitoare."
+                            )
+                        elif leave_status == LEAVE_STATUS_EXPIRED:
+                            st.warning(
+                                "Solicitarea nu a fost aprobată înainte de ora solicitată și este considerată "
+                                "refuzată. Nu poate fi aprobată retroactiv."
+                            )
+                        elif leave_status == LEAVE_STATUS_APPROVED:
+                            approved_raw = str(leave_request.get("approved_at_utc") or "")
+                            if approved_raw:
+                                try:
+                                    approved_dt = datetime.datetime.fromisoformat(approved_raw.replace("Z", "+00:00"))
+                                    if approved_dt.tzinfo is None:
+                                        approved_dt = approved_dt.replace(tzinfo=datetime.timezone.utc)
+                                    approved_display = approved_dt.astimezone(
+                                        ZoneInfo("Europe/Bucharest")
+                                    ).strftime("%d.%m.%Y, ora %H:%M")
+                                except (ValueError, TypeError):
+                                    approved_display = approved_raw
+                                st.success(f"✅ Învoire aprobată — {approved_display}")
+                            try:
+                                _, leave_pdf = read_approved_leave_pass(
+                                    doc_student[3], leave_request["id"]
+                                )
+                                st.download_button(
+                                    "📥 Descarcă biletul de voie aprobat",
+                                    data=leave_pdf,
+                                    file_name=f"Bilet_de_voie_{leave_request['request_date']}.pdf",
+                                    mime="application/pdf",
+                                    use_container_width=True,
+                                    key=f"teacher_leave_download_{leave_request['id']}",
+                                )
+                            except DocumentStorageError as ex:
+                                st.error(f"Biletul de voie nu poate fi deschis în siguranță: {ex}")
+                except (DocumentStorageError, ValueError) as ex:
+                    st.error(f"Solicitarea de învoire nu poate fi încărcată în siguranță: {ex}")
     
         st.divider()
     
@@ -4226,213 +4228,219 @@ if tab8.open:
     
         st.divider()
     
-        try:
-            sent_documents = list_student_documents(
-                doc_student[3],
-                direction="SCOALA_PARINTE",
-            )
-            st.markdown("#### 📬 Documente trimise către părinte/reprezentant legal")
-            if not sent_documents:
-                st.info("Nu există documente transmise de școală pentru elevul selectat.")
-            else:
-                sent_labels = {
-                    "INSTIINTARE": "Înștiințare",
-                    "DOCUMENT_SCOALA": "Document transmis de școală",
-                }
-                selected_sent_id = st.selectbox(
-                    "Document trimis:",
-                    [item["id"] for item in sent_documents],
-                    format_func=lambda doc_id: next(
-                        (
-                            f"{sent_labels.get(item.get('document_type'), item.get('document_type'))} — "
-                            f"{item.get('original_filename')} — "
-                            f"{item.get('created_at_utc', '')[:10]}"
-                        )
-                        for item in sent_documents
-                        if item["id"] == doc_id
-                    ),
-                    key="teacher_sent_document",
-                )
-                selected_sent = next(
-                    item for item in sent_documents if item["id"] == selected_sent_id
-                )
-                first_accessed = str(selected_sent.get("first_accessed_at_utc") or "")
-                if first_accessed:
-                    try:
-                        accessed_dt = datetime.datetime.fromisoformat(first_accessed.replace("Z", "+00:00"))
-                        if accessed_dt.tzinfo is None:
-                            accessed_dt = accessed_dt.replace(tzinfo=datetime.timezone.utc)
-                        accessed_display = accessed_dt.astimezone(
-                            ZoneInfo("Europe/Bucharest")
-                        ).strftime("%d.%m.%Y, ora %H:%M")
-                    except (ValueError, TypeError):
-                        accessed_display = first_accessed
-                    st.success(f"✅ Accesat de părinte — {accessed_display}")
-                else:
-                    st.warning("🔔 Neaccesat de părinte")
-    
-                st.caption(
-                    f"Tip: {sent_labels.get(selected_sent.get('document_type'), selected_sent.get('document_type'))} | "
-                    f"An școlar: {selected_sent.get('school_year')} | "
-                    f"Dimensiune: {selected_sent.get('size_bytes', 0)} bytes"
-                )
+        _doc_sent_panel=st.expander("📬 Documente trimise către părinte", expanded=False, key="doc_sent_panel", on_change="rerun")
+        if _doc_sent_panel.open:
+            with _doc_sent_panel:
                 try:
-                    sent_meta, sent_content = read_registered_document(
+                    sent_documents = list_student_documents(
                         doc_student[3],
-                        selected_sent_id,
+                        direction="SCOALA_PARINTE",
                     )
-                    st.download_button(
-                        "📥 Descarcă documentul trimis",
-                        data=sent_content,
-                        file_name=sent_meta.get("original_filename", "document"),
-                        mime=sent_meta.get("mime_type", "application/octet-stream"),
-                        use_container_width=True,
-                        key="teacher_download_sent_document",
-                    )
-                    _sent_wa_links = _parent_whatsapp_links(
-                        doc_student[3],
-                        "Catalog Online: aveți un document transmis de școală disponibil în Portalul Părinților.",
-                    )
-                    for _idx, _wa in enumerate(_sent_wa_links):
-                        st.link_button(
-                            f"📲 Deschide WhatsApp pentru părinte {(_idx + 1)}",
-                            _wa,
-                            use_container_width=True,
-                            key=f"teacher_sent_document_wa_{selected_sent_id}_{_idx}",
+                    st.markdown("#### 📬 Documente trimise către părinte/reprezentant legal")
+                    if not sent_documents:
+                        st.info("Nu există documente transmise de școală pentru elevul selectat.")
+                    else:
+                        sent_labels = {
+                            "INSTIINTARE": "Înștiințare",
+                            "DOCUMENT_SCOALA": "Document transmis de școală",
+                        }
+                        selected_sent_id = st.selectbox(
+                            "Document trimis:",
+                            [item["id"] for item in sent_documents],
+                            format_func=lambda doc_id: next(
+                                (
+                                    f"{sent_labels.get(item.get('document_type'), item.get('document_type'))} — "
+                                    f"{item.get('original_filename')} — "
+                                    f"{item.get('created_at_utc', '')[:10]}"
+                                )
+                                for item in sent_documents
+                                if item["id"] == doc_id
+                            ),
+                            key="teacher_sent_document",
                         )
-                except DocumentStorageError as ex:
-                    st.error(f"Documentul trimis nu poate fi deschis în siguranță: {ex}")
+                        selected_sent = next(
+                            item for item in sent_documents if item["id"] == selected_sent_id
+                        )
+                        first_accessed = str(selected_sent.get("first_accessed_at_utc") or "")
+                        if first_accessed:
+                            try:
+                                accessed_dt = datetime.datetime.fromisoformat(first_accessed.replace("Z", "+00:00"))
+                                if accessed_dt.tzinfo is None:
+                                    accessed_dt = accessed_dt.replace(tzinfo=datetime.timezone.utc)
+                                accessed_display = accessed_dt.astimezone(
+                                    ZoneInfo("Europe/Bucharest")
+                                ).strftime("%d.%m.%Y, ora %H:%M")
+                            except (ValueError, TypeError):
+                                accessed_display = first_accessed
+                            st.success(f"✅ Accesat de părinte — {accessed_display}")
+                        else:
+                            st.warning("🔔 Neaccesat de părinte")
     
-                confirmation_id = selected_sent.get("confirmation_document_id")
-                if confirmation_id:
-                    try:
-                        confirmation_meta, confirmation_content = read_registered_document(
-                            doc_student[3],
-                            confirmation_id,
+                        st.caption(
+                            f"Tip: {sent_labels.get(selected_sent.get('document_type'), selected_sent.get('document_type'))} | "
+                            f"An școlar: {selected_sent.get('school_year')} | "
+                            f"Dimensiune: {selected_sent.get('size_bytes', 0)} bytes"
                         )
-                        st.download_button(
-                            "📄 Descarcă confirmarea de primire",
-                            data=confirmation_content,
-                            file_name=confirmation_meta.get("original_filename", "confirmare_primire.pdf"),
-                            mime="application/pdf",
-                            use_container_width=True,
-                            key="teacher_download_receipt",
-                        )
-                    except DocumentStorageError as ex:
-                        st.error(f"Confirmarea de primire nu poate fi deschisă în siguranță: {ex}")
-        except DocumentStorageError as ex:
-            st.error(f"Documentele trimise nu pot fi încărcate în siguranță: {ex}")
+                        try:
+                            sent_meta, sent_content = read_registered_document(
+                                doc_student[3],
+                                selected_sent_id,
+                            )
+                            st.download_button(
+                                "📥 Descarcă documentul trimis",
+                                data=sent_content,
+                                file_name=sent_meta.get("original_filename", "document"),
+                                mime=sent_meta.get("mime_type", "application/octet-stream"),
+                                use_container_width=True,
+                                key="teacher_download_sent_document",
+                            )
+                            _sent_wa_links = _parent_whatsapp_links(
+                                doc_student[3],
+                                "Catalog Online: aveți un document transmis de școală disponibil în Portalul Părinților.",
+                            )
+                            for _idx, _wa in enumerate(_sent_wa_links):
+                                st.link_button(
+                                    f"📲 Deschide WhatsApp pentru părinte {(_idx + 1)}",
+                                    _wa,
+                                    use_container_width=True,
+                                    key=f"teacher_sent_document_wa_{selected_sent_id}_{_idx}",
+                                )
+                        except DocumentStorageError as ex:
+                            st.error(f"Documentul trimis nu poate fi deschis în siguranță: {ex}")
+    
+                        confirmation_id = selected_sent.get("confirmation_document_id")
+                        if confirmation_id:
+                            try:
+                                confirmation_meta, confirmation_content = read_registered_document(
+                                    doc_student[3],
+                                    confirmation_id,
+                                )
+                                st.download_button(
+                                    "📄 Descarcă confirmarea de primire",
+                                    data=confirmation_content,
+                                    file_name=confirmation_meta.get("original_filename", "confirmare_primire.pdf"),
+                                    mime="application/pdf",
+                                    use_container_width=True,
+                                    key="teacher_download_receipt",
+                                )
+                            except DocumentStorageError as ex:
+                                st.error(f"Confirmarea de primire nu poate fi deschisă în siguranță: {ex}")
+                except DocumentStorageError as ex:
+                    st.error(f"Documentele trimise nu pot fi încărcate în siguranță: {ex}")
     
         st.divider()
     
-        try:
-            received_documents = list_student_documents(
-                doc_student[3],
-                direction="PARINTE_SCOALA",
-            )
-            col_doc1, col_doc2 = st.columns(2)
-            col_doc1.metric("Documente de la părinte", len(received_documents))
-            col_doc2.metric(
-                "Documente primite în anul curent",
-                sum(1 for item in received_documents if item.get("school_year") == "2026-2027"),
-            )
-    
-            try:
-                excuse_usage = parent_excuse_usage(doc_student[3], "2026-2027")
-                st.markdown("#### 📝 Scutiri / Motivări întocmite de părinte — anul școlar 2026–2027")
-                col_exc1, col_exc2, col_exc3 = st.columns(3)
-                col_exc1.metric("Ore utilizate", excuse_usage["used_hours"])
-                col_exc2.metric("Ore rămase", excuse_usage["remaining_hours"])
-                col_exc3.metric("Limită anuală", excuse_usage["annual_limit"])
-            except DocumentStorageError as ex:
-                st.error(f"Contorul anual al motivărilor nu poate fi încărcat în siguranță: {ex}")
-    
-            if not received_documents:
-                st.info("Nu există documente transmise de părinte pentru elevul selectat.")
-            else:
-                labels = {
-                    "DOSAR_PERSONAL": "Dosar personal",
-                    "SCUTIRE_MEDICALA": "Scutire / document medical",
-                    "DOSAR_BURSA": "Dosar bursă",
-                    "MOTIVARE_PARINTE": "Scutire / Motivare absențe — Părinte",
-                }
-                selected_doc_id = st.selectbox(
-                    "Document primit:",
-                    [item["id"] for item in received_documents],
-                    format_func=lambda doc_id: next(
-                        (
-                            f"{labels.get(item.get('category'), item.get('category'))} — "
-                            f"{item.get('original_filename')} — "
-                            f"{item.get('created_at_utc', '')[:10]}"
-                        )
-                        for item in received_documents
-                        if item["id"] == doc_id
-                    ),
-                    key="teacher_received_document",
-                )
-                selected_meta = next(
-                    item for item in received_documents if item["id"] == selected_doc_id
-                )
-                st.caption(
-                    f"Tip: {selected_meta.get('document_type')} | "
-                    f"An școlar: {selected_meta.get('school_year')} | "
-                    f"Dimensiune: {selected_meta.get('size_bytes', 0)} bytes"
-                )
-    
-                if selected_meta.get("category") == "MOTIVARE_PARINTE":
-                    try:
-                        excuse_meta = get_parent_excuse_for_document(
-                            doc_student[3],
-                            selected_doc_id,
-                        )
-                        if excuse_meta is None:
-                            st.warning(
-                                "Documentul există în registrul general, dar înregistrarea administrativă "
-                                "a motivării nu a fost găsită. Situația trebuie verificată înainte de prelucrare."
-                            )
-                        else:
-                            absence_date = str(excuse_meta.get("absence_date", ""))
-                            try:
-                                absence_date_display = datetime.date.fromisoformat(absence_date).strftime("%d.%m.%Y")
-                            except ValueError:
-                                absence_date_display = absence_date or "—"
-                            transmitted_at = str(excuse_meta.get("transmitted_at_utc", ""))
-                            try:
-                                transmitted_display = datetime.datetime.fromisoformat(transmitted_at).strftime("%d.%m.%Y %H:%M")
-                            except ValueError:
-                                transmitted_display = transmitted_at or "—"
-                            st.markdown(
-                                f"**Data absenței:** {absence_date_display}  \n"
-                                f"**Număr ore:** {excuse_meta.get('hours', '—')}  \n"
-                                f"**Transmis de:** {excuse_meta.get('parent_name') or '—'}  \n"
-                                f"**Stare:** {excuse_meta.get('status') or '—'}  \n"
-                                f"**Înregistrat la:** {transmitted_display} UTC"
-                            )
-                            st.info(
-                                "Cererea a fost transmisă prin contul autentificat al părintelui/reprezentantului "
-                                "legal și este considerată depusă. Dacă sunt necesare clarificări sau documente "
-                                "suplimentare, părintele va fi contactat."
-                            )
-                    except DocumentStorageError as ex:
-                        st.error(f"Datele administrative ale motivării nu pot fi încărcate în siguranță: {ex}")
-    
+        _doc_received_panel=st.expander("📨 Documente primite de la părinte", expanded=False, key="doc_received_panel", on_change="rerun")
+        if _doc_received_panel.open:
+            with _doc_received_panel:
                 try:
-                    verified_meta, verified_content = read_registered_document(
+                    received_documents = list_student_documents(
                         doc_student[3],
-                        selected_doc_id,
+                        direction="PARINTE_SCOALA",
                     )
-                    st.download_button(
-                        "📥 Descarcă documentul selectat",
-                        data=verified_content,
-                        file_name=verified_meta.get("original_filename", "document"),
-                        mime=verified_meta.get("mime_type", "application/octet-stream"),
-                        use_container_width=True,
-                        key="teacher_download_received_document",
+                    col_doc1, col_doc2 = st.columns(2)
+                    col_doc1.metric("Documente de la părinte", len(received_documents))
+                    col_doc2.metric(
+                        "Documente primite în anul curent",
+                        sum(1 for item in received_documents if item.get("school_year") == "2026-2027"),
                     )
+    
+                    try:
+                        excuse_usage = parent_excuse_usage(doc_student[3], "2026-2027")
+                        st.markdown("#### 📝 Scutiri / Motivări întocmite de părinte — anul școlar 2026–2027")
+                        col_exc1, col_exc2, col_exc3 = st.columns(3)
+                        col_exc1.metric("Ore utilizate", excuse_usage["used_hours"])
+                        col_exc2.metric("Ore rămase", excuse_usage["remaining_hours"])
+                        col_exc3.metric("Limită anuală", excuse_usage["annual_limit"])
+                    except DocumentStorageError as ex:
+                        st.error(f"Contorul anual al motivărilor nu poate fi încărcat în siguranță: {ex}")
+    
+                    if not received_documents:
+                        st.info("Nu există documente transmise de părinte pentru elevul selectat.")
+                    else:
+                        labels = {
+                            "DOSAR_PERSONAL": "Dosar personal",
+                            "SCUTIRE_MEDICALA": "Scutire / document medical",
+                            "DOSAR_BURSA": "Dosar bursă",
+                            "MOTIVARE_PARINTE": "Scutire / Motivare absențe — Părinte",
+                        }
+                        selected_doc_id = st.selectbox(
+                            "Document primit:",
+                            [item["id"] for item in received_documents],
+                            format_func=lambda doc_id: next(
+                                (
+                                    f"{labels.get(item.get('category'), item.get('category'))} — "
+                                    f"{item.get('original_filename')} — "
+                                    f"{item.get('created_at_utc', '')[:10]}"
+                                )
+                                for item in received_documents
+                                if item["id"] == doc_id
+                            ),
+                            key="teacher_received_document",
+                        )
+                        selected_meta = next(
+                            item for item in received_documents if item["id"] == selected_doc_id
+                        )
+                        st.caption(
+                            f"Tip: {selected_meta.get('document_type')} | "
+                            f"An școlar: {selected_meta.get('school_year')} | "
+                            f"Dimensiune: {selected_meta.get('size_bytes', 0)} bytes"
+                        )
+    
+                        if selected_meta.get("category") == "MOTIVARE_PARINTE":
+                            try:
+                                excuse_meta = get_parent_excuse_for_document(
+                                    doc_student[3],
+                                    selected_doc_id,
+                                )
+                                if excuse_meta is None:
+                                    st.warning(
+                                        "Documentul există în registrul general, dar înregistrarea administrativă "
+                                        "a motivării nu a fost găsită. Situația trebuie verificată înainte de prelucrare."
+                                    )
+                                else:
+                                    absence_date = str(excuse_meta.get("absence_date", ""))
+                                    try:
+                                        absence_date_display = datetime.date.fromisoformat(absence_date).strftime("%d.%m.%Y")
+                                    except ValueError:
+                                        absence_date_display = absence_date or "—"
+                                    transmitted_at = str(excuse_meta.get("transmitted_at_utc", ""))
+                                    try:
+                                        transmitted_display = datetime.datetime.fromisoformat(transmitted_at).strftime("%d.%m.%Y %H:%M")
+                                    except ValueError:
+                                        transmitted_display = transmitted_at or "—"
+                                    st.markdown(
+                                        f"**Data absenței:** {absence_date_display}  \n"
+                                        f"**Număr ore:** {excuse_meta.get('hours', '—')}  \n"
+                                        f"**Transmis de:** {excuse_meta.get('parent_name') or '—'}  \n"
+                                        f"**Stare:** {excuse_meta.get('status') or '—'}  \n"
+                                        f"**Înregistrat la:** {transmitted_display} UTC"
+                                    )
+                                    st.info(
+                                        "Cererea a fost transmisă prin contul autentificat al părintelui/reprezentantului "
+                                        "legal și este considerată depusă. Dacă sunt necesare clarificări sau documente "
+                                        "suplimentare, părintele va fi contactat."
+                                    )
+                            except DocumentStorageError as ex:
+                                st.error(f"Datele administrative ale motivării nu pot fi încărcate în siguranță: {ex}")
+    
+                        try:
+                            verified_meta, verified_content = read_registered_document(
+                                doc_student[3],
+                                selected_doc_id,
+                            )
+                            st.download_button(
+                                "📥 Descarcă documentul selectat",
+                                data=verified_content,
+                                file_name=verified_meta.get("original_filename", "document"),
+                                mime=verified_meta.get("mime_type", "application/octet-stream"),
+                                use_container_width=True,
+                                key="teacher_download_received_document",
+                            )
+                        except DocumentStorageError as ex:
+                            st.error(f"Documentul nu poate fi deschis în siguranță: {ex}")
                 except DocumentStorageError as ex:
-                    st.error(f"Documentul nu poate fi deschis în siguranță: {ex}")
-        except DocumentStorageError as ex:
-            st.error(f"Registrul documentelor nu poate fi încărcat în siguranță: {ex}")
+                    st.error(f"Registrul documentelor nu poate fi încărcat în siguranță: {ex}")
     
     
 render_copyright_footer()
