@@ -50,6 +50,7 @@ from leave_pass_storage import (
 )
 from notification_storage import RECIPIENT_PARENT, RECIPIENT_TEACHER, ensure_notification, list_notifications, mark_notification_read, reconcile_teacher_inbox
 from whatsapp_delivery import normalize_ro_phone, whatsapp_link
+from student_profile_pdf import append_student_profile_pdf, find_student_profile
 from openpyxl.formula.translate import Translator
 from catalog_photo_import import (
     PhotoImportError, ImportProposal, safe_zip_images, pair_catalog_images,
@@ -2360,13 +2361,19 @@ def _read_conduct_for_student(student_key):
 
 def _refresh_teacher_view():
     """Invalidează doar datele de afișare; autentificarea și datele primare rămân intacte."""
-    for key in ("_teacher_conduct_view_cache", "_teacher_inbox_cache", "_catalog_etag"):
+    for key in ("_teacher_conduct_view_cache", "_teacher_inbox_cache", "_catalog_etag", "_student_profile_pdf_cache"):
         st.session_state.pop(key, None)
     st.rerun()
 
 
 # --- GENERATOARE PDF ---
-def generate_pdf_student(student_idx, file_path, conduct_rows=None):
+def generate_pdf_student(student_idx, file_path, conduct_rows=None, student_profile=None):
+    # Sursa unică este registrul de gestiune verificat, nu o copie din cache neverificată.
+    if student_profile is None:
+        raise ValueError("Datele de gestiune ale elevului nu au fost confirmate.")
+    student_profile = find_student_profile([student_profile], ELEVI[student_idx])
+    if not os.path.isfile(file_path):
+        raise FileNotFoundError("Catalogul Excel nu este disponibil pentru fișa completă.")
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     story = []
@@ -2386,7 +2393,7 @@ def generate_pdf_student(student_idx, file_path, conduct_rows=None):
     story.append(Spacer(1, 10))
     
     meta_data = [
-        [Paragraph(clean_pdf_text(f"<b>Nume și Prenume:</b> {e_info[1]}"), cell_style), Paragraph(clean_pdf_text(f"<b>Nr. Matricol:</b> {e_info[3]}"), cell_style), Paragraph(clean_pdf_text(f"<b>RM/PG:</b> {e_info[2]}"), cell_style)]
+        [Paragraph(clean_pdf_text(f"<b>Nume și Prenume:</b> {e_info[1]}"), cell_style), Paragraph(clean_pdf_text(f"<b>Nr. Matricol:</b> {e_info[2]}"), cell_style), Paragraph(clean_pdf_text(f"<b>RM/PG:</b> {e_info[3]}"), cell_style)]
     ]
     t_meta = Table(meta_data, colWidths=[240, 150, 130])
     t_meta.setStyle(TableStyle([
@@ -2395,7 +2402,18 @@ def generate_pdf_student(student_idx, file_path, conduct_rows=None):
         ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E0"))
     ]))
     story.append(t_meta)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 7))
+    story.append(Paragraph(
+        clean_pdf_text("DOCUMENT CU DATE PERSONALE — utilizare exclusiv de către persoanele autorizate."),
+        subtitle_style,
+    ))
+    append_student_profile_pdf(
+        story, student_profile,
+        heading_style=heading_style, cell_style=cell_style, cell_bold=cell_bold,
+        pdf_clean=clean_pdf_text,
+    )
+    story.append(Spacer(1, 8))
+    story.append(Paragraph(clean_pdf_text("SITUAȚIA LA ÎNVĂȚĂTURĂ ȘI A ABSENȚELOR"), heading_style))
 
     if os.path.exists(file_path):
         wb = openpyxl.load_workbook(file_path, data_only=True)
@@ -3104,8 +3122,38 @@ if tab4.open:
             st.write("")
             st.write("")
             try:
-                pdf_bytes = generate_pdf_student(elev_idx_v, selected_file, conduct_rows=_student_conduct_rows)
-                st.download_button("🖨️ Descarcă Fișă PDF", data=pdf_bytes, file_name=f"Fisa_Elev_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
+                # Fără apeluri suplimentare la GitHub: load_gestiune_data refolosește
+                # registrul privat validat al sesiunii profesorului.
+                _profile_record = find_student_profile(load_gestiune_data(), ELEVI[elev_idx_v])
+                with open(selected_file, "rb") as _student_file_handle:
+                    _student_catalog_hash = hashlib.sha256(_student_file_handle.read()).hexdigest()
+                _student_profile_hash = hashlib.sha256(
+                    json.dumps(_profile_record, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+                ).hexdigest()
+                _student_conduct_hash = hashlib.sha256(
+                    json.dumps(_student_conduct_rows, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+                ).hexdigest()
+                _student_pdf_key = (
+                    str(ELEVI[elev_idx_v][3]), _student_catalog_hash,
+                    _student_profile_hash, _student_conduct_hash,
+                )
+                _pdf_cached = st.session_state.get("_student_profile_pdf_cache")
+                if not isinstance(_pdf_cached, dict) or _pdf_cached.get("key") != _student_pdf_key:
+                    _student_pdf_data = _measure_catalog_operation(
+                        "student_full_profile_pdf_generate",
+                        lambda: generate_pdf_student(
+                            elev_idx_v, selected_file,
+                            conduct_rows=_student_conduct_rows,
+                            student_profile=_profile_record,
+                        ).getvalue(),
+                    )
+                    _pdf_cached = {"key": _student_pdf_key, "data": _student_pdf_data}
+                    st.session_state["_student_profile_pdf_cache"] = _pdf_cached
+                st.download_button(
+                    "🖨️ Descarcă Fișă PDF", data=_pdf_cached["data"],
+                    file_name=f"Fisa_Elev_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf",
+                    mime="application/pdf", use_container_width=True,
+                )
             except Exception as ex:
                 st.error(f"Eroare PDF: {ex}")
         with col_v3:
