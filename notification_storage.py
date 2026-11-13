@@ -108,34 +108,97 @@ def supersede_teacher_leave_notifications(source_id,current_revision):
 
 
 def reconcile_teacher_inbox():
-    """Derivă idempotent Inbox-ul din sursele primare; nu modifică sursele."""
-    docs,_=load_registry()
-    leaves,_=load_leave_pass_registry()
-    created=0
-    for item in docs.get("documents",[]):
-        if item.get("direction")!="PARINTE_SCOALA":
+    """Reconciliază Inbox-ul printr-o singură scriere CAS, fără modificarea surselor.
+
+    Anterior, fiecare document/învoire genera una sau mai multe citiri și
+    scrieri GitHub; la zeci de intrări acest lucru întârzia toate fișele.
+    Istoricul, marcajele de citire și reviziile rămân nemodificate.
+    """
+    docs, _ = load_registry()
+    leaves, _ = load_leave_pass_registry()
+    desired = []
+    current_leave_revisions = {}
+    for item in docs.get("documents", []):
+        if item.get("direction") != "PARINTE_SCOALA":
             continue
-        _,was_created=ensure_notification(
-            recipient=RECIPIENT_TEACHER,event_type="DOCUMENT_PARINTE",source_type="DOCUMENT",
-            source_id=item.get("id"),student_key=item.get("student_key"),
+        desired.append(dict(
+            recipient=RECIPIENT_TEACHER, event_type="DOCUMENT_PARINTE",
+            source_type="DOCUMENT", source_id=item.get("id"),
+            source_revision="", student_key=item.get("student_key"),
             title="Document nou de la părinte/reprezentant legal",
             message="A fost primit un document nou în Portalul Părinților.",
             created_at_utc=item.get("created_at_utc"),
-        )
-        created+=int(was_created)
-    for item in leaves.get("requests",[]):
-        _,was_created=ensure_notification(
-            recipient=RECIPIENT_TEACHER,event_type="CERERE_INVOIRE",source_type="INVOIRE",
-            source_id=item.get("id"),source_revision=item.get("revision",1),
-            student_key=item.get("student_key"),
-            title="Cerere de învoire nouă",
+        ))
+    for item in leaves.get("requests", []):
+        revision = str(item.get("revision", 1))
+        source_id = str(item.get("id"))
+        if source_id in current_leave_revisions:
+            raise DocumentConflictError("Solicitări de învoire duplicate în registrul primar.")
+        current_leave_revisions[source_id] = int(revision)
+        desired.append(dict(
+            recipient=RECIPIENT_TEACHER, event_type="CERERE_INVOIRE",
+            source_type="INVOIRE", source_id=source_id, source_revision=revision,
+            student_key=item.get("student_key"), title="Cerere de învoire nouă",
             message="A fost primită o cerere de învoire care necesită verificare.",
             created_at_utc=item.get("transmitted_at_utc"),
-        )
-        created+=int(was_created)
-        supersede_teacher_leave_notifications(item.get("id"),item.get("revision",1))
-    return created
+        ))
 
+    for _ in range(3):
+        registry, sha = load_notification_registry()
+        by_id = {}
+        for event in registry["events"]:
+            eid = event.get("id")
+            if eid in by_id:
+                raise DocumentConflictError("Registrul conține notificări duplicate; reconcilierea a fost oprită.")
+            by_id[eid] = event
+
+        created = 0
+        changed = False
+        for spec in desired:
+            eid = _event_id(
+                spec["recipient"], spec["event_type"], spec["source_type"],
+                spec["source_id"], spec["source_revision"],
+            )
+            if eid in by_id:
+                continue
+            event = dict(
+                id=eid, schema_version=1,
+                recipient=spec["recipient"], event_type=spec["event_type"],
+                source_type=spec["source_type"], source_id=str(spec["source_id"]),
+                source_revision=str(spec["source_revision"] or ""),
+                student_key=str(spec["student_key"]),
+                title=spec["title"], message=spec["message"],
+                created_at_utc=spec["created_at_utc"] or dt.datetime.now(dt.timezone.utc).isoformat(),
+                read_at_utc=None,
+            )
+            registry["events"].append(event)
+            by_id[eid] = event
+            created += 1
+            changed = True
+
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        for event in registry["events"]:
+            source_id = str(event.get("source_id"))
+            current_revision = current_leave_revisions.get(source_id)
+            if (
+                event.get("recipient") == RECIPIENT_TEACHER
+                and event.get("source_type") == "INVOIRE"
+                and current_revision is not None
+                and int(event.get("source_revision") or 1) < current_revision
+                and not event.get("superseded_at_utc")
+            ):
+                event["superseded_at_utc"] = now
+                event["superseded_by_revision"] = str(current_revision)
+                changed = True
+
+        if not changed:
+            return 0
+        try:
+            save_notification_registry(registry, sha)
+            return created
+        except DocumentConflictError:
+            continue
+    raise DocumentConflictError("Inbox-ul nu a putut fi reconciliat în siguranță.")
 
 def reconcile_parent_inbox(student_key):
     """Derivă notificările părintelui din documentele Școală→Părinte."""

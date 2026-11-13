@@ -1890,6 +1890,8 @@ with st.sidebar:
             )):
                 st.session_state.pop(_pv_session_key, None)
         st.session_state.pop("nelutu_admin_verified", None)
+        for _key in ("_teacher_inbox_cache", "_teacher_conduct_view_cache", "_inbox_leave_pdf", "_inbox_document_open", "_inbox_leave_open"):
+            st.session_state.pop(_key, None)
         st.session_state.pop("parent_history_verified", None)
         st.session_state.pop("parent_history_rows", None)
         st.rerun()
@@ -2018,71 +2020,155 @@ with st.sidebar:
 if not os.path.exists(selected_file):
     st.warning(f"⚠️ Fișierul catalog '{selected_file}' nu a fost găsit în directorul curent.")
 
-# Inbox global diriginte: derivat din registrele primare, independent de elevul selectat.
+# Inbox global diriginte: un singur instantaneu verificat per 30 de secunde,
+# cu actualizare explicită. Schimbarea elevului nu declanșează zeci de accesări GitHub.
 try:
-    reconcile_teacher_inbox()
+    if st.button("🔄 Actualizează Inbox diriginte", key="refresh_teacher_inbox"):
+        st.session_state.pop("_teacher_inbox_cache", None)
+    _inbox_snapshot = st.session_state.get("_teacher_inbox_cache")
+    if not _inbox_snapshot or time.monotonic() - _inbox_snapshot["at"] > 30:
+        reconcile_teacher_inbox()
+        _teacher_notifications = list_notifications(recipient=RECIPIENT_TEACHER)
+        _teacher_unread = list_notifications(recipient=RECIPIENT_TEACHER,unread_only=True)
+        _inbox_snapshot = {
+            "at": time.monotonic(),
+            "notifications": _teacher_notifications,
+            "unread": _teacher_unread,
+        }
+        st.session_state["_teacher_inbox_cache"] = _inbox_snapshot
+    else:
+        _teacher_notifications = _inbox_snapshot["notifications"]
+        _teacher_unread = _inbox_snapshot["unread"]
+
     _student_name_by_key={normalize_student_key(e[3]): e[1] for e in ELEVI}
-    _teacher_notifications=list_notifications(recipient=RECIPIENT_TEACHER)
-    _teacher_unread=list_notifications(recipient=RECIPIENT_TEACHER,unread_only=True)
-    with st.expander(f"🔔 Inbox diriginte — {len(_teacher_unread)} necitite", expanded=bool(_teacher_unread)):
-        if not _teacher_notifications:
-            st.info("Nu există documente sau solicitări noi de la părinți.")
-        for _n in _teacher_notifications[:100]:
-            _name=_student_name_by_key.get(_n.get("student_key"),"Elev")
-            if _n.get("superseded_at_utc"):
-                _status=f"↪ înlocuită de revizia {_n.get('superseded_by_revision','curentă')}"
-            else:
-                _status="🆕 NECITIT" if not _n.get("read_at_utc") else "✓ văzut"
-            st.markdown(f"**{_status} — {_n.get('title','Notificare')}**  \nElev: **{_name}**  \n{_n.get('message','')}")
-            if _n.get("superseded_at_utc"):
-                st.caption("Această formă rămâne în istoric pentru trasabilitate. Consultați revizia curentă a solicitării.")
+    _inbox_panel = st.expander(
+        f"🔔 Inbox diriginte — {len(_teacher_unread)} necitite",
+        expanded=bool(_teacher_unread),
+        key="teacher_inbox_expander",
+        on_change="rerun",
+    )
+    if _inbox_panel.open:
+        with _inbox_panel:
+            _inbox_message = st.session_state.pop("_inbox_action_message", None)
+            if _inbox_message:
+                st.success(_inbox_message)
+            if not _teacher_notifications:
+                st.info("Nu există documente sau solicitări noi de la părinți.")
+            for _n in _teacher_notifications[:100]:
+                _name=_student_name_by_key.get(_n.get("student_key"),"Elev")
+                if _n.get("superseded_at_utc"):
+                    _status=f"↪ înlocuită de revizia {_n.get('superseded_by_revision','curentă')}"
+                else:
+                    _status="🆕 NECITIT" if not _n.get("read_at_utc") else "✓ văzut"
+                st.markdown(f"**{_status} — {_n.get('title','Notificare')}**  \nElev: **{_name}**  \n{_n.get('message','')}")
+                if _n.get("superseded_at_utc"):
+                    st.caption("Această formă rămâne în istoric pentru trasabilitate. Consultați revizia curentă a solicitării.")
+                    st.divider()
+                    continue
+                _source_type=_n.get("source_type")
+                _source_id=_n.get("source_id")
+                _student_key=_n.get("student_key")
+                if _source_type=="DOCUMENT":
+                    if st.button("📄 Deschide documentul", key=f"inbox_show_doc_{_n['id']}"):
+                        st.session_state["_inbox_document_open"] = _n["id"]
+                    if st.session_state.get("_inbox_document_open") == _n["id"]:
+                        try:
+                            _doc_record,_doc_content=read_registered_document_by_student_key(_student_key,_source_id)
+                            _mime=_doc_record.get("mime_type") or "application/octet-stream"
+                            _filename=_doc_record.get("original_filename") or f"document_{_source_id}"
+                            if st.download_button(
+                                "📥 Descarcă documentul verificat",
+                                data=_doc_content,file_name=_filename,mime=_mime,
+                                key=f"inbox_open_doc_{_n['id']}",
+                            ):
+                                mark_notification_read(_n["id"],RECIPIENT_TEACHER)
+                                st.session_state.pop("_teacher_inbox_cache", None)
+                                st.rerun()
+                        except DocumentStorageError as _source_error:
+                            st.error(f"Documentul sursă nu poate fi deschis în siguranță: {_source_error}")
+                elif _source_type=="INVOIRE":
+                    if st.button("📋 Deschide solicitarea de învoire", key=f"inbox_show_leave_{_n['id']}"):
+                        st.session_state["_inbox_leave_open"] = _n["id"]
+                        st.session_state.pop("_inbox_leave_pdf", None)
+                    if st.session_state.get("_inbox_leave_open") == _n["id"]:
+                        try:
+                            _leave_registry,_=load_leave_pass_registry()
+                            _leave_matches=[
+                                item for item in _leave_registry.get("requests",[])
+                                if str(item.get("id"))==str(_source_id)
+                                and item.get("student_key")==str(_student_key)
+                                and str(item.get("revision",1))==str(_n.get("source_revision") or 1)
+                            ]
+                            if len(_leave_matches)!=1:
+                                raise DocumentStorageError("Solicitarea sursă nu există în revizia notificată.")
+                            _leave=dict(_leave_matches[0])
+                            st.write(f"Data: {_leave.get('request_date','-')}")
+                            st.write(f"Ora plecării: {_leave.get('departure_time','-')}")
+                            st.write(f"Motiv: {_leave.get('reason_label','-')}")
+                            st.write(f"Stare: {_leave.get('status','-')}")
+                            if not _n.get("read_at_utc") and st.button(
+                                "Confirmă vizualizarea solicitării",
+                                key=f"inbox_open_leave_{_n['id']}",
+                            ):
+                                mark_notification_read(_n["id"],RECIPIENT_TEACHER)
+                                st.session_state.pop("_teacher_inbox_cache", None)
+                                st.rerun()
+
+                            if _leave.get("status") == LEAVE_STATUS_PENDING:
+                                _approve_col, _refuse_col = st.columns(2)
+                                if _approve_col.button(
+                                    "✅ Aprobă și generează biletul PDF", type="primary",
+                                    key=f"inbox_approve_leave_{_n['id']}",
+                                ):
+                                    _result=approve_leave_request(
+                                        student_rm_pg=_student_key, request_id=_source_id,
+                                        expected_revision=_leave["revision"],
+                                    )
+                                    if _result.get("status")==LEAVE_STATUS_APPROVED:
+                                        st.session_state["_inbox_action_message"]="Învoirea a fost aprobată, iar biletul PDF a fost generat automat."
+                                    else:
+                                        st.session_state["_inbox_action_message"]="Ora solicitată a fost depășită. Învoirea nu a fost aprobată."
+                                    st.session_state.pop("_teacher_inbox_cache", None)
+                                    st.rerun()
+                                if _refuse_col.button(
+                                    "❌ Refuză învoirea", key=f"inbox_refuse_leave_{_n['id']}",
+                                ):
+                                    _result=refuse_leave_request(
+                                        student_rm_pg=_student_key, request_id=_source_id,
+                                        expected_revision=_leave["revision"],
+                                    )
+                                    st.session_state["_inbox_action_message"]=(
+                                        "Învoirea a expirat fără aprobare."
+                                        if _result.get("status")==LEAVE_STATUS_EXPIRED
+                                        else "Refuzul învoirii a fost înregistrat."
+                                    )
+                                    st.session_state.pop("_teacher_inbox_cache", None)
+                                    st.rerun()
+                            elif _leave.get("status") == LEAVE_STATUS_APPROVED:
+                                st.success("Învoire aprobată — biletul de voie este disponibil.")
+                                if st.button("📄 Pregătește descărcarea biletului", key=f"inbox_prepare_leave_{_n['id']}"):
+                                    _, _leave_pdf=read_approved_leave_pass(_student_key,_source_id)
+                                    st.session_state["_inbox_leave_pdf"]={
+                                        "id":_source_id,"revision":_leave["revision"],"data":_leave_pdf,
+                                    }
+                                _prepared_pdf=st.session_state.get("_inbox_leave_pdf") or {}
+                                if _prepared_pdf.get("id")==_source_id and _prepared_pdf.get("revision")==_leave["revision"]:
+                                    st.download_button(
+                                        "📥 Descarcă biletul de voie aprobat",
+                                        data=_prepared_pdf["data"],
+                                        file_name=f"Bilet_de_voie_{_leave['request_date']}.pdf",
+                                        mime="application/pdf",
+                                        key=f"inbox_download_leave_{_n['id']}",
+                                    )
+                            elif _leave.get("status") == LEAVE_STATUS_EXPIRED:
+                                st.warning("Cererea a expirat. Aprobarea retroactivă nu este permisă.")
+                            elif _leave.get("status") == LEAVE_STATUS_REFUSED:
+                                st.warning("Cererea a fost refuzată. Părintele poate formula o nouă solicitare permisă.")
+                        except (DocumentStorageError, ValueError) as _source_error:
+                            st.error(f"Solicitarea sursă nu poate fi procesată în siguranță: {_source_error}")
+                else:
+                    st.warning("Tipul sursei notificării nu este recunoscut; notificarea rămâne necitită.")
                 st.divider()
-                continue
-            _source_type=_n.get("source_type")
-            _source_id=_n.get("source_id")
-            _student_key=_n.get("student_key")
-            if _source_type=="DOCUMENT":
-                try:
-                    _doc_record,_doc_content=read_registered_document_by_student_key(_student_key,_source_id)
-                    _mime=_doc_record.get("mime_type") or "application/octet-stream"
-                    _filename=_doc_record.get("original_filename") or f"document_{_source_id}"
-                    if st.download_button(
-                        "📄 Deschide / descarcă documentul",
-                        data=_doc_content,file_name=_filename,mime=_mime,
-                        key=f"inbox_open_doc_{_n['id']}",
-                    ):
-                        mark_notification_read(_n["id"],RECIPIENT_TEACHER)
-                        st.rerun()
-                except DocumentStorageError as _source_error:
-                    st.error(f"Documentul sursă nu poate fi deschis în siguranță: {_source_error}")
-            elif _source_type=="INVOIRE":
-                try:
-                    _leave_registry,_=load_leave_pass_registry()
-                    _leave_matches=[
-                        item for item in _leave_registry.get("requests",[])
-                        if str(item.get("id"))==str(_source_id)
-                        and item.get("student_key")==str(_student_key)
-                        and str(item.get("revision",1))==str(_n.get("source_revision") or 1)
-                    ]
-                    if len(_leave_matches)!=1:
-                        raise DocumentStorageError("Solicitarea sursă nu există în revizia notificată.")
-                    _leave=dict(_leave_matches[0])
-                    with st.expander("📋 Deschide solicitarea de învoire"):
-                        st.write(f"Data: {_leave.get('request_date','-')}")
-                        st.write(f"Ora plecării: {_leave.get('departure_time','-')}")
-                        st.write(f"Motiv: {_leave.get('reason_label','-')}")
-                        st.write(f"Stare: {_leave.get('status','-')}")
-                        if not _n.get("read_at_utc") and st.button(
-                            "Confirmă vizualizarea solicitării",
-                            key=f"inbox_open_leave_{_n['id']}",
-                        ):
-                            mark_notification_read(_n["id"],RECIPIENT_TEACHER)
-                            st.rerun()
-                except DocumentStorageError as _source_error:
-                    st.error(f"Solicitarea sursă nu poate fi deschisă în siguranță: {_source_error}")
-            else:
-                st.warning("Tipul sursei notificării nu este recunoscut; notificarea rămâne necitită.")
-            st.divider()
 except DocumentStorageError as _inbox_error:
     st.warning(f"Inbox-ul nu a putut fi sincronizat în siguranță: {_inbox_error}")
 
@@ -2098,163 +2184,177 @@ tab1, tab2, tab3, tab_del, tab4, tab5, tab6, tab7, tab8, tab9, tab_photo = st.ta
     "📁 Documente Elevi",
     "🧭 Purtare pe intervale",
     "📷 Import catalog fizic"
-])
+], key="catalog_active_section", on_change="rerun")
 
 elev_options = [f"{e[0]}. {e[1]} (Matr. {e[3]})" for e in ELEVI]
 
 # --- IMPORT FOTO CATALOG FIZIC ---
-with tab_photo:
-    st.subheader("📷 Import note și absențe din catalogul fizic")
-    st.caption(
-        "Flux protejat: fotografii → analiză → comparație → confirmare → backup → scriere. "
-        "Nicio valoare nu este salvată înainte de confirmarea explicită."
-    )
-    c1, c2 = st.columns(2)
-    with c1:
-        import_start = st.date_input(
-            "Prima zi inclusă", value=datetime.date(2026, 9, 30),
-            min_value=datetime.date(2026, 9, 1), max_value=datetime.date(2027, 8, 31),
-            key="photo_import_start"
+if tab_photo.open:
+    with tab_photo:
+        st.subheader("📷 Import note și absențe din catalogul fizic")
+        st.caption(
+            "Flux protejat: fotografii → analiză → comparație → confirmare → backup → scriere. "
+            "Nicio valoare nu este salvată înainte de confirmarea explicită."
         )
-    with c2:
-        import_end = st.date_input(
-            "Ultima zi inclusă", value=datetime.date(2026, 10, 2),
-            min_value=datetime.date(2026, 9, 1), max_value=datetime.date(2027, 8, 31),
-            key="photo_import_end"
-        )
-    if import_start > import_end:
-        st.error("Perioada este invalidă: prima zi este după ultima zi.")
-    elif (import_end - import_start).days > 6:
-        st.warning("Intervalul depășește 7 zile. Pentru verificare mai sigură recomand maximum 7 zile.")
-
-    photo_zip = st.file_uploader(
-        "Încarcă arhiva ZIP cu fotografiile în ordine: copertă (opțional), apoi stânga/dreapta pentru fiecare 3 elevi",
-        type=["zip"], key="photo_catalog_zip"
-    )
-
-    if photo_zip is not None and import_start <= import_end:
-        try:
-            images = safe_zip_images(photo_zip.getvalue())
-            pairs = pair_catalog_images(images, skip_cover=True)
-            expected_pairs = (len(ELEVI) + 2) // 3
-            if len(pairs) != expected_pairs:
-                st.warning(
-                    f"Au fost găsite {len(pairs)} perechi pentru {len(ELEVI)} elevi; "
-                    f"structura curentă a clasei așteaptă {expected_pairs} perechi."
-                )
-            else:
-                st.success(f"Structură validată: {len(images)} fotografii, {len(pairs)} perechi stânga/dreapta.")
-
-            zoom = st.slider("Zoom pentru verificarea scrisului olograf", 100, 250, 150, 25, key="photo_zoom")
-            pair_no = st.selectbox(
-                "Pereche pentru verificare vizuală", range(len(pairs)),
-                format_func=lambda i: f"Perechea {i+1}: elevii {i*3+1}–{min(i*3+3, len(ELEVI))}",
-                key="photo_pair_preview"
+        c1, c2 = st.columns(2)
+        with c1:
+            import_start = st.date_input(
+                "Prima zi inclusă", value=datetime.date(2026, 9, 30),
+                min_value=datetime.date(2026, 9, 1), max_value=datetime.date(2027, 8, 31),
+                key="photo_import_start"
             )
-            left, right = pairs[pair_no]
-            pc1, pc2 = st.columns(2)
-            with pc1:
-                st.caption(f"Stânga — {left[0]}")
-                st.image(left[1], width=int(420 * zoom / 100))
-            with pc2:
-                st.caption(f"Dreapta — {right[0]}")
-                st.image(right[1], width=int(420 * zoom / 100))
-
-            if st.button("🔎 Analizează fotografiile pentru perioada selectată", type="primary", key="photo_analyze"):
-                allowed = [name for name, _ in DISCIPLINE_CG] + [name for name, _ in MODULE_TH]
-                all_proposals = []
-                progress = st.progress(0.0, text="Analizez perechile fără a modifica Excelul...")
-                for pair_idx, (left_img, right_img) in enumerate(pairs):
-                    start_idx = pair_idx * 3
-                    if start_idx >= len(ELEVI):
-                        break
-                    names = [ELEVI[i][1] for i in range(start_idx, min(start_idx + 3, len(ELEVI)))]
-                    local = analyze_pair_with_vision(
-                        left_img, right_img, names, import_start, import_end, allowed
+        with c2:
+            import_end = st.date_input(
+                "Ultima zi inclusă", value=datetime.date(2026, 10, 2),
+                min_value=datetime.date(2026, 9, 1), max_value=datetime.date(2027, 8, 31),
+                key="photo_import_end"
+            )
+        if import_start > import_end:
+            st.error("Perioada este invalidă: prima zi este după ultima zi.")
+        elif (import_end - import_start).days > 6:
+            st.warning("Intervalul depășește 7 zile. Pentru verificare mai sigură recomand maximum 7 zile.")
+    
+        photo_zip = st.file_uploader(
+            "Încarcă arhiva ZIP cu fotografiile în ordine: copertă (opțional), apoi stânga/dreapta pentru fiecare 3 elevi",
+            type=["zip"], key="photo_catalog_zip"
+        )
+    
+        if photo_zip is not None and import_start <= import_end:
+            try:
+                images = safe_zip_images(photo_zip.getvalue())
+                pairs = pair_catalog_images(images, skip_cover=True)
+                expected_pairs = (len(ELEVI) + 2) // 3
+                if len(pairs) != expected_pairs:
+                    st.warning(
+                        f"Au fost găsite {len(pairs)} perechi pentru {len(ELEVI)} elevi; "
+                        f"structura curentă a clasei așteaptă {expected_pairs} perechi."
                     )
-                    for p in local:
-                        all_proposals.append(ImportProposal(
-                            student_index=start_idx + p.student_index,
-                            category=p.category, subject=p.subject, kind=p.kind,
-                            value=p.value, date=p.date, motivated=p.motivated,
-                            confidence=p.confidence, source_image=p.source_image,
-                        ))
-                    progress.progress((pair_idx + 1) / len(pairs))
-                comparison = compare_with_workbook(
-                    selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
-                    resolve_student_row, all_proposals
+                else:
+                    st.success(f"Structură validată: {len(images)} fotografii, {len(pairs)} perechi stânga/dreapta.")
+    
+                zoom = st.slider("Zoom pentru verificarea scrisului olograf", 100, 250, 150, 25, key="photo_zoom")
+                pair_no = st.selectbox(
+                    "Pereche pentru verificare vizuală", range(len(pairs)),
+                    format_func=lambda i: f"Perechea {i+1}: elevii {i*3+1}–{min(i*3+3, len(ELEVI))}",
+                    key="photo_pair_preview"
                 )
-                st.session_state["photo_import_comparison"] = comparison
-                st.session_state["photo_import_period"] = (str(import_start), str(import_end))
-                st.success("Analiza s-a încheiat. Verifică fiecare propunere înainte de salvare.")
-
-            comparison = st.session_state.get("photo_import_comparison")
-            if comparison:
-                st.markdown("#### Verificare înainte de scriere")
-                approved = []
-                for i, item in enumerate(comparison):
-                    p, status, msg = item
-                    elev_name = ELEVI[p.student_index][1]
-                    value_text = f"nota {p.value}" if p.kind == "grade" else ("absență motivată" if p.motivated else "absență")
-                    label = (
-                        f"{status} — {elev_name} — {p.subject} — {value_text} — "
-                        f"{p.date} — încredere {p.confidence:.0%}"
-                    )
-                    if status == "NOU":
-                        if st.checkbox(label, value=False, key=f"photo_approve_{i}"):
-                            approved.append(item)
-                    elif status == "DEJA_EXISTENT":
-                        st.info(label + " — nu se dublează.")
-                    else:
-                        st.warning(label + " — " + msg)
-
-                st.warning(
-                    "Butonul de mai jos este singurul pas care poate modifica Excelul. "
-                    "Se creează backup înainte de scriere și se reverifică datele."
-                )
-                if st.button("✅ Confirmă și actualizează catalogul", disabled=not approved, key="photo_apply"):
-                    changed, backup = apply_confirmed_import(
-                        selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
-                        resolve_student_row, approved
-                    )
-                    if changed:
-                        if not update_excel_computed_values(selected_file):
-                            if backup and os.path.exists(backup):
-                                shutil.copy2(backup, selected_file)
-                            raise PhotoImportError("Recalcularea post-import a eșuat; backup-ul a fost restaurat.")
-                        # Reverificare fail-closed: după scriere, aceleași propuneri trebuie să fie deja existente.
-                        post = compare_with_workbook(
-                            selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
-                            resolve_student_row, [x[0] for x in approved]
+                left, right = pairs[pair_no]
+                pc1, pc2 = st.columns(2)
+                with pc1:
+                    st.caption(f"Stânga — {left[0]}")
+                    st.image(left[1], width=int(420 * zoom / 100))
+                with pc2:
+                    st.caption(f"Dreapta — {right[0]}")
+                    st.image(right[1], width=int(420 * zoom / 100))
+    
+                if st.button("🔎 Analizează fotografiile pentru perioada selectată", type="primary", key="photo_analyze"):
+                    allowed = [name for name, _ in DISCIPLINE_CG] + [name for name, _ in MODULE_TH]
+                    all_proposals = []
+                    progress = st.progress(0.0, text="Analizez perechile fără a modifica Excelul...")
+                    for pair_idx, (left_img, right_img) in enumerate(pairs):
+                        start_idx = pair_idx * 3
+                        if start_idx >= len(ELEVI):
+                            break
+                        names = [ELEVI[i][1] for i in range(start_idx, min(start_idx + 3, len(ELEVI)))]
+                        local = analyze_pair_with_vision(
+                            left_img, right_img, names, import_start, import_end, allowed
                         )
-                        if any(status != "DEJA_EXISTENT" for _, status, _ in post):
-                            if backup and os.path.exists(backup):
-                                shutil.copy2(backup, selected_file)
-                            raise PhotoImportError("Verificarea post-scriere a eșuat; backup-ul a fost restaurat.")
-                        if not push_to_github(selected_file):
-                            if backup and os.path.exists(backup):
-                                shutil.copy2(backup, selected_file)
-                            raise PhotoImportError("Sincronizarea privată nu a fost confirmată; backup-ul local a fost restaurat.")
-                        st.session_state.pop("photo_import_comparison", None)
-                        st.success(f"Import confirmat: {changed} înregistrări noi. Suprapunerile nu au fost duplicate.")
-                        st.rerun()
-                    else:
-                        st.info("Nu a fost necesară nicio modificare.")
-        except PhotoImportError as ex:
-            st.error(str(ex))
-        except Exception as ex:
-            st.error(f"Importul a fost oprit fără scriere: {type(ex).__name__}: {ex}")
-
-
+                        for p in local:
+                            all_proposals.append(ImportProposal(
+                                student_index=start_idx + p.student_index,
+                                category=p.category, subject=p.subject, kind=p.kind,
+                                value=p.value, date=p.date, motivated=p.motivated,
+                                confidence=p.confidence, source_image=p.source_image,
+                            ))
+                        progress.progress((pair_idx + 1) / len(pairs))
+                    comparison = compare_with_workbook(
+                        selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
+                        resolve_student_row, all_proposals
+                    )
+                    st.session_state["photo_import_comparison"] = comparison
+                    st.session_state["photo_import_period"] = (str(import_start), str(import_end))
+                    st.success("Analiza s-a încheiat. Verifică fiecare propunere înainte de salvare.")
+    
+                comparison = st.session_state.get("photo_import_comparison")
+                if comparison:
+                    st.markdown("#### Verificare înainte de scriere")
+                    approved = []
+                    for i, item in enumerate(comparison):
+                        p, status, msg = item
+                        elev_name = ELEVI[p.student_index][1]
+                        value_text = f"nota {p.value}" if p.kind == "grade" else ("absență motivată" if p.motivated else "absență")
+                        label = (
+                            f"{status} — {elev_name} — {p.subject} — {value_text} — "
+                            f"{p.date} — încredere {p.confidence:.0%}"
+                        )
+                        if status == "NOU":
+                            if st.checkbox(label, value=False, key=f"photo_approve_{i}"):
+                                approved.append(item)
+                        elif status == "DEJA_EXISTENT":
+                            st.info(label + " — nu se dublează.")
+                        else:
+                            st.warning(label + " — " + msg)
+    
+                    st.warning(
+                        "Butonul de mai jos este singurul pas care poate modifica Excelul. "
+                        "Se creează backup înainte de scriere și se reverifică datele."
+                    )
+                    if st.button("✅ Confirmă și actualizează catalogul", disabled=not approved, key="photo_apply"):
+                        changed, backup = apply_confirmed_import(
+                            selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
+                            resolve_student_row, approved
+                        )
+                        if changed:
+                            if not update_excel_computed_values(selected_file):
+                                if backup and os.path.exists(backup):
+                                    shutil.copy2(backup, selected_file)
+                                raise PhotoImportError("Recalcularea post-import a eșuat; backup-ul a fost restaurat.")
+                            # Reverificare fail-closed: după scriere, aceleași propuneri trebuie să fie deja existente.
+                            post = compare_with_workbook(
+                                selected_file, ELEVI, DISCIPLINE_CG, MODULE_TH,
+                                resolve_student_row, [x[0] for x in approved]
+                            )
+                            if any(status != "DEJA_EXISTENT" for _, status, _ in post):
+                                if backup and os.path.exists(backup):
+                                    shutil.copy2(backup, selected_file)
+                                raise PhotoImportError("Verificarea post-scriere a eșuat; backup-ul a fost restaurat.")
+                            if not push_to_github(selected_file):
+                                if backup and os.path.exists(backup):
+                                    shutil.copy2(backup, selected_file)
+                                raise PhotoImportError("Sincronizarea privată nu a fost confirmată; backup-ul local a fost restaurat.")
+                            st.session_state.pop("photo_import_comparison", None)
+                            st.success(f"Import confirmat: {changed} înregistrări noi. Suprapunerile nu au fost duplicate.")
+                            st.rerun()
+                        else:
+                            st.info("Nu a fost necesară nicio modificare.")
+            except PhotoImportError as ex:
+                st.error(str(ex))
+            except Exception as ex:
+                st.error(f"Importul a fost oprit fără scriere: {type(ex).__name__}: {ex}")
+    
+    
 def _read_conduct_for_student(student_key):
-    """Doar afișare: ultimele note confirmate de sursa privată."""
-    token = os.environ.get("GITHUB_TOKEN") or ""
-    try:
-        if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
-            token = token or str(st.secrets["GITHUB_TOKEN"])
-    except Exception:
-        pass
-    return conduct_interval_rows(fetch_private_conduct_registry(token), student_key)
+    """Citire verificată, cu reutilizare scurtă în sesiunea profesorului."""
+    cached = st.session_state.get("_teacher_conduct_view_cache")
+    now = time.monotonic()
+    if not cached or now - cached["at"] > 15:
+        token = os.environ.get("GITHUB_TOKEN") or ""
+        try:
+            if hasattr(st, "secrets") and "GITHUB_TOKEN" in st.secrets:
+                token = token or str(st.secrets["GITHUB_TOKEN"])
+        except Exception:
+            pass
+        registry = fetch_private_conduct_registry(token)
+        cached = {"at": now, "registry": registry}
+        st.session_state["_teacher_conduct_view_cache"] = cached
+    return conduct_interval_rows(cached["registry"], student_key)
+
+
+def _refresh_teacher_view():
+    """Invalidează doar datele de afișare; autentificarea și datele primare rămân intacte."""
+    for key in ("_teacher_conduct_view_cache", "_teacher_inbox_cache", "_catalog_etag"):
+        st.session_state.pop(key, None)
+    st.rerun()
 
 
 # --- GENERATOARE PDF ---
@@ -2572,318 +2672,322 @@ def _restore_manual_backup(path, backup):
         shutil.copy2(backup, path)
 
 # --- TAB 1: NOTĂ ---
-with tab1:
-    @st.fragment
-    @_timed_catalog_call("grade_fragment_render")
-    def _render_manual_grade():
-        st.subheader("Adăugare Notă Nouă (Sloturi N1 - N10)")
-        col1, col2 = st.columns(2)
-        with col1:
-            elev_idx_n = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_n")
-            cat_n = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_n")
-        with col2:
-            materii = [d[0] for d in DISCIPLINE_CG] if cat_n == "Cultură Generală" else [m[0] for m in MODULE_TH]
-            mat_idx_n = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii)), format_func=lambda i: materii[i], key="mat_n")
-            nota_val = st.number_input("Notă (1 - 10):", min_value=1, max_value=10, value=10, step=1)
-            data_nota = st.text_input("Data Notei (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_n")
-            
-        if st.button("💾 Salvează Nota în Catalog", type="primary", use_container_width=True):
-            _manual_action_started = time.perf_counter()
-            if not os.path.exists(selected_file):
-                st.error(f"Fișierul {selected_file} nu există!")
-            else:
-                backup = None
-                wb = None
-                try:
-                    data_nota = _normalize_manual_ddmm(data_nota)
-                    backup = selected_file + ".manual.bak"
-                    _measure_catalog_operation("grade_backup", lambda: shutil.copy2(selected_file, backup))
-                    wb = _measure_catalog_operation("grade_workbook_open", lambda: openpyxl.load_workbook(selected_file))
-                    sheet_name = "Cultură Generală" if cat_n == "Cultură Generală" else "Module Tehnologice"
-                    ws = wb[sheet_name]
-                    student_row = resolve_student_row(wb, ELEVI[elev_idx_n])
-                    start_col = DISCIPLINE_CG[mat_idx_n][1] if cat_n == "Cultură Generală" else MODULE_TH[mat_idx_n][1]
-                    
-                    slot_found = False
-                    for k in range(10):
-                        n_col = start_col + (k * 2)
-                        d_col = n_col + 1
-                        cell_n = ws.cell(row=student_row, column=n_col)
-                        cell_d = ws.cell(row=student_row, column=d_col)
-                        existing_date = str(cell_d.value or "").strip()
-                        if existing_date == data_nota:
-                            if str(cell_n.value).strip() == str(int(nota_val)):
-                                raise ValueError(f"Nota {nota_val} din {data_nota} există deja; nu a fost duplicată.")
-                            raise ValueError(f"Există deja nota {cell_n.value} în data {data_nota}; salvarea este blocată.")
-                        if cell_n.value is None or str(cell_n.value).strip() == "":
-                            cell_n.value = int(nota_val)
-                            cell_d.value = str(data_nota)
-                            cell_d.number_format = '@'
-                            slot_found = True
-                            slot_num = k + 1
-                            break
-                    if slot_found:
-                        if not update_excel_computed_values(selected_file, workbook=wb):
-                            _restore_manual_backup(selected_file, backup)
-                            raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
-                        if push_to_github(selected_file):
-                            st.success(f"✅ Notă salvată și sincronizată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
-                            print(f"[catalog-performance] grade_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
-                            st.rerun(scope="fragment")
-                        else:
-                            _restore_manual_backup(selected_file, backup)
-                            raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
-                    else:
-                        st.error("❌ Toate cele 10 sloturi de note sunt pline pentru această disciplină!")
-                    wb.close()
-                except Exception as ex:
-                    if wb is not None:
-                        try: wb.close()
-                        except Exception: pass
-                    _restore_manual_backup(selected_file, backup)
-                    st.error(f"Eroare la salvare: {ex}")
-
-
-    _render_manual_grade()
-
-# --- TAB 2: ABSENȚĂ ---
-with tab2:
-    @st.fragment
-    @_timed_catalog_call("absence_fragment_render")
-    def _render_manual_absence():
-        st.subheader("Adăugare Absență (Sloturi A1 - A30)")
-        col1, col2 = st.columns(2)
-        with col1:
-            elev_idx_a = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_a")
-            cat_a = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_a")
-        with col2:
-            materii_a = [d[0] for d in DISCIPLINE_CG] if cat_a == "Cultură Generală" else [m[0] for m in MODULE_TH]
-            mat_idx_a = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii_a)), format_func=lambda i: materii_a[i], key="mat_a")
-            data_abs = st.text_input("Data Absenței (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_a")
-            is_mot = st.checkbox("Absență Motivată (adaugă 'm')", value=False)
-            
-        if st.button("💾 Salvează Absența în Catalog", type="primary", use_container_width=True):
-            _manual_action_started = time.perf_counter()
-            if not os.path.exists(selected_file):
-                st.error(f"Fișierul {selected_file} nu există!")
-            else:
-                backup = None
-                wb = None
-                try:
-                    data_abs = _normalize_manual_ddmm(data_abs)
-                    backup = selected_file + ".manual.bak"
-                    _measure_catalog_operation("absence_backup", lambda: shutil.copy2(selected_file, backup))
-                    wb = _measure_catalog_operation("absence_workbook_open", lambda: openpyxl.load_workbook(selected_file))
-                    sheet_name = "Cultură Generală" if cat_a == "Cultură Generală" else "Module Tehnologice"
-                    ws = wb[sheet_name]
-                    student_row = resolve_student_row(wb, ELEVI[elev_idx_a])
-                    start_col = DISCIPLINE_CG[mat_idx_a][1] if cat_a == "Cultură Generală" else MODULE_TH[mat_idx_a][1]
-                    
-                    abs_val = f"{data_abs.strip()}m" if is_mot else data_abs.strip()
-                    
-                    slot_found = False
-                    for k in range(30):
-                        a_col = start_col + 21 + k
-                        cell_a = ws.cell(row=student_row, column=a_col)
-                        existing_abs = str(cell_a.value or "").strip()
-                        if existing_abs.lower().rstrip("m") == data_abs:
-                            requested = f"{data_abs}m" if is_mot else data_abs
-                            if existing_abs.lower() == requested.lower():
-                                raise ValueError(f"Absența din {data_abs} există deja; nu a fost duplicată.")
-                            raise ValueError(f"Absența din {data_abs} există deja cu altă stare de motivare; salvarea este blocată.")
-                        if cell_a.value is None or str(cell_a.value).strip() == "":
-                            cell_a.value = abs_val
-                            cell_a.number_format = '@'
-                            slot_found = True
-                            slot_num = k + 1
-                            break
-                    if slot_found:
-                        if not update_excel_computed_values(selected_file, workbook=wb):
-                            _restore_manual_backup(selected_file, backup)
-                            raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
-                        if push_to_github(selected_file):
-                            st.success(f"✅ Absență salvată și sincronizată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
-                            print(f"[catalog-performance] absence_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
-                            st.rerun(scope="fragment")
-                        else:
-                            _restore_manual_backup(selected_file, backup)
-                            raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
-                    else:
-                        st.error("❌ Toate cele 30 de sloturi de absențe sunt pline pentru această disciplină!")
-                    wb.close()
-                except Exception as ex:
-                    st.error(f"Eroare la salvare: {ex}")
-
-
-    _render_manual_absence()
-
-# --- TAB 3: MOTIVARE ---
-with tab3:
-    @st.fragment
-    @_timed_catalog_call("motivation_fragment_render")
-    def _render_manual_motivation():
-        st.subheader("Motivare Absență Existentă")
-        col1, col2 = st.columns(2)
-        with col1:
-            elev_idx_m = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_m")
-            cat_m = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_m")
-        with col2:
-            materii_m = [d[0] for d in DISCIPLINE_CG] if cat_m == "Cultură Generală" else [m[0] for m in MODULE_TH]
-            mat_idx_m = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii_m)), format_func=lambda i: materii_m[i], key="mat_m")
-            data_mot = st.text_input("Data de motivat (ex: 21.09):", key="data_mot")
-
-        if st.button("✅ Motivează Absența", type="primary", use_container_width=True):
-            _manual_action_started = time.perf_counter()
-            if not os.path.exists(selected_file):
-                st.error(f"Fișierul {selected_file} nu există!")
-            elif not data_mot.strip():
-                st.warning("Vă rugăm să introduceți data absenței!")
-            else:
-                wb = None
-                backup = None
-                try:
-                    target_d = data_mot.strip()
-                    wb = _measure_catalog_operation("motivation_workbook_open", lambda: openpyxl.load_workbook(selected_file))
-                    sheet_name = "Cultură Generală" if cat_m == "Cultură Generală" else "Module Tehnologice"
-                    ws = wb[sheet_name]
-                    student_row = resolve_student_row(wb, ELEVI[elev_idx_m])
-                    start_col = DISCIPLINE_CG[mat_idx_m][1] if cat_m == "Cultură Generală" else MODULE_TH[mat_idx_m][1]
-
-                    found = False
-                    already_motivated = False
-                    for k in range(30):
-                        a_col = start_col + 21 + k
-                        cell_a = ws.cell(row=student_row, column=a_col)
-                        val = str(cell_a.value).strip() if cell_a.value else ""
-                        if val == target_d:
-                            found = True
-                            break
-                        if val == f"{target_d}m":
-                            found = True
-                            already_motivated = True
-                            break
-
-                    if not found:
-                        st.warning(f"Nu s-a găsit nicio absență nemotivată cu data '{target_d}'.")
-                    elif already_motivated:
-                        st.info(f"Absența din {target_d} este deja motivată!")
-                    else:
-                        backup = selected_file + ".manual.bak"
-                        _measure_catalog_operation("motivation_backup", lambda: shutil.copy2(selected_file, backup))
-                        cell_a.value = f"{target_d}m"
-                        cell_a.number_format = '@'
-                        if not update_excel_computed_values(selected_file, workbook=wb):
-                            raise RuntimeError("Recalcularea a eșuat; motivarea a fost anulată.")
-                        if not push_to_github(selected_file):
-                            raise RuntimeError("Sincronizarea privată a eșuat; motivarea locală a fost anulată.")
-                        st.success(f"✅ Absență motivată și sincronizată ('{target_d}m') pentru {ELEVI[elev_idx_m][1]} la {materii_m[mat_idx_m]}")
-                        print(f"[catalog-performance] motivation_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
-                        st.rerun(scope="fragment")
-                except Exception as ex:
-                    _restore_manual_backup(selected_file, backup)
-                    st.error(f"Eroare la motivare: {ex}")
-                finally:
-                    if wb is not None:
-                        wb.close()
-
-    _render_manual_motivation()
-
-# --- TAB 4: ȘTERGERE NOTĂ / ABSENȚĂ ---
-with tab_del:
-    @st.fragment
-    @_timed_catalog_call("delete_fragment_render")
-    def _render_manual_delete():
-        st.subheader("🗑️ Ștergere Notă sau Absență Introduse")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            elev_idx_del = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_del")
-            cat_del = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_del")
-            tip_del = st.radio("Ce doriți să ștergeți?", ["Notă", "Absență"], key="tip_del")
-            
-        with col2:
-            materii_del = [d[0] for d in DISCIPLINE_CG] if cat_del == "Cultură Generală" else [m[0] for m in MODULE_TH]
-            mat_idx_del = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii_del)), format_func=lambda i: materii_del[i], key="mat_del")
-            
-            existing_items = []
-            item_coords = []
-            
-            if os.path.exists(selected_file):
-                try:
-                    wb = openpyxl.load_workbook(selected_file, data_only=True)
-                    sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
-                    ws = wb[sheet_name]
-                    student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
-                    start_col = DISCIPLINE_CG[mat_idx_del][1] if cat_del == "Cultură Generală" else MODULE_TH[mat_idx_del][1]
-                    
-                    if tip_del == "Notă":
-                        for k in range(10):
-                            n_col = start_col + (k * 2)
-                            d_col = n_col + 1
-                            n_val = ws.cell(row=student_row, column=n_col).value
-                            d_val = ws.cell(row=student_row, column=d_col).value
-                            if n_val is not None and str(n_val).strip() != "":
-                                d_str = f" din data {d_val}" if d_val else ""
-                                existing_items.append(f"Slot N{k+1}: Notă {n_val}{d_str}")
-                                item_coords.append((n_col, d_col))
-                    else:
-                        for k in range(30):
-                            a_col = start_col + 21 + k
-                            a_val = ws.cell(row=student_row, column=a_col).value
-                            if a_val is not None and str(a_val).strip() != "":
-                                existing_items.append(f"Slot A{k+1}: Absență '{a_val}'")
-                                item_coords.append((a_col, None))
-                    wb.close()
-                except Exception as ex:
-                    st.error(f"Eroare la citire: {ex}")
-
-            if existing_items:
-                item_selected_idx = st.selectbox(f"Selectează {tip_del} de șters:", range(len(existing_items)), format_func=lambda i: existing_items[i], key="item_del_sel")
+if tab1.open:
+    with tab1:
+        @st.fragment
+        @_timed_catalog_call("grade_fragment_render")
+        def _render_manual_grade():
+            st.subheader("Adăugare Notă Nouă (Sloturi N1 - N10)")
+            col1, col2 = st.columns(2)
+            with col1:
+                elev_idx_n = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_n")
+                cat_n = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_n")
+            with col2:
+                materii = [d[0] for d in DISCIPLINE_CG] if cat_n == "Cultură Generală" else [m[0] for m in MODULE_TH]
+                mat_idx_n = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii)), format_func=lambda i: materii[i], key="mat_n")
+                nota_val = st.number_input("Notă (1 - 10):", min_value=1, max_value=10, value=10, step=1)
+                data_nota = st.text_input("Data Notei (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_n")
                 
-                if st.button(f"🗑️ Șterge {tip_del} Selectată", type="primary", use_container_width=True):
-                    _manual_action_started = time.perf_counter()
+            if st.button("💾 Salvează Nota în Catalog", type="primary", use_container_width=True):
+                _manual_action_started = time.perf_counter()
+                if not os.path.exists(selected_file):
+                    st.error(f"Fișierul {selected_file} nu există!")
+                else:
                     backup = None
                     wb = None
                     try:
+                        data_nota = _normalize_manual_ddmm(data_nota)
                         backup = selected_file + ".manual.bak"
-                        _measure_catalog_operation("delete_backup", lambda: shutil.copy2(selected_file, backup))
-                        wb = _measure_catalog_operation("delete_write_workbook_open", lambda: openpyxl.load_workbook(selected_file))
-                        sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
+                        _measure_catalog_operation("grade_backup", lambda: shutil.copy2(selected_file, backup))
+                        wb = _measure_catalog_operation("grade_workbook_open", lambda: openpyxl.load_workbook(selected_file))
+                        sheet_name = "Cultură Generală" if cat_n == "Cultură Generală" else "Module Tehnologice"
                         ws = wb[sheet_name]
-                        student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
-                        c1, c2 = item_coords[item_selected_idx]
-                        expected = existing_items[item_selected_idx]
-                        actual = ws.cell(row=student_row, column=c1).value
-                        if tip_del == "Notă":
-                            date_val = ws.cell(row=student_row, column=c2).value
-                            actual_label = f"Slot N{(c1 - start_col) // 2 + 1}: Notă {actual}" + (f" din data {date_val}" if date_val else "")
+                        student_row = resolve_student_row(wb, ELEVI[elev_idx_n])
+                        start_col = DISCIPLINE_CG[mat_idx_n][1] if cat_n == "Cultură Generală" else MODULE_TH[mat_idx_n][1]
+                        
+                        slot_found = False
+                        for k in range(10):
+                            n_col = start_col + (k * 2)
+                            d_col = n_col + 1
+                            cell_n = ws.cell(row=student_row, column=n_col)
+                            cell_d = ws.cell(row=student_row, column=d_col)
+                            existing_date = str(cell_d.value or "").strip()
+                            if existing_date == data_nota:
+                                if str(cell_n.value).strip() == str(int(nota_val)):
+                                    raise ValueError(f"Nota {nota_val} din {data_nota} există deja; nu a fost duplicată.")
+                                raise ValueError(f"Există deja nota {cell_n.value} în data {data_nota}; salvarea este blocată.")
+                            if cell_n.value is None or str(cell_n.value).strip() == "":
+                                cell_n.value = int(nota_val)
+                                cell_d.value = str(data_nota)
+                                cell_d.number_format = '@'
+                                slot_found = True
+                                slot_num = k + 1
+                                break
+                        if slot_found:
+                            if not update_excel_computed_values(selected_file, workbook=wb):
+                                _restore_manual_backup(selected_file, backup)
+                                raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
+                            if push_to_github(selected_file):
+                                st.success(f"✅ Notă salvată și sincronizată: {nota_val} pe {data_nota} la {materii[mat_idx_n]} (Slot N{slot_num}) pentru {ELEVI[elev_idx_n][1]}")
+                                print(f"[catalog-performance] grade_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
+                                st.rerun(scope="fragment")
+                            else:
+                                _restore_manual_backup(selected_file, backup)
+                                raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
                         else:
-                            actual_label = f"Slot A{c1 - start_col - 20}: Absență '{actual}'"
-                        if actual_label != expected:
-                            raise RuntimeError("Înregistrarea s-a modificat între selectare și ștergere; operația a fost blocată.")
-                        ws.cell(row=student_row, column=c1).value = None
-                        if c2 is not None:
-                            ws.cell(row=student_row, column=c2).value = None
-                        if not update_excel_computed_values(selected_file, workbook=wb):
-                            raise RuntimeError("Recalcularea a eșuat; ștergerea a fost anulată.")
-                        if not push_to_github(selected_file):
-                            raise RuntimeError("Sincronizarea privată a eșuat; ștergerea locală a fost anulată.")
-                        st.success(f"✅ {expected} a fost ștearsă și sincronizată cu succes din catalog!")
+                            st.error("❌ Toate cele 10 sloturi de note sunt pline pentru această disciplină!")
                         wb.close()
-                        print(f"[catalog-performance] delete_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
-                        st.rerun(scope="fragment")
                     except Exception as ex:
                         if wb is not None:
                             try: wb.close()
                             except Exception: pass
                         _restore_manual_backup(selected_file, backup)
-                        st.error(f"Eroare la ștergere: {ex}")
-            else:
-                st.info(f"ℹ️ Nu există nicio {tip_del.lower()} înregistrată pentru elevul selectat la {materii_del[mat_idx_del]}.")
-
-
-    _render_manual_delete()
-
+                        st.error(f"Eroare la salvare: {ex}")
+    
+    
+        _render_manual_grade()
+    
+    # --- TAB 2: ABSENȚĂ ---
+if tab2.open:
+    with tab2:
+        @st.fragment
+        @_timed_catalog_call("absence_fragment_render")
+        def _render_manual_absence():
+            st.subheader("Adăugare Absență (Sloturi A1 - A30)")
+            col1, col2 = st.columns(2)
+            with col1:
+                elev_idx_a = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_a")
+                cat_a = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_a")
+            with col2:
+                materii_a = [d[0] for d in DISCIPLINE_CG] if cat_a == "Cultură Generală" else [m[0] for m in MODULE_TH]
+                mat_idx_a = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii_a)), format_func=lambda i: materii_a[i], key="mat_a")
+                data_abs = st.text_input("Data Absenței (DD.MM):", value=datetime.datetime.now().strftime("%d.%m"), key="data_a")
+                is_mot = st.checkbox("Absență Motivată (adaugă 'm')", value=False)
+                
+            if st.button("💾 Salvează Absența în Catalog", type="primary", use_container_width=True):
+                _manual_action_started = time.perf_counter()
+                if not os.path.exists(selected_file):
+                    st.error(f"Fișierul {selected_file} nu există!")
+                else:
+                    backup = None
+                    wb = None
+                    try:
+                        data_abs = _normalize_manual_ddmm(data_abs)
+                        backup = selected_file + ".manual.bak"
+                        _measure_catalog_operation("absence_backup", lambda: shutil.copy2(selected_file, backup))
+                        wb = _measure_catalog_operation("absence_workbook_open", lambda: openpyxl.load_workbook(selected_file))
+                        sheet_name = "Cultură Generală" if cat_a == "Cultură Generală" else "Module Tehnologice"
+                        ws = wb[sheet_name]
+                        student_row = resolve_student_row(wb, ELEVI[elev_idx_a])
+                        start_col = DISCIPLINE_CG[mat_idx_a][1] if cat_a == "Cultură Generală" else MODULE_TH[mat_idx_a][1]
+                        
+                        abs_val = f"{data_abs.strip()}m" if is_mot else data_abs.strip()
+                        
+                        slot_found = False
+                        for k in range(30):
+                            a_col = start_col + 21 + k
+                            cell_a = ws.cell(row=student_row, column=a_col)
+                            existing_abs = str(cell_a.value or "").strip()
+                            if existing_abs.lower().rstrip("m") == data_abs:
+                                requested = f"{data_abs}m" if is_mot else data_abs
+                                if existing_abs.lower() == requested.lower():
+                                    raise ValueError(f"Absența din {data_abs} există deja; nu a fost duplicată.")
+                                raise ValueError(f"Absența din {data_abs} există deja cu altă stare de motivare; salvarea este blocată.")
+                            if cell_a.value is None or str(cell_a.value).strip() == "":
+                                cell_a.value = abs_val
+                                cell_a.number_format = '@'
+                                slot_found = True
+                                slot_num = k + 1
+                                break
+                        if slot_found:
+                            if not update_excel_computed_values(selected_file, workbook=wb):
+                                _restore_manual_backup(selected_file, backup)
+                                raise RuntimeError("Recalcularea a eșuat; modificarea a fost anulată.")
+                            if push_to_github(selected_file):
+                                st.success(f"✅ Absență salvată și sincronizată: '{abs_val}' la {materii_a[mat_idx_a]} (Slot A{slot_num}) pentru {ELEVI[elev_idx_a][1]}")
+                                print(f"[catalog-performance] absence_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
+                                st.rerun(scope="fragment")
+                            else:
+                                _restore_manual_backup(selected_file, backup)
+                                raise RuntimeError("Sincronizarea privată a eșuat; modificarea locală a fost anulată.")
+                        else:
+                            st.error("❌ Toate cele 30 de sloturi de absențe sunt pline pentru această disciplină!")
+                        wb.close()
+                    except Exception as ex:
+                        st.error(f"Eroare la salvare: {ex}")
+    
+    
+        _render_manual_absence()
+    
+    # --- TAB 3: MOTIVARE ---
+if tab3.open:
+    with tab3:
+        @st.fragment
+        @_timed_catalog_call("motivation_fragment_render")
+        def _render_manual_motivation():
+            st.subheader("Motivare Absență Existentă")
+            col1, col2 = st.columns(2)
+            with col1:
+                elev_idx_m = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_m")
+                cat_m = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_m")
+            with col2:
+                materii_m = [d[0] for d in DISCIPLINE_CG] if cat_m == "Cultură Generală" else [m[0] for m in MODULE_TH]
+                mat_idx_m = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii_m)), format_func=lambda i: materii_m[i], key="mat_m")
+                data_mot = st.text_input("Data de motivat (ex: 21.09):", key="data_mot")
+    
+            if st.button("✅ Motivează Absența", type="primary", use_container_width=True):
+                _manual_action_started = time.perf_counter()
+                if not os.path.exists(selected_file):
+                    st.error(f"Fișierul {selected_file} nu există!")
+                elif not data_mot.strip():
+                    st.warning("Vă rugăm să introduceți data absenței!")
+                else:
+                    wb = None
+                    backup = None
+                    try:
+                        target_d = data_mot.strip()
+                        wb = _measure_catalog_operation("motivation_workbook_open", lambda: openpyxl.load_workbook(selected_file))
+                        sheet_name = "Cultură Generală" if cat_m == "Cultură Generală" else "Module Tehnologice"
+                        ws = wb[sheet_name]
+                        student_row = resolve_student_row(wb, ELEVI[elev_idx_m])
+                        start_col = DISCIPLINE_CG[mat_idx_m][1] if cat_m == "Cultură Generală" else MODULE_TH[mat_idx_m][1]
+    
+                        found = False
+                        already_motivated = False
+                        for k in range(30):
+                            a_col = start_col + 21 + k
+                            cell_a = ws.cell(row=student_row, column=a_col)
+                            val = str(cell_a.value).strip() if cell_a.value else ""
+                            if val == target_d:
+                                found = True
+                                break
+                            if val == f"{target_d}m":
+                                found = True
+                                already_motivated = True
+                                break
+    
+                        if not found:
+                            st.warning(f"Nu s-a găsit nicio absență nemotivată cu data '{target_d}'.")
+                        elif already_motivated:
+                            st.info(f"Absența din {target_d} este deja motivată!")
+                        else:
+                            backup = selected_file + ".manual.bak"
+                            _measure_catalog_operation("motivation_backup", lambda: shutil.copy2(selected_file, backup))
+                            cell_a.value = f"{target_d}m"
+                            cell_a.number_format = '@'
+                            if not update_excel_computed_values(selected_file, workbook=wb):
+                                raise RuntimeError("Recalcularea a eșuat; motivarea a fost anulată.")
+                            if not push_to_github(selected_file):
+                                raise RuntimeError("Sincronizarea privată a eșuat; motivarea locală a fost anulată.")
+                            st.success(f"✅ Absență motivată și sincronizată ('{target_d}m') pentru {ELEVI[elev_idx_m][1]} la {materii_m[mat_idx_m]}")
+                            print(f"[catalog-performance] motivation_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
+                            st.rerun(scope="fragment")
+                    except Exception as ex:
+                        _restore_manual_backup(selected_file, backup)
+                        st.error(f"Eroare la motivare: {ex}")
+                    finally:
+                        if wb is not None:
+                            wb.close()
+    
+        _render_manual_motivation()
+    
+    # --- TAB 4: ȘTERGERE NOTĂ / ABSENȚĂ ---
+if tab_del.open:
+    with tab_del:
+        @st.fragment
+        @_timed_catalog_call("delete_fragment_render")
+        def _render_manual_delete():
+            st.subheader("🗑️ Ștergere Notă sau Absență Introduse")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                elev_idx_del = st.selectbox("Selectează Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_del")
+                cat_del = st.radio("Categorie Disciplină:", ["Cultură Generală", "Module Tehnologice"], key="cat_del")
+                tip_del = st.radio("Ce doriți să ștergeți?", ["Notă", "Absență"], key="tip_del")
+                
+            with col2:
+                materii_del = [d[0] for d in DISCIPLINE_CG] if cat_del == "Cultură Generală" else [m[0] for m in MODULE_TH]
+                mat_idx_del = st.selectbox("Selectează Disciplina / Modulul:", range(len(materii_del)), format_func=lambda i: materii_del[i], key="mat_del")
+                
+                existing_items = []
+                item_coords = []
+                
+                if os.path.exists(selected_file):
+                    try:
+                        wb = openpyxl.load_workbook(selected_file, data_only=True)
+                        sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
+                        ws = wb[sheet_name]
+                        student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
+                        start_col = DISCIPLINE_CG[mat_idx_del][1] if cat_del == "Cultură Generală" else MODULE_TH[mat_idx_del][1]
+                        
+                        if tip_del == "Notă":
+                            for k in range(10):
+                                n_col = start_col + (k * 2)
+                                d_col = n_col + 1
+                                n_val = ws.cell(row=student_row, column=n_col).value
+                                d_val = ws.cell(row=student_row, column=d_col).value
+                                if n_val is not None and str(n_val).strip() != "":
+                                    d_str = f" din data {d_val}" if d_val else ""
+                                    existing_items.append(f"Slot N{k+1}: Notă {n_val}{d_str}")
+                                    item_coords.append((n_col, d_col))
+                        else:
+                            for k in range(30):
+                                a_col = start_col + 21 + k
+                                a_val = ws.cell(row=student_row, column=a_col).value
+                                if a_val is not None and str(a_val).strip() != "":
+                                    existing_items.append(f"Slot A{k+1}: Absență '{a_val}'")
+                                    item_coords.append((a_col, None))
+                        wb.close()
+                    except Exception as ex:
+                        st.error(f"Eroare la citire: {ex}")
+    
+                if existing_items:
+                    item_selected_idx = st.selectbox(f"Selectează {tip_del} de șters:", range(len(existing_items)), format_func=lambda i: existing_items[i], key="item_del_sel")
+                    
+                    if st.button(f"🗑️ Șterge {tip_del} Selectată", type="primary", use_container_width=True):
+                        _manual_action_started = time.perf_counter()
+                        backup = None
+                        wb = None
+                        try:
+                            backup = selected_file + ".manual.bak"
+                            _measure_catalog_operation("delete_backup", lambda: shutil.copy2(selected_file, backup))
+                            wb = _measure_catalog_operation("delete_write_workbook_open", lambda: openpyxl.load_workbook(selected_file))
+                            sheet_name = "Cultură Generală" if cat_del == "Cultură Generală" else "Module Tehnologice"
+                            ws = wb[sheet_name]
+                            student_row = resolve_student_row(wb, ELEVI[elev_idx_del])
+                            c1, c2 = item_coords[item_selected_idx]
+                            expected = existing_items[item_selected_idx]
+                            actual = ws.cell(row=student_row, column=c1).value
+                            if tip_del == "Notă":
+                                date_val = ws.cell(row=student_row, column=c2).value
+                                actual_label = f"Slot N{(c1 - start_col) // 2 + 1}: Notă {actual}" + (f" din data {date_val}" if date_val else "")
+                            else:
+                                actual_label = f"Slot A{c1 - start_col - 20}: Absență '{actual}'"
+                            if actual_label != expected:
+                                raise RuntimeError("Înregistrarea s-a modificat între selectare și ștergere; operația a fost blocată.")
+                            ws.cell(row=student_row, column=c1).value = None
+                            if c2 is not None:
+                                ws.cell(row=student_row, column=c2).value = None
+                            if not update_excel_computed_values(selected_file, workbook=wb):
+                                raise RuntimeError("Recalcularea a eșuat; ștergerea a fost anulată.")
+                            if not push_to_github(selected_file):
+                                raise RuntimeError("Sincronizarea privată a eșuat; ștergerea locală a fost anulată.")
+                            st.success(f"✅ {expected} a fost ștearsă și sincronizată cu succes din catalog!")
+                            wb.close()
+                            print(f"[catalog-performance] delete_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
+                            st.rerun(scope="fragment")
+                        except Exception as ex:
+                            if wb is not None:
+                                try: wb.close()
+                                except Exception: pass
+                            _restore_manual_backup(selected_file, backup)
+                            st.error(f"Eroare la ștergere: {ex}")
+                else:
+                    st.info(f"ℹ️ Nu există nicio {tip_del.lower()} înregistrată pentru elevul selectat la {materii_del[mat_idx_del]}.")
+    
+    
+        _render_manual_delete()
+    
 def generate_parent_access_pdf(elev_idx, file_path):
     """Generează în memorie fișa individuală de acces pentru părintele/reprezentantul legal."""
     elev_info = ELEVI[elev_idx]
@@ -2975,230 +3079,321 @@ def generate_parent_access_pdf(elev_idx, file_path):
 
 
 # --- TAB 5: FIȘĂ ELEV ---
-with tab4:
-    st.subheader("Fișă Elev & Rezumat")
-    col_v1, col_v2, col_v3 = st.columns([3, 1, 1])
-    with col_v1:
-        elev_idx_v = st.selectbox("Alege Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_v")
-    _student_conduct_rows = None
-    try:
-        _student_conduct_rows = _read_conduct_for_student(ELEVI[elev_idx_v][3])
-    except ConductViewError:
-        st.warning("Notele la purtare nu pot fi confirmate momentan din registrul privat. Nu se afișează valori locale posibil învechite.")
-    with col_v2:
-        st.write("")
-        st.write("")
+if tab4.open:
+    with tab4:
+        st.subheader("Fișă Elev & Rezumat")
+        if st.button("🔄 Actualizează fișa elevului", key="refresh_student_profile"):
+            _refresh_teacher_view()
+        col_v1, col_v2, col_v3 = st.columns([3, 1, 1])
+        with col_v1:
+            elev_idx_v = st.selectbox("Alege Elevul:", range(len(ELEVI)), format_func=lambda i: elev_options[i], key="elev_v")
+        _student_conduct_rows = None
         try:
-            pdf_bytes = generate_pdf_student(elev_idx_v, selected_file, conduct_rows=_student_conduct_rows)
-            st.download_button("🖨️ Descarcă Fișă PDF", data=pdf_bytes, file_name=f"Fisa_Elev_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
-        except Exception as ex:
-            st.error(f"Eroare PDF: {ex}")
-    with col_v3:
-        st.write("")
-        st.write("")
-        try:
-            access_pdf_bytes = generate_parent_access_pdf(elev_idx_v, selected_file)
-            st.download_button(
-                "🔐 Descarcă Fișa de acces pentru părinte",
-                data=access_pdf_bytes,
-                file_name=f"Fisa_Acces_Parinte_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
-        except Exception as ex:
-            st.error(f"Eroare fișă acces: {ex}")
-
-    if os.path.exists(selected_file):
-        try:
-            wb = openpyxl.load_workbook(selected_file, data_only=True)
-            e_info = ELEVI[elev_idx_v]
-            st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[3]}) | Cod PIN Părinți: `{e_info[4] if len(e_info)>4 else '1234'}`")
-            
-            _academic_payload=[]
-            for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
-                st.markdown(f"#### {cat_title}")
-                ws = wb[sheet_n]
-                s_row = resolve_student_row(wb, ELEVI[elev_idx_v])
+            _student_conduct_rows = _read_conduct_for_student(ELEVI[elev_idx_v][3])
+        except ConductViewError:
+            st.warning("Notele la purtare nu pot fi confirmate momentan din registrul privat. Nu se afișează valori locale posibil învechite.")
+        with col_v2:
+            st.write("")
+            st.write("")
+            try:
+                pdf_bytes = generate_pdf_student(elev_idx_v, selected_file, conduct_rows=_student_conduct_rows)
+                st.download_button("🖨️ Descarcă Fișă PDF", data=pdf_bytes, file_name=f"Fisa_Elev_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
+            except Exception as ex:
+                st.error(f"Eroare PDF: {ex}")
+        with col_v3:
+            st.write("")
+            st.write("")
+            try:
+                access_pdf_bytes = generate_parent_access_pdf(elev_idx_v, selected_file)
+                st.download_button(
+                    "🔐 Descarcă Fișa de acces pentru părinte",
+                    data=access_pdf_bytes,
+                    file_name=f"Fisa_Acces_Parinte_{ELEVI[elev_idx_v][1].replace(' ', '_')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+            except Exception as ex:
+                st.error(f"Eroare fișă acces: {ex}")
+    
+        if os.path.exists(selected_file):
+            try:
+                wb = openpyxl.load_workbook(selected_file, data_only=True)
+                e_info = ELEVI[elev_idx_v]
+                st.markdown(f"### 👤 {e_info[1]} (Matricol {e_info[3]}) | Cod PIN Părinți: `{e_info[4] if len(e_info)>4 else '1234'}`")
                 
-                rows_data = []
-                for s_name, start_col in sub_list:
-                    notes = []
-                    for k in range(10):
-                        n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
-                        d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
-                        if n_val is not None and str(n_val).strip() != "":
-                            d_str = f" ({d_val})" if d_val else ""
-                            notes.append(f"{n_val}{d_str}")
+                _academic_payload=[]
+                for cat_title, sheet_n, sub_list in [("Cultură Generală", "Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", "Module Tehnologice", MODULE_TH)]:
+                    st.markdown(f"#### {cat_title}")
+                    ws = wb[sheet_n]
+                    s_row = resolve_student_row(wb, ELEVI[elev_idx_v])
                     
-                    absences = []
-                    sub_nem = 0
-                    sub_mot = 0
-                    for k in range(30):
-                        a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
-                        if a_val is not None and str(a_val).strip() != "":
-                            s_a = str(a_val).strip()
-                            absences.append(s_a)
-                            if s_a.endswith('m') or s_a.endswith('M'): sub_mot += 1
-                            else: sub_nem += 1
-                            
-                    sub_tot = sub_nem + sub_mot
-                    abs_str_formatted = f"{sub_tot} total ({sub_nem} nem. / {sub_mot} mot.) — Date: {', '.join(absences)}" if sub_tot > 0 else "Fără absențe (0)"
-                    
-                    media_val = ws.cell(row=s_row, column=start_col + 20).value
-                    media_str = safe_float_str(media_val)
-                    
-                    rows_data.append({
-                        "Disciplină / Modul": s_name,
-                        "Note & Date": ", ".join(notes) if notes else "Fără note",
-                        "Absențe Detaliate (Total / Nem / Mot)": abs_str_formatted,
-                        "Medie": media_str
-                    })
-                st.dataframe(rows_data, use_container_width=True, hide_index=True)
-                _academic_payload.extend(rows_data)
-            st.markdown("#### 🧭 Purtare pe intervalele de cursuri")
-            if _student_conduct_rows is not None:
-                st.dataframe(_student_conduct_rows, use_container_width=True, hide_index=True)
-                _academic_payload.append({"purtare_intervale": _student_conduct_rows})
-            else:
-                st.info("Notarea pe intervale nu este disponibilă pentru afișare în acest moment.")
-            st.info(CONDUCT_ANNUAL_NOTICE)
-            _academic_fingerprint=hashlib.sha256(
-                json.dumps(_academic_payload,ensure_ascii=False,sort_keys=True).encode("utf-8")
-            ).hexdigest()
-            if st.button(
-                "📱 Informează părintele despre actualizarea situației școlare",
-                type="primary",use_container_width=True,
-                key=f"notify_parent_school_state_{e_info[0]}",
-            ):
-                _event,_created=ensure_notification(
-                    recipient=RECIPIENT_PARENT,
-                    event_type="SITUATIE_SCOLARA_ACTUALIZATA",
-                    source_type="CATALOG",
-                    source_id=normalize_student_key(e_info[3]),
-                    source_revision=_academic_fingerprint,
-                    student_key=normalize_student_key(e_info[3]),
-                    title="Situația școlară a fost actualizată",
-                    message="Situația școlară din Catalog Online a fost verificată și actualizată. Accesați Portalul Părinților pentru detalii.",
-                )
-                if _created:
-                    _wa_links=_parent_whatsapp_links(e_info[3],_event.get("message") or "")
-                    st.success("✅ Informarea a fost înregistrată în Portalul Părinților.")
-                    for _idx,_wa in enumerate(_wa_links):
-                        st.link_button(f"📲 Deschide WhatsApp pentru părinte {(_idx+1)}",_wa,use_container_width=True)
+                    rows_data = []
+                    for s_name, start_col in sub_list:
+                        notes = []
+                        for k in range(10):
+                            n_val = ws.cell(row=s_row, column=start_col + (k * 2)).value
+                            d_val = ws.cell(row=s_row, column=start_col + (k * 2) + 1).value
+                            if n_val is not None and str(n_val).strip() != "":
+                                d_str = f" ({d_val})" if d_val else ""
+                                notes.append(f"{n_val}{d_str}")
+                        
+                        absences = []
+                        sub_nem = 0
+                        sub_mot = 0
+                        for k in range(30):
+                            a_val = ws.cell(row=s_row, column=start_col + 21 + k).value
+                            if a_val is not None and str(a_val).strip() != "":
+                                s_a = str(a_val).strip()
+                                absences.append(s_a)
+                                if s_a.endswith('m') or s_a.endswith('M'): sub_mot += 1
+                                else: sub_nem += 1
+                                
+                        sub_tot = sub_nem + sub_mot
+                        abs_str_formatted = f"{sub_tot} total ({sub_nem} nem. / {sub_mot} mot.) — Date: {', '.join(absences)}" if sub_tot > 0 else "Fără absențe (0)"
+                        
+                        media_val = ws.cell(row=s_row, column=start_col + 20).value
+                        media_str = safe_float_str(media_val)
+                        
+                        rows_data.append({
+                            "Disciplină / Modul": s_name,
+                            "Note & Date": ", ".join(notes) if notes else "Fără note",
+                            "Absențe Detaliate (Total / Nem / Mot)": abs_str_formatted,
+                            "Medie": media_str
+                        })
+                    st.dataframe(rows_data, use_container_width=True, hide_index=True)
+                    _academic_payload.extend(rows_data)
+                st.markdown("#### 🧭 Purtare pe intervalele de cursuri")
+                if _student_conduct_rows is not None:
+                    st.dataframe(_student_conduct_rows, use_container_width=True, hide_index=True)
+                    _academic_payload.append({"purtare_intervale": _student_conduct_rows})
                 else:
-                    st.info("ℹ️ Părintele a fost deja informat pentru această versiune a situației școlare.")
-            wb.close()
-        except Exception as ex:
-            st.error(f"Eroare la citire fișă: {ex}")
-
-# --- TAB 6: CENTRALIZATOR CLASĂ ---
-with tab5:
-    st.subheader("📈 Centralizator General Clasă (Situție Școlară & Premii)")
-    col_c1, col_c2 = st.columns([2, 1])
-    with col_c2:
-        try:
-            pdf_cent_bytes = generate_pdf_centralizator(selected_file)
-            st.download_button("🖨️ Descarcă Centralizator PDF", data=pdf_cent_bytes, file_name="Centralizator_General_IX_TH.pdf", mime="application/pdf", use_container_width=True)
-        except Exception as ex:
-            st.error(f"Eroare PDF Centralizator: {ex}")
-            
-    if os.path.exists(selected_file):
-        try:
-            stats, sub_totals = calculate_all_class_stats(selected_file)
-            c_data = []
-            for s in stats:
-                c_data.append({
-                    "Nr.": str(s['nr']),
-                    "Nume și Prenume": s['nume'],
-                    "Matricol": s['matr'],
-                    "Media CG": safe_float_str(s['mcg']),
-                    "Media TH": safe_float_str(s['mth']),
-                    "Media Generală": safe_float_str(s['mg']),
-                    "Nota Purtare": str(s['purtare']),
-                    "Statut Școlar": s['statut'],
-                    "Total Absențe": str(s['tot_abs']),
-                    "Rang": s['rang'],
-                    "Premiu": s['premiu']
-                })
-            st.dataframe(c_data, use_container_width=True, hide_index=True)
-            
-            st.divider()
-            col_lun1, col_lun2 = st.columns(2)
-            with col_lun1:
-                try:
-                    lunar_st_rows = calculate_lunar_student_absences(selected_file)
-                    if lunar_st_rows:
-                        excel_lun_st_bytes = generate_excel_bytes(lunar_st_rows, sheet_name="Absente Lunare Elevi")
-                        st.download_button("📊 Descarcă Absențe Lunare pe Elevi (.xlsx)", data=excel_lun_st_bytes, file_name="Absente_Lunare_Elevi_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-                except Exception as ex:
-                    st.error(f"Eroare Excel Absențe Lunare Elevi: {ex}")
-
-            with col_lun2:
-                try:
-                    lunar_sub_rows = calculate_lunar_subject_absences(selected_file)
-                    if lunar_sub_rows:
-                        excel_lun_sub_bytes = generate_excel_bytes(lunar_sub_rows, sheet_name="Absente Lunare Discipline")
-                        st.download_button("📊 Descarcă Absențe Lunare pe Discipline (.xlsx)", data=excel_lun_sub_bytes, file_name="Absente_Lunare_Discipline_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-                except Exception as ex:
-                    st.error(f"Eroare Excel Absențe Lunare Discipline: {ex}")
-
-            # Raport separat pentru o singura luna a anului scolar configurat.
-            st.markdown("#### 📅 Raport absențe pentru o lună selectată")
-            month_options = {name.split(" ")[0]: (code, int(name.split(" ")[1])) for code, name in MONTH_DEFS}
-            col_month, col_year = st.columns(2)
-            with col_month:
-                selected_month_name = st.selectbox("Selectează luna", list(month_options), key="abs_disc_month")
-            with col_year:
-                selected_report_year = st.selectbox(
-                    "Selectează anul",
-                    sorted({year for _, year in month_options.values()}),
-                    key="abs_disc_year",
-                )
-            selected_code, expected_year = month_options[selected_month_name]
-            valid_month_year = selected_report_year == expected_year
-            if not valid_month_year:
-                st.info("Luna și anul selectate nu aparțin anului școlar configurat. Selectează o combinație validă.")
-            if st.button("📊 Generează raport absențe lunar", key="generate_abs_disc_single_month", disabled=not valid_month_year):
-                if valid_month_year:
-                    try:
-                        monthly_rows = calculate_lunar_subject_absences(selected_file)
-                        month_label = f"{selected_month_name} {selected_report_year}"
-                        monthly_columns = [
-                            "Categorie", "Disciplină / Modul",
-                            f"{month_label} - Nemotivate Clasă",
-                            f"{month_label} - Motivate Clasă",
-                            f"{month_label} - Total Clasă",
-                        ]
-                        if monthly_rows:
-                            report_rows = [{key: row[key] for key in monthly_columns} for row in monthly_rows]
-                            st.session_state["abs_disc_monthly_download"] = (
-                                generate_excel_bytes(report_rows, sheet_name="Absente Discipline Lunar"),
-                                f"Absente_Discipline_{selected_month_name}_{selected_report_year}_IX_TH.xlsx",
-                                selected_month_name,
-                                selected_report_year,
-                            )
-                        else:
-                            st.error("Raportul nu a putut fi calculat. Nu a fost generat niciun fișier.")
-                    except Exception as ex:
-                        st.error(f"Eroare la generarea raportului lunar: {ex}")
-            if "abs_disc_monthly_download" in st.session_state:
-                monthly_bytes, monthly_filename, generated_month, generated_year = st.session_state["abs_disc_monthly_download"]
-                if valid_month_year and (generated_month, generated_year) == (selected_month_name, selected_report_year):
-                    st.download_button(
-                        "⬇️ Descarcă raportul lunar (.xlsx)",
-                        data=monthly_bytes,
-                        file_name=monthly_filename,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True,
+                    st.info("Notarea pe intervale nu este disponibilă pentru afișare în acest moment.")
+                st.info(CONDUCT_ANNUAL_NOTICE)
+                _academic_fingerprint=hashlib.sha256(
+                    json.dumps(_academic_payload,ensure_ascii=False,sort_keys=True).encode("utf-8")
+                ).hexdigest()
+                if st.button(
+                    "📱 Informează părintele despre actualizarea situației școlare",
+                    type="primary",use_container_width=True,
+                    key=f"notify_parent_school_state_{e_info[0]}",
+                ):
+                    _event,_created=ensure_notification(
+                        recipient=RECIPIENT_PARENT,
+                        event_type="SITUATIE_SCOLARA_ACTUALIZATA",
+                        source_type="CATALOG",
+                        source_id=normalize_student_key(e_info[3]),
+                        source_revision=_academic_fingerprint,
+                        student_key=normalize_student_key(e_info[3]),
+                        title="Situația școlară a fost actualizată",
+                        message="Situația școlară din Catalog Online a fost verificată și actualizată. Accesați Portalul Părinților pentru detalii.",
                     )
-
-            st.subheader("📊 Centralizator Absențe pe Discipline și Module")
-            st.caption("Generează raportul sintetic al absențelor defalcat pe fiecare disciplină în parte cu totalurile la nivel de clasă.")
-            
-            show_abs_cent = st.checkbox("Afișează Centralizator Absențe pe Discipline", value=True, key="chk_show_abs_cent")
-            
-            if show_abs_cent:
-                abs_by_sub_rows = []
+                    if _created:
+                        _wa_links=_parent_whatsapp_links(e_info[3],_event.get("message") or "")
+                        st.success("✅ Informarea a fost înregistrată în Portalul Părinților.")
+                        for _idx,_wa in enumerate(_wa_links):
+                            st.link_button(f"📲 Deschide WhatsApp pentru părinte {(_idx+1)}",_wa,use_container_width=True)
+                    else:
+                        st.info("ℹ️ Părintele a fost deja informat pentru această versiune a situației școlare.")
+                wb.close()
+            except Exception as ex:
+                st.error(f"Eroare la citire fișă: {ex}")
+    
+    # --- TAB 6: CENTRALIZATOR CLASĂ ---
+if tab5.open:
+    with tab5:
+        st.subheader("📈 Centralizator General Clasă (Situție Școlară & Premii)")
+        col_c1, col_c2 = st.columns([2, 1])
+        with col_c2:
+            try:
+                pdf_cent_bytes = generate_pdf_centralizator(selected_file)
+                st.download_button("🖨️ Descarcă Centralizator PDF", data=pdf_cent_bytes, file_name="Centralizator_General_IX_TH.pdf", mime="application/pdf", use_container_width=True)
+            except Exception as ex:
+                st.error(f"Eroare PDF Centralizator: {ex}")
+                
+        if os.path.exists(selected_file):
+            try:
+                stats, sub_totals = calculate_all_class_stats(selected_file)
+                c_data = []
+                for s in stats:
+                    c_data.append({
+                        "Nr.": str(s['nr']),
+                        "Nume și Prenume": s['nume'],
+                        "Matricol": s['matr'],
+                        "Media CG": safe_float_str(s['mcg']),
+                        "Media TH": safe_float_str(s['mth']),
+                        "Media Generală": safe_float_str(s['mg']),
+                        "Nota Purtare": str(s['purtare']),
+                        "Statut Școlar": s['statut'],
+                        "Total Absențe": str(s['tot_abs']),
+                        "Rang": s['rang'],
+                        "Premiu": s['premiu']
+                    })
+                st.dataframe(c_data, use_container_width=True, hide_index=True)
+                
+                st.divider()
+                col_lun1, col_lun2 = st.columns(2)
+                with col_lun1:
+                    try:
+                        lunar_st_rows = calculate_lunar_student_absences(selected_file)
+                        if lunar_st_rows:
+                            excel_lun_st_bytes = generate_excel_bytes(lunar_st_rows, sheet_name="Absente Lunare Elevi")
+                            st.download_button("📊 Descarcă Absențe Lunare pe Elevi (.xlsx)", data=excel_lun_st_bytes, file_name="Absente_Lunare_Elevi_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                    except Exception as ex:
+                        st.error(f"Eroare Excel Absențe Lunare Elevi: {ex}")
+    
+                with col_lun2:
+                    try:
+                        lunar_sub_rows = calculate_lunar_subject_absences(selected_file)
+                        if lunar_sub_rows:
+                            excel_lun_sub_bytes = generate_excel_bytes(lunar_sub_rows, sheet_name="Absente Lunare Discipline")
+                            st.download_button("📊 Descarcă Absențe Lunare pe Discipline (.xlsx)", data=excel_lun_sub_bytes, file_name="Absente_Lunare_Discipline_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                    except Exception as ex:
+                        st.error(f"Eroare Excel Absențe Lunare Discipline: {ex}")
+    
+                # Raport separat pentru o singura luna a anului scolar configurat.
+                st.markdown("#### 📅 Raport absențe pentru o lună selectată")
+                month_options = {name.split(" ")[0]: (code, int(name.split(" ")[1])) for code, name in MONTH_DEFS}
+                col_month, col_year = st.columns(2)
+                with col_month:
+                    selected_month_name = st.selectbox("Selectează luna", list(month_options), key="abs_disc_month")
+                with col_year:
+                    selected_report_year = st.selectbox(
+                        "Selectează anul",
+                        sorted({year for _, year in month_options.values()}),
+                        key="abs_disc_year",
+                    )
+                selected_code, expected_year = month_options[selected_month_name]
+                valid_month_year = selected_report_year == expected_year
+                if not valid_month_year:
+                    st.info("Luna și anul selectate nu aparțin anului școlar configurat. Selectează o combinație validă.")
+                if st.button("📊 Generează raport absențe lunar", key="generate_abs_disc_single_month", disabled=not valid_month_year):
+                    if valid_month_year:
+                        try:
+                            monthly_rows = calculate_lunar_subject_absences(selected_file)
+                            month_label = f"{selected_month_name} {selected_report_year}"
+                            monthly_columns = [
+                                "Categorie", "Disciplină / Modul",
+                                f"{month_label} - Nemotivate Clasă",
+                                f"{month_label} - Motivate Clasă",
+                                f"{month_label} - Total Clasă",
+                            ]
+                            if monthly_rows:
+                                report_rows = [{key: row[key] for key in monthly_columns} for row in monthly_rows]
+                                st.session_state["abs_disc_monthly_download"] = (
+                                    generate_excel_bytes(report_rows, sheet_name="Absente Discipline Lunar"),
+                                    f"Absente_Discipline_{selected_month_name}_{selected_report_year}_IX_TH.xlsx",
+                                    selected_month_name,
+                                    selected_report_year,
+                                )
+                            else:
+                                st.error("Raportul nu a putut fi calculat. Nu a fost generat niciun fișier.")
+                        except Exception as ex:
+                            st.error(f"Eroare la generarea raportului lunar: {ex}")
+                if "abs_disc_monthly_download" in st.session_state:
+                    monthly_bytes, monthly_filename, generated_month, generated_year = st.session_state["abs_disc_monthly_download"]
+                    if valid_month_year and (generated_month, generated_year) == (selected_month_name, selected_report_year):
+                        st.download_button(
+                            "⬇️ Descarcă raportul lunar (.xlsx)",
+                            data=monthly_bytes,
+                            file_name=monthly_filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True,
+                        )
+    
+                st.subheader("📊 Centralizator Absențe pe Discipline și Module")
+                st.caption("Generează raportul sintetic al absențelor defalcat pe fiecare disciplină în parte cu totalurile la nivel de clasă.")
+                
+                show_abs_cent = st.checkbox("Afișează Centralizator Absențe pe Discipline", value=True, key="chk_show_abs_cent")
+                
+                if show_abs_cent:
+                    abs_by_sub_rows = []
+                    tot_class_nem = 0
+                    tot_class_mot = 0
+                    
+                    for cat_name, sub_list in [("Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", MODULE_TH)]:
+                        for s_name, _ in sub_list:
+                            s_info = sub_totals.get((cat_name, s_name), {'nem': 0, 'mot': 0, 'tot': 0})
+                            tot_class_nem += s_info['nem']
+                            tot_class_mot += s_info['mot']
+                            abs_by_sub_rows.append({
+                                "Categorie": cat_name,
+                                "Disciplină / Modul": s_name,
+                                "Absențe Nemotivate Clasă": s_info['nem'],
+                                "Absențe Motivate Clasă": s_info['mot'],
+                                "Total Absențe Clasă": s_info['tot']
+                            })
+                    
+                    tot_class_all = tot_class_nem + tot_class_mot
+                    abs_by_sub_rows.append({
+                        "Categorie": "TOTAL CLASĂ",
+                        "Disciplină / Modul": "TOTAL GENERAL CLASĂ",
+                        "Absențe Nemotivate Clasă": tot_class_nem,
+                        "Absențe Motivate Clasă": tot_class_mot,
+                        "Total Absențe Clasă": tot_class_all
+                    })
+                    
+                    st.dataframe(abs_by_sub_rows, use_container_width=True, hide_index=True)
+                
+                st.divider()
+                st.subheader("🔐 Coduri PIN Confidențiale Părinți")
+                st.caption("Fișierul cu codurile de acces necesare părinților pentru autentificare în portalul lor.")
+                
+                col_p1, col_p2 = st.columns([3, 1])
+                with col_p2:
+                    try:
+                        pdf_pins_bytes = generate_pdf_pins(selected_file)
+                        st.download_button("🖨️ Descarcă Listă PIN-uri (PDF)", data=pdf_pins_bytes, file_name="Lista_Coduri_PIN_Parinti_IX_TH.pdf", mime="application/pdf", use_container_width=True)
+                    except Exception as ex:
+                        st.error(f"Eroare PDF PIN-uri: {ex}")
+                
+                pin_display_data = []
+                for idx, e in enumerate(ELEVI):
+                    pin_display_data.append({
+                        "Nr.": str(e[0]),
+                        "Nume și Prenume Elev": e[1],
+                        "Număr Matricol": e[3],
+                        "COD PIN ACCES PĂRINTE": e[4] if len(e)>4 else "1234"
+                    })
+                st.dataframe(pin_display_data, use_container_width=True, hide_index=True)
+            except Exception as ex:
+                st.error(f"Eroare la citire centralizator: {ex}")
+    
+    # --- TAB 7: RAPORT DIRIGINTE ---
+if tab6.open:
+    with tab6:
+        st.subheader("📋 Raport Sintetic al Dirigintelui")
+        col_r1, col_r2 = st.columns([3, 1])
+        with col_r2:
+            try:
+                pdf_rap_bytes = generate_pdf_raport(selected_file)
+                st.download_button("🖨️ Descarcă Raport PDF", data=pdf_rap_bytes, file_name="Raport_Diriginte_IX_TH.pdf", mime="application/pdf", use_container_width=True)
+            except Exception as ex:
+                st.error(f"Eroare PDF Raport: {ex}")
+                
+        if os.path.exists(selected_file):
+            try:
+                stats, sub_totals = calculate_all_class_stats(selected_file)
+                tot_el = len(stats)
+                promovati = [s for s in stats if s['statut'] == "Promovat"]
+                promov_str = f"{len(promovati)}/{tot_el} ({(len(promovati)/tot_el*100):.1f}%)" if tot_el else "-"
+                
+                valid_mgs = [s['mg'] for s in stats if s['mg'] is not None]
+                med_clasa = f"{(sum(valid_mgs)/len(valid_mgs)):.2f}" if valid_mgs else "-"
+                med_purt = f"{(sum(s['purtare'] for s in stats)/tot_el):.2f}" if tot_el else "10.00"
+                tot_abs_sum = sum(s['tot_abs'] for s in stats)
+                tot_abs_str = f"{tot_abs_sum}"
+    
+                st.markdown("#### 📊 Indicatori Cheie de Performanță Clasă")
+                m1, m2, m3, m4, m5 = st.columns(5)
+                m1.metric("Total Elevi", str(tot_el))
+                m2.metric("Promovabilitate", promov_str)
+                m3.metric("Media Clasei", med_clasa)
+                m4.metric("Media Purtare", med_purt)
+                m5.metric("Total Absențe", tot_abs_str)
+                
+                st.divider()
+                st.markdown("#### 📊 Raport Centralizat al Absențelor pe Discipline (Include Ultimul Rând - Total Clasă)")
+                abs_rap_rows = []
                 tot_class_nem = 0
                 tot_class_mot = 0
                 
@@ -3207,7 +3402,7 @@ with tab5:
                         s_info = sub_totals.get((cat_name, s_name), {'nem': 0, 'mot': 0, 'tot': 0})
                         tot_class_nem += s_info['nem']
                         tot_class_mot += s_info['mot']
-                        abs_by_sub_rows.append({
+                        abs_rap_rows.append({
                             "Categorie": cat_name,
                             "Disciplină / Modul": s_name,
                             "Absențe Nemotivate Clasă": s_info['nem'],
@@ -3216,512 +3411,538 @@ with tab5:
                         })
                 
                 tot_class_all = tot_class_nem + tot_class_mot
-                abs_by_sub_rows.append({
+                abs_rap_rows.append({
                     "Categorie": "TOTAL CLASĂ",
                     "Disciplină / Modul": "TOTAL GENERAL CLASĂ",
                     "Absențe Nemotivate Clasă": tot_class_nem,
                     "Absențe Motivate Clasă": tot_class_mot,
                     "Total Absențe Clasă": tot_class_all
                 })
-                
-                st.dataframe(abs_by_sub_rows, use_container_width=True, hide_index=True)
-            
-            st.divider()
-            st.subheader("🔐 Coduri PIN Confidențiale Părinți")
-            st.caption("Fișierul cu codurile de acces necesare părinților pentru autentificare în portalul lor.")
-            
-            col_p1, col_p2 = st.columns([3, 1])
-            with col_p2:
+                st.dataframe(abs_rap_rows, use_container_width=True, hide_index=True)
                 try:
-                    pdf_pins_bytes = generate_pdf_pins(selected_file)
-                    st.download_button("🖨️ Descarcă Listă PIN-uri (PDF)", data=pdf_pins_bytes, file_name="Lista_Coduri_PIN_Parinti_IX_TH.pdf", mime="application/pdf", use_container_width=True)
+                    excel_abs_bytes = generate_excel_bytes(abs_rap_rows, sheet_name="Absente Discipline")
+                    st.download_button("📊 Descarcă Raport Centralizat Absențe (.xlsx)", data=excel_abs_bytes, file_name="Raport_Centralizat_Absente_Discipline_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
                 except Exception as ex:
-                    st.error(f"Eroare PDF PIN-uri: {ex}")
-            
-            pin_display_data = []
-            for idx, e in enumerate(ELEVI):
-                pin_display_data.append({
-                    "Nr.": str(e[0]),
-                    "Nume și Prenume Elev": e[1],
-                    "Număr Matricol": e[3],
-                    "COD PIN ACCES PĂRINTE": e[4] if len(e)>4 else "1234"
-                })
-            st.dataframe(pin_display_data, use_container_width=True, hide_index=True)
-        except Exception as ex:
-            st.error(f"Eroare la citire centralizator: {ex}")
-
-# --- TAB 7: RAPORT DIRIGINTE ---
-with tab6:
-    st.subheader("📋 Raport Sintetic al Dirigintelui")
-    col_r1, col_r2 = st.columns([3, 1])
-    with col_r2:
-        try:
-            pdf_rap_bytes = generate_pdf_raport(selected_file)
-            st.download_button("🖨️ Descarcă Raport PDF", data=pdf_rap_bytes, file_name="Raport_Diriginte_IX_TH.pdf", mime="application/pdf", use_container_width=True)
-        except Exception as ex:
-            st.error(f"Eroare PDF Raport: {ex}")
-            
-    if os.path.exists(selected_file):
-        try:
-            stats, sub_totals = calculate_all_class_stats(selected_file)
-            tot_el = len(stats)
-            promovati = [s for s in stats if s['statut'] == "Promovat"]
-            promov_str = f"{len(promovati)}/{tot_el} ({(len(promovati)/tot_el*100):.1f}%)" if tot_el else "-"
-            
-            valid_mgs = [s['mg'] for s in stats if s['mg'] is not None]
-            med_clasa = f"{(sum(valid_mgs)/len(valid_mgs)):.2f}" if valid_mgs else "-"
-            med_purt = f"{(sum(s['purtare'] for s in stats)/tot_el):.2f}" if tot_el else "10.00"
-            tot_abs_sum = sum(s['tot_abs'] for s in stats)
-            tot_abs_str = f"{tot_abs_sum}"
-
-            st.markdown("#### 📊 Indicatori Cheie de Performanță Clasă")
-            m1, m2, m3, m4, m5 = st.columns(5)
-            m1.metric("Total Elevi", str(tot_el))
-            m2.metric("Promovabilitate", promov_str)
-            m3.metric("Media Clasei", med_clasa)
-            m4.metric("Media Purtare", med_purt)
-            m5.metric("Total Absențe", tot_abs_str)
-            
-            st.divider()
-            st.markdown("#### 📊 Raport Centralizat al Absențelor pe Discipline (Include Ultimul Rând - Total Clasă)")
-            abs_rap_rows = []
-            tot_class_nem = 0
-            tot_class_mot = 0
-            
-            for cat_name, sub_list in [("Cultură Generală", DISCIPLINE_CG), ("Module Tehnologice", MODULE_TH)]:
-                for s_name, _ in sub_list:
-                    s_info = sub_totals.get((cat_name, s_name), {'nem': 0, 'mot': 0, 'tot': 0})
-                    tot_class_nem += s_info['nem']
-                    tot_class_mot += s_info['mot']
-                    abs_rap_rows.append({
-                        "Categorie": cat_name,
-                        "Disciplină / Modul": s_name,
-                        "Absențe Nemotivate Clasă": s_info['nem'],
-                        "Absențe Motivate Clasă": s_info['mot'],
-                        "Total Absențe Clasă": s_info['tot']
+                    st.error(f"Eroare la generare Excel: {ex}")
+                
+                st.divider()
+                st.markdown(f"#### 🏆 Clasament Complet Elevi în Funcție de Absențe ({len(ELEVI)} Elevi)")
+                
+                sort_criterion = st.radio("Criteriu Sortare Clasament Absențe:", ["După Total Absențe (Descrescător)", "După Absențe Nemotivate (Descrescător)"], horizontal=True, key="sort_crit_abs")
+                
+                if "Nemotivate" in sort_criterion:
+                    sorted_abs_stats = sorted(stats, key=lambda x: (x['abs_nem'], x['tot_abs']), reverse=True)
+                else:
+                    sorted_abs_stats = sorted(stats, key=lambda x: (x['tot_abs'], x['abs_nem']), reverse=True)
+                    
+                rank_abs_rows = []
+                for r_idx, s in enumerate(sorted_abs_stats):
+                    max_sub_str = f"{s['max_sub']}"
+                    max_sub_det = f"{s['max_sub_info']['tot']} tot ({s['max_sub_info']['nem']} nem. / {s['max_sub_info']['mot']} mot.)" if s['max_sub_info']['tot'] > 0 else "0 absențe"
+                    rank_abs_rows.append({
+                        "Loc Absențe": r_idx + 1,
+                        "Nume și Prenume Elev": s['nume'],
+                        "Matricol": s['matr'],
+                        "Total Absențe": s['tot_abs'],
+                        "Absențe Nemotivate": s['abs_nem'],
+                        "Absențe Motivate": s['abs_mot'],
+                        "Disciplina cu Cele Mai Multe Absențe": max_sub_str,
+                        "Absențe la Disciplina Maximă": max_sub_det
                     })
-            
-            tot_class_all = tot_class_nem + tot_class_mot
-            abs_rap_rows.append({
-                "Categorie": "TOTAL CLASĂ",
-                "Disciplină / Modul": "TOTAL GENERAL CLASĂ",
-                "Absențe Nemotivate Clasă": tot_class_nem,
-                "Absențe Motivate Clasă": tot_class_mot,
-                "Total Absențe Clasă": tot_class_all
-            })
-            st.dataframe(abs_rap_rows, use_container_width=True, hide_index=True)
-            try:
-                excel_abs_bytes = generate_excel_bytes(abs_rap_rows, sheet_name="Absente Discipline")
-                st.download_button("📊 Descarcă Raport Centralizat Absențe (.xlsx)", data=excel_abs_bytes, file_name="Raport_Centralizat_Absente_Discipline_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-            except Exception as ex:
-                st.error(f"Eroare la generare Excel: {ex}")
-            
-            st.divider()
-            st.markdown(f"#### 🏆 Clasament Complet Elevi în Funcție de Absențe ({len(ELEVI)} Elevi)")
-            
-            sort_criterion = st.radio("Criteriu Sortare Clasament Absențe:", ["După Total Absențe (Descrescător)", "După Absențe Nemotivate (Descrescător)"], horizontal=True, key="sort_crit_abs")
-            
-            if "Nemotivate" in sort_criterion:
-                sorted_abs_stats = sorted(stats, key=lambda x: (x['abs_nem'], x['tot_abs']), reverse=True)
-            else:
-                sorted_abs_stats = sorted(stats, key=lambda x: (x['tot_abs'], x['abs_nem']), reverse=True)
+                st.dataframe(rank_abs_rows, use_container_width=True, hide_index=True)
                 
-            rank_abs_rows = []
-            for r_idx, s in enumerate(sorted_abs_stats):
-                max_sub_str = f"{s['max_sub']}"
-                max_sub_det = f"{s['max_sub_info']['tot']} tot ({s['max_sub_info']['nem']} nem. / {s['max_sub_info']['mot']} mot.)" if s['max_sub_info']['tot'] > 0 else "0 absențe"
-                rank_abs_rows.append({
-                    "Loc Absențe": r_idx + 1,
-                    "Nume și Prenume Elev": s['nume'],
-                    "Matricol": s['matr'],
-                    "Total Absențe": s['tot_abs'],
-                    "Absențe Nemotivate": s['abs_nem'],
-                    "Absențe Motivate": s['abs_mot'],
-                    "Disciplina cu Cele Mai Multe Absențe": max_sub_str,
-                    "Absențe la Disciplina Maximă": max_sub_det
-                })
-            st.dataframe(rank_abs_rows, use_container_width=True, hide_index=True)
-            
-            sorted_tot_stats = sorted(stats, key=lambda x: (x['tot_abs'], x['abs_nem']), reverse=True)
-            rank_tot_rows = []
-            for r_idx, s in enumerate(sorted_tot_stats):
-                max_sub_str = f"{s['max_sub']}"
-                max_sub_det = f"{s['max_sub_info']['tot']} tot ({s['max_sub_info']['nem']} nem. / {s['max_sub_info']['mot']} mot.)" if s['max_sub_info']['tot'] > 0 else "0 absențe"
-                rank_tot_rows.append({
-                    "Loc Absențe": r_idx + 1,
-                    "Nume și Prenume Elev": s['nume'],
-                    "Matricol": s['matr'],
-                    "Total Absențe": s['tot_abs'],
-                    "Absențe Nemotivate": s['abs_nem'],
-                    "Absențe Motivate": s['abs_mot'],
-                    "Disciplina cu Cele Mai Multe Absențe": max_sub_str,
-                    "Absențe la Disciplina Maximă": max_sub_det
-                })
-
-            sorted_nem_stats = sorted(stats, key=lambda x: (x['abs_nem'], x['tot_abs']), reverse=True)
-            rank_nem_rows = []
-            for r_idx, s in enumerate(sorted_nem_stats):
-                max_sub_str = f"{s['max_sub']}"
-                max_sub_det = f"{s['max_sub_info']['tot']} tot ({s['max_sub_info']['nem']} nem. / {s['max_sub_info']['mot']} mot.)" if s['max_sub_info']['tot'] > 0 else "0 absențe"
-                rank_nem_rows.append({
-                    "Loc Absențe": r_idx + 1,
-                    "Nume și Prenume Elev": s['nume'],
-                    "Matricol": s['matr'],
-                    "Total Absențe": s['tot_abs'],
-                    "Absențe Nemotivate": s['abs_nem'],
-                    "Absențe Motivate": s['abs_mot'],
-                    "Disciplina cu Cele Mai Multe Absențe": max_sub_str,
-                    "Absențe la Disciplina Maximă": max_sub_det
-                })
-
-            col_ex1, col_ex2 = st.columns(2)
-            with col_ex1:
-                try:
-                    excel_tot_bytes = generate_excel_bytes(rank_tot_rows, sheet_name="Clasament Total Absente")
-                    st.download_button("📊 Descarcă Clasament după Total Absențe (.xlsx)", data=excel_tot_bytes, file_name="Clasament_Elevi_Dupa_Total_Absente_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-                except Exception as ex:
-                    st.error(f"Eroare la generare Excel: {ex}")
-
-            with col_ex2:
-                try:
-                    excel_nem_bytes = generate_excel_bytes(rank_nem_rows, sheet_name="Clasament Absente Nemotivate")
-                    st.download_button("📊 Descarcă Clasament după Absențe Nemotivate (.xlsx)", data=excel_nem_bytes, file_name="Clasament_Elevi_Dupa_Absente_Nemotivate_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-                except Exception as ex:
-                    st.error(f"Eroare la generare Excel: {ex}")
-
-            st.divider()
-            st.markdown("#### 📈 Distribuția Mediilor Generale")
-            transe = [
-                ("Medii = 10.00", lambda m: m == 10.0),
-                ("Medii 9.00 - 9.99", lambda m: 9.0 <= m < 10.0),
-                ("Medii 8.00 - 8.99", lambda m: 8.0 <= m < 9.0),
-                ("Medii 7.00 - 7.99", lambda m: 7.0 <= m < 8.0),
-                ("Medii 6.00 - 6.99", lambda m: 6.0 <= m < 7.0),
-                ("Medii 5.00 - 5.99", lambda m: 5.0 <= m < 6.0),
-                ("Medii sub 5.00", lambda m: m < 5.0)
-            ]
-            
-            d_rows = []
-            for label, cond in transe:
-                cnt = sum(1 for m in valid_mgs if cond(m))
-                pond = f"{(cnt/len(valid_mgs)*100):.1f}%" if valid_mgs else "0%"
-                d_rows.append({
-                    "Tranșă Medie": label,
-                    "Număr Elevi": str(cnt),
-                    "Pondere (%)": pond
-                })
-            st.dataframe(d_rows, use_container_width=True, hide_index=True)
-            
-            st.markdown("#### 🏆 Top 5 Elevi ai Clasei")
-            top_students = sorted([s for s in stats if s['mg'] is not None], key=lambda x: x['mg'], reverse=True)[:5]
-            top_rows = []
-            for r_idx, s in enumerate(top_students):
-                top_rows.append({
-                    "Loc": r_idx + 1,
-                    "Nume și Prenume": s['nume'],
-                    "Matricol": s['matr'],
-                    "Media CG": safe_float_str(s['mcg']),
-                    "Media TH": safe_float_str(s['mth']),
-                    "Media Generală": safe_float_str(s['mg']),
-                    "Distincție": s['premiu']
-                })
-            if top_rows:
-                st.dataframe(top_rows, use_container_width=True, hide_index=True)
-            else:
-                st.info("ℹ️ Nu există încă elevi cu medii calculate pentru afișarea clasamentului.")
-        except Exception as ex:
-            st.error(f"Eroare la citire raport: {ex}")
-
-# --- TAB 8: GESTIUNE ELEVI ---
-with tab7:
-    st.subheader("👥 GESTIUNE ELEVI — Date Personale, Părinți & Situații Speciale")
-    st.caption("Meniu administrativ pentru introducerea, modificarea și exportul datelor generale ale elevilor din clasă.")
+                sorted_tot_stats = sorted(stats, key=lambda x: (x['tot_abs'], x['abs_nem']), reverse=True)
+                rank_tot_rows = []
+                for r_idx, s in enumerate(sorted_tot_stats):
+                    max_sub_str = f"{s['max_sub']}"
+                    max_sub_det = f"{s['max_sub_info']['tot']} tot ({s['max_sub_info']['nem']} nem. / {s['max_sub_info']['mot']} mot.)" if s['max_sub_info']['tot'] > 0 else "0 absențe"
+                    rank_tot_rows.append({
+                        "Loc Absențe": r_idx + 1,
+                        "Nume și Prenume Elev": s['nume'],
+                        "Matricol": s['matr'],
+                        "Total Absențe": s['tot_abs'],
+                        "Absențe Nemotivate": s['abs_nem'],
+                        "Absențe Motivate": s['abs_mot'],
+                        "Disciplina cu Cele Mai Multe Absențe": max_sub_str,
+                        "Absențe la Disciplina Maximă": max_sub_det
+                    })
     
-    gest_data = load_gestiune_data()
-    try:
-        wb_identity_check = openpyxl.load_workbook(selected_file, data_only=False)
-        validate_student_identity_consistency(wb_identity_check, gest_data)
-        wb_identity_check.close()
-    except Exception as ex:
+                sorted_nem_stats = sorted(stats, key=lambda x: (x['abs_nem'], x['tot_abs']), reverse=True)
+                rank_nem_rows = []
+                for r_idx, s in enumerate(sorted_nem_stats):
+                    max_sub_str = f"{s['max_sub']}"
+                    max_sub_det = f"{s['max_sub_info']['tot']} tot ({s['max_sub_info']['nem']} nem. / {s['max_sub_info']['mot']} mot.)" if s['max_sub_info']['tot'] > 0 else "0 absențe"
+                    rank_nem_rows.append({
+                        "Loc Absențe": r_idx + 1,
+                        "Nume și Prenume Elev": s['nume'],
+                        "Matricol": s['matr'],
+                        "Total Absențe": s['tot_abs'],
+                        "Absențe Nemotivate": s['abs_nem'],
+                        "Absențe Motivate": s['abs_mot'],
+                        "Disciplina cu Cele Mai Multe Absențe": max_sub_str,
+                        "Absențe la Disciplina Maximă": max_sub_det
+                    })
+    
+                col_ex1, col_ex2 = st.columns(2)
+                with col_ex1:
+                    try:
+                        excel_tot_bytes = generate_excel_bytes(rank_tot_rows, sheet_name="Clasament Total Absente")
+                        st.download_button("📊 Descarcă Clasament după Total Absențe (.xlsx)", data=excel_tot_bytes, file_name="Clasament_Elevi_Dupa_Total_Absente_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                    except Exception as ex:
+                        st.error(f"Eroare la generare Excel: {ex}")
+    
+                with col_ex2:
+                    try:
+                        excel_nem_bytes = generate_excel_bytes(rank_nem_rows, sheet_name="Clasament Absente Nemotivate")
+                        st.download_button("📊 Descarcă Clasament după Absențe Nemotivate (.xlsx)", data=excel_nem_bytes, file_name="Clasament_Elevi_Dupa_Absente_Nemotivate_IX_TH.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                    except Exception as ex:
+                        st.error(f"Eroare la generare Excel: {ex}")
+    
+                st.divider()
+                st.markdown("#### 📈 Distribuția Mediilor Generale")
+                transe = [
+                    ("Medii = 10.00", lambda m: m == 10.0),
+                    ("Medii 9.00 - 9.99", lambda m: 9.0 <= m < 10.0),
+                    ("Medii 8.00 - 8.99", lambda m: 8.0 <= m < 9.0),
+                    ("Medii 7.00 - 7.99", lambda m: 7.0 <= m < 8.0),
+                    ("Medii 6.00 - 6.99", lambda m: 6.0 <= m < 7.0),
+                    ("Medii 5.00 - 5.99", lambda m: 5.0 <= m < 6.0),
+                    ("Medii sub 5.00", lambda m: m < 5.0)
+                ]
+                
+                d_rows = []
+                for label, cond in transe:
+                    cnt = sum(1 for m in valid_mgs if cond(m))
+                    pond = f"{(cnt/len(valid_mgs)*100):.1f}%" if valid_mgs else "0%"
+                    d_rows.append({
+                        "Tranșă Medie": label,
+                        "Număr Elevi": str(cnt),
+                        "Pondere (%)": pond
+                    })
+                st.dataframe(d_rows, use_container_width=True, hide_index=True)
+                
+                st.markdown("#### 🏆 Top 5 Elevi ai Clasei")
+                top_students = sorted([s for s in stats if s['mg'] is not None], key=lambda x: x['mg'], reverse=True)[:5]
+                top_rows = []
+                for r_idx, s in enumerate(top_students):
+                    top_rows.append({
+                        "Loc": r_idx + 1,
+                        "Nume și Prenume": s['nume'],
+                        "Matricol": s['matr'],
+                        "Media CG": safe_float_str(s['mcg']),
+                        "Media TH": safe_float_str(s['mth']),
+                        "Media Generală": safe_float_str(s['mg']),
+                        "Distincție": s['premiu']
+                    })
+                if top_rows:
+                    st.dataframe(top_rows, use_container_width=True, hide_index=True)
+                else:
+                    st.info("ℹ️ Nu există încă elevi cu medii calculate pentru afișarea clasamentului.")
+            except Exception as ex:
+                st.error(f"Eroare la citire raport: {ex}")
+    
+    # --- TAB 8: GESTIUNE ELEVI ---
+if tab7.open:
+    with tab7:
+        st.subheader("👥 GESTIUNE ELEVI — Date Personale, Părinți & Situații Speciale")
+        st.caption("Meniu administrativ pentru introducerea, modificarea și exportul datelor generale ale elevilor din clasă.")
+        
+        gest_data = load_gestiune_data()
         try:
+            wb_identity_check = openpyxl.load_workbook(selected_file, data_only=False)
+            validate_student_identity_consistency(wb_identity_check, gest_data)
             wb_identity_check.close()
-        except Exception:
-            pass
-        st.error(
-            "Gestiunea elevilor a fost blocată deoarece JSON și catalogul Excel "
-            f"nu sunt perfect aliniate: {ex}"
-        )
-        st.stop()
-    
-    op_gest = st.radio(
-        "Alegeți operațiunea dorită:",
-        ["✏️ Modificare Date Elev Existent", "➕ Adăugare Elev Nou în Clasă", "🔄 Transfer/Retragere Elev", "↩️ Anulare adăugare greșită"],
-        horizontal=True,
-        key="radio_op_gest"
-    )
-    
-    st.divider()
-    
-    if op_gest == "✏️ Modificare Date Elev Existent":
-        if gest_data:
-            sel_st_idx = st.selectbox(
-                "Selectează Elevul de Modificat:",
-                range(len(gest_data)),
-                format_func=lambda i: f"{i+1}. {gest_data[i].get('nume_complet', '')} [{gest_data[i].get('status_scolar', 'ACTIV')}] (RM/PG {gest_data[i].get('matricol', '')})",
-                key="sel_st_mod"
+        except Exception as ex:
+            try:
+                wb_identity_check.close()
+            except Exception:
+                pass
+            st.error(
+                "Gestiunea elevilor a fost blocată deoarece JSON și catalogul Excel "
+                f"nu sunt perfect aliniate: {ex}"
             )
-            st_curr = gest_data[sel_st_idx]
-            
-            with st.form("form_edit_elev"):
-                st.markdown("#### 1. 🆔 Identificare & Școlar")
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    e_nume = st.text_input("Nume de Familie:", value=st_curr.get("nume", ""))
-                    e_initiala = st.text_input("Inițiala Tatălui:", value=st_curr.get("initiala", ""))
-                    e_prenume = st.text_input("Prenume:", value=st_curr.get("prenume", ""))
-                with c2:
-                    e_nr_matr = st.text_input("NR. MATR.:", value=str(st_curr.get("rand_excel", "")))
-                    e_rm_pg = st.text_input("RM/PG:", value=st_curr.get("matricol", ""))
-                    e_cnp = st.text_input("Cod Numeric Personal (CNP):", value=st_curr.get("cnp", ""))
-                    e_tel = st.text_input("Telefon Elev:", value=st_curr.get("telefon", ""))
-                with c3:
-                    e_nat = st.text_input("Naționalitate:", value=st_curr.get("nationalitate", "Română"))
-                    e_cet = st.text_input(
-                        "Cetățenie:", value=st_curr.get("cetatenie") or "Română",
-                        help="Distinctă de naționalitate și de etnie; pentru clasa IX TH este precompletată Română.",
+            st.stop()
+        
+        op_gest = st.radio(
+            "Alegeți operațiunea dorită:",
+            ["✏️ Modificare Date Elev Existent", "➕ Adăugare Elev Nou în Clasă", "🔄 Transfer/Retragere Elev", "↩️ Anulare adăugare greșită"],
+            horizontal=True,
+            key="radio_op_gest"
+        )
+        
+        st.divider()
+        
+        if op_gest == "✏️ Modificare Date Elev Existent":
+            if gest_data:
+                sel_st_idx = st.selectbox(
+                    "Selectează Elevul de Modificat:",
+                    range(len(gest_data)),
+                    format_func=lambda i: f"{i+1}. {gest_data[i].get('nume_complet', '')} [{gest_data[i].get('status_scolar', 'ACTIV')}] (RM/PG {gest_data[i].get('matricol', '')})",
+                    key="sel_st_mod"
+                )
+                st_curr = gest_data[sel_st_idx]
+                
+                with st.form("form_edit_elev"):
+                    st.markdown("#### 1. 🆔 Identificare & Școlar")
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        e_nume = st.text_input("Nume de Familie:", value=st_curr.get("nume", ""))
+                        e_initiala = st.text_input("Inițiala Tatălui:", value=st_curr.get("initiala", ""))
+                        e_prenume = st.text_input("Prenume:", value=st_curr.get("prenume", ""))
+                    with c2:
+                        e_nr_matr = st.text_input("NR. MATR.:", value=str(st_curr.get("rand_excel", "")))
+                        e_rm_pg = st.text_input("RM/PG:", value=st_curr.get("matricol", ""))
+                        e_cnp = st.text_input("Cod Numeric Personal (CNP):", value=st_curr.get("cnp", ""))
+                        e_tel = st.text_input("Telefon Elev:", value=st_curr.get("telefon", ""))
+                    with c3:
+                        e_nat = st.text_input("Naționalitate:", value=st_curr.get("nationalitate", "Română"))
+                        e_cet = st.text_input(
+                            "Cetățenie:", value=st_curr.get("cetatenie") or "Română",
+                            help="Distinctă de naționalitate și de etnie; pentru clasa IX TH este precompletată Română.",
+                        )
+                        e_etn = st.text_input("Etnie:", value=st_curr.get("etnie", "Română"))
+                        e_pin = st.text_input("PIN Acces Părinte:", value=st_curr.get("pin", "1234"))
+    
+                    st.markdown("#### 2. 🏠 Adresă Domiciliu")
+                    a1, a2, a3 = st.columns(3)
+                    with a1:
+                        e_loc = st.text_input("Localitate:", value=st_curr.get("localitate", "Turda"))
+                        e_jud = st.text_input("Județ:", value=st_curr.get("judet", "Cluj"))
+                    with a2:
+                        e_str = st.text_input("Stradă:", value=st_curr.get("strada", ""))
+                        e_nr = st.text_input("Număr Stradă:", value=st_curr.get("numar_strada", ""))
+                    with a3:
+                        e_bl = st.text_input("Bloc:", value=st_curr.get("bloc", ""))
+                        e_apt = st.text_input("Apartament:", value=st_curr.get("apartament", ""))
+    
+                    st.markdown("#### 3. 👨‍👩‍👧 Informații Părinți & Plecări Străinătate")
+                    m1, m2 = st.columns(2)
+                    with m1:
+                        e_nume_m = st.text_input("Nume și Prenume Mamă:", value=st_curr.get("nume_mama", ""))
+                        e_tel_m = st.text_input("Telefon Mamă:", value=st_curr.get("telefon_mama", ""))
+                        e_m_plec = st.checkbox("Mamă plecată în străinătate", value=st_curr.get("mama_plecata", False))
+                        e_tara_m = st.text_input("Țara unde este plecată mama:", value=st_curr.get("tara_mama", ""))
+                    with m2:
+                        e_nume_t = st.text_input("Nume și Prenume Tată:", value=st_curr.get("nume_tata", ""))
+                        e_tel_t = st.text_input("Telefon Tată:", value=st_curr.get("telefon_tata", ""))
+                        e_t_plec = st.checkbox("Tată plecat în străinătate", value=st_curr.get("tata_plecat", False))
+                        e_tara_t = st.text_input("Țara unde este plecat tatăl:", value=st_curr.get("tara_tata", ""))
+    
+                    st.markdown("##### 👤 Persoana care îngrijește copilul")
+                    p1, p2 = st.columns(2)
+                    with p1:
+                        e_ingrijitor_nume = st.text_input("Nume și prenume persoană care îngrijește copilul:", value=st_curr.get("ingrijitor_nume", ""))
+                    with p2:
+                        e_ingrijitor_telefon = st.text_input("Telefon de contact persoană care îngrijește copilul:", value=st_curr.get("ingrijitor_telefon", ""))
+    
+                    e_revenit_strainatate = st.checkbox("Copil revenit în țară după o ședere în străinătate mai mare de un an", value=st_curr.get("revenit_strainatate_peste_un_an", False))
+                    opt_parinte_unic = ["Nu", "Mama", "Tata"]
+                    valoare_unic = st_curr.get("parinte_unic_sustinator_plecat_tip", "Nu")
+                    if valoare_unic not in opt_parinte_unic:
+                        valoare_unic = "Nespecificat" if st_curr.get("parinte_unic_sustinator_plecat") else "Nu"
+                    opt_parinte_unic_ui = opt_parinte_unic + (["Nespecificat"] if valoare_unic == "Nespecificat" else [])
+                    e_parinte_unic_tip = st.selectbox(
+                        "Părinte unic susținător plecat în străinătate:",
+                        opt_parinte_unic_ui,
+                        index=opt_parinte_unic_ui.index(valoare_unic),
+                        help="Nespecificat păstrează o bifă veche până la identificarea părintelui, fără a inventa Mama/Tata.",
                     )
-                    e_etn = st.text_input("Etnie:", value=st_curr.get("etnie", "Română"))
-                    e_pin = st.text_input("PIN Acces Părinte:", value=st_curr.get("pin", "1234"))
-
-                st.markdown("#### 2. 🏠 Adresă Domiciliu")
+                    opt_stare = ["Căsătoriți", "Divorțați", "Văduvie"]
+                    stare_curenta = st_curr.get("stare_civila_parinti", "Căsătoriți")
+                    e_stare_civila = st.selectbox(
+                        "Starea civilă a părinților:",
+                        opt_stare, index=opt_stare.index(stare_curenta) if stare_curenta in opt_stare else 0,
+                    )
+                    opt_locuire = ["Nespecificat", "Mama", "Tata", "Bunici", "Rude până la gradul IV", "Plasament", "Pe cont propriu"]
+                    locuire_curenta = st_curr.get("locuieste_cu", "Nespecificat")
+                    e_locuieste_cu = st.selectbox(
+                        "În momentul de față copilul locuiește cu:",
+                        opt_locuire, index=opt_locuire.index(locuire_curenta) if locuire_curenta in opt_locuire else 0,
+                    )
+    
+                    st.markdown("#### 4. 🩺 Situații Speciale, Burse & CES (Bife)")
+                    b1, b2, b3 = st.columns(3)
+                    with b1:
+                        e_ces = st.checkbox("Elev cu Cerințe Educaționale Speciale (CES)", value=st_curr.get("ces", False))
+                        e_orfan = st.checkbox("Elev Orfan", value=st_curr.get("orfan", False))
+                    with b2:
+                        e_plas = st.checkbox("Elev aflat în Plasament", value=st_curr.get("plasament", False))
+                        e_bmed = st.checkbox("Bursă Socială Medicală", value=st_curr.get("bursa_medicala", False))
+                    with b3:
+                        e_bven = st.checkbox("Bursă Socială pe bază de Venit", value=st_curr.get("bursa_venit", False))
+    
+                    btn_save_edit = st.form_submit_button("💾 Salvează Date Elev", type="primary", use_container_width=True)
+                    if btn_save_edit:
+                        n_full = f"{e_nume.strip()} {e_initiala.strip()} {e_prenume.strip()}".replace("  ", " ").strip()
+                        original_student = dict(st_curr)
+                        old_elev_info = (
+                            st_curr.get("id"),
+                            st_curr.get("nume_complet", ""),
+                            st_curr.get("rand_excel", ""),
+                            st_curr.get("matricol", ""),
+                            str(st_curr.get("pin", ""))
+                        )
+                        try:
+                            excel_backup = prepare_student_identity_edit(
+                                selected_file, old_elev_info, n_full, e_nr_matr, e_rm_pg
+                            )
+                        except Exception as ex:
+                            st.error(f"Modificarea a fost oprită înainte de salvare: {ex}")
+                            st.stop()
+                        st_curr.update({
+                            "nume": e_nume.strip(),
+                            "initiala": e_initiala.strip(),
+                            "prenume": e_prenume.strip(),
+                            "nume_complet": n_full,
+                            "rand_excel": e_nr_matr.strip(),
+                            "matricol": e_rm_pg.strip(),
+                            "cnp": e_cnp.strip(),
+                            "telefon": e_tel.strip(),
+                            "nationalitate": e_nat.strip(),
+                            "cetatenie": e_cet.strip() or "Română",
+                            "etnie": e_etn.strip(),
+                            "pin": e_pin.strip(),
+                            "localitate": e_loc.strip(),
+                            "judet": e_jud.strip(),
+                            "strada": e_str.strip(),
+                            "numar_strada": e_nr.strip(),
+                            "bloc": e_bl.strip(),
+                            "apartament": e_apt.strip(),
+                            "nume_mama": e_nume_m.strip(),
+                            "telefon_mama": e_tel_m.strip(),
+                            "mama_plecata": e_m_plec,
+                            "tara_mama": e_tara_m.strip(),
+                            "nume_tata": e_nume_t.strip(),
+                            "telefon_tata": e_tel_t.strip(),
+                            "tata_plecat": e_t_plec,
+                            "tara_tata": e_tara_t.strip(),
+                            "ingrijitor_nume": e_ingrijitor_nume.strip(),
+                            "ingrijitor_telefon": e_ingrijitor_telefon.strip(),
+                            "revenit_strainatate_peste_un_an": e_revenit_strainatate,
+                            "parinte_unic_sustinator_plecat": e_parinte_unic_tip != "Nu",
+                            "parinte_unic_sustinator_plecat_tip": e_parinte_unic_tip,
+                            "stare_civila_parinti": e_stare_civila,
+                            "locuieste_cu": e_locuieste_cu,
+                            "ces": e_ces,
+                            "orfan": e_orfan,
+                            "plasament": e_plas,
+                            "bursa_medicala": e_bmed,
+                            "bursa_venit": e_bven
+                        })
+                        if not push_to_github(selected_file):
+                            shutil.copy2(excel_backup, selected_file)
+                            st_curr.clear()
+                            st_curr.update(original_student)
+                            st.warning("⚠️ Excel nu a fost sincronizat. Copia originală a fost restaurată, iar JSON nu a fost modificat.")
+                        elif save_gestiune_data(gest_data):
+                            try:
+                                os.remove(excel_backup)
+                            except Exception:
+                                pass
+                            st.success(f"✅ Datele elevului {n_full} au fost salvate și sincronizate cu succes!")
+                            st.rerun()
+                        else:
+                            st.error("⚠️ Excel a fost sincronizat, dar JSON nu a fost confirmat. Gestiunea elevilor va fi blocată la următoarea verificare de consistență.")
+    
+        elif op_gest == "➕ Adăugare Elev Nou în Clasă":
+            with st.form("form_add_elev"):
+                st.markdown("#### Introduceți Datele Noului Elev")
                 a1, a2, a3 = st.columns(3)
                 with a1:
-                    e_loc = st.text_input("Localitate:", value=st_curr.get("localitate", "Turda"))
-                    e_jud = st.text_input("Județ:", value=st_curr.get("judet", "Cluj"))
+                    add_nume = st.text_input("Nume de Familie:")
+                    add_init = st.text_input("Inițiala Tatălui:")
+                    add_prenume = st.text_input("Prenume:")
                 with a2:
-                    e_str = st.text_input("Stradă:", value=st_curr.get("strada", ""))
-                    e_nr = st.text_input("Număr Stradă:", value=st_curr.get("numar_strada", ""))
+                    next_id = max([d.get("id", 0) for d in gest_data] or [0]) + 1
+                    add_nr_matr = st.text_input("NR. MATR. (atribuit de școală):")
+                    add_rm_pg = st.text_input("RM/PG (atribuit de școală):")
+                    add_cnp = st.text_input("CNP (13 cifre):")
+                    add_tel = st.text_input("Telefon Elev:")
                 with a3:
-                    e_bl = st.text_input("Bloc:", value=st_curr.get("bloc", ""))
-                    e_apt = st.text_input("Apartament:", value=st_curr.get("apartament", ""))
-
-                st.markdown("#### 3. 👨‍👩‍👧 Informații Părinți & Plecări Străinătate")
-                m1, m2 = st.columns(2)
-                with m1:
-                    e_nume_m = st.text_input("Nume și Prenume Mamă:", value=st_curr.get("nume_mama", ""))
-                    e_tel_m = st.text_input("Telefon Mamă:", value=st_curr.get("telefon_mama", ""))
-                    e_m_plec = st.checkbox("Mamă plecată în străinătate", value=st_curr.get("mama_plecata", False))
-                    e_tara_m = st.text_input("Țara unde este plecată mama:", value=st_curr.get("tara_mama", ""))
-                with m2:
-                    e_nume_t = st.text_input("Nume și Prenume Tată:", value=st_curr.get("nume_tata", ""))
-                    e_tel_t = st.text_input("Telefon Tată:", value=st_curr.get("telefon_tata", ""))
-                    e_t_plec = st.checkbox("Tată plecat în străinătate", value=st_curr.get("tata_plecat", False))
-                    e_tara_t = st.text_input("Țara unde este plecat tatăl:", value=st_curr.get("tara_tata", ""))
-
-                st.markdown("##### 👤 Persoana care îngrijește copilul")
-                p1, p2 = st.columns(2)
-                with p1:
-                    e_ingrijitor_nume = st.text_input("Nume și prenume persoană care îngrijește copilul:", value=st_curr.get("ingrijitor_nume", ""))
-                with p2:
-                    e_ingrijitor_telefon = st.text_input("Telefon de contact persoană care îngrijește copilul:", value=st_curr.get("ingrijitor_telefon", ""))
-
-                e_revenit_strainatate = st.checkbox("Copil revenit în țară după o ședere în străinătate mai mare de un an", value=st_curr.get("revenit_strainatate_peste_un_an", False))
-                opt_parinte_unic = ["Nu", "Mama", "Tata"]
-                valoare_unic = st_curr.get("parinte_unic_sustinator_plecat_tip", "Nu")
-                if valoare_unic not in opt_parinte_unic:
-                    valoare_unic = "Nespecificat" if st_curr.get("parinte_unic_sustinator_plecat") else "Nu"
-                opt_parinte_unic_ui = opt_parinte_unic + (["Nespecificat"] if valoare_unic == "Nespecificat" else [])
-                e_parinte_unic_tip = st.selectbox(
-                    "Părinte unic susținător plecat în străinătate:",
-                    opt_parinte_unic_ui,
-                    index=opt_parinte_unic_ui.index(valoare_unic),
-                    help="Nespecificat păstrează o bifă veche până la identificarea părintelui, fără a inventa Mama/Tata.",
-                )
-                opt_stare = ["Căsătoriți", "Divorțați", "Văduvie"]
-                stare_curenta = st_curr.get("stare_civila_parinti", "Căsătoriți")
-                e_stare_civila = st.selectbox(
-                    "Starea civilă a părinților:",
-                    opt_stare, index=opt_stare.index(stare_curenta) if stare_curenta in opt_stare else 0,
-                )
-                opt_locuire = ["Nespecificat", "Mama", "Tata", "Bunici", "Rude până la gradul IV", "Plasament", "Pe cont propriu"]
-                locuire_curenta = st_curr.get("locuieste_cu", "Nespecificat")
-                e_locuieste_cu = st.selectbox(
-                    "În momentul de față copilul locuiește cu:",
-                    opt_locuire, index=opt_locuire.index(locuire_curenta) if locuire_curenta in opt_locuire else 0,
-                )
-
-                st.markdown("#### 4. 🩺 Situații Speciale, Burse & CES (Bife)")
-                b1, b2, b3 = st.columns(3)
-                with b1:
-                    e_ces = st.checkbox("Elev cu Cerințe Educaționale Speciale (CES)", value=st_curr.get("ces", False))
-                    e_orfan = st.checkbox("Elev Orfan", value=st_curr.get("orfan", False))
-                with b2:
-                    e_plas = st.checkbox("Elev aflat în Plasament", value=st_curr.get("plasament", False))
-                    e_bmed = st.checkbox("Bursă Socială Medicală", value=st_curr.get("bursa_medicala", False))
-                with b3:
-                    e_bven = st.checkbox("Bursă Socială pe bază de Venit", value=st_curr.get("bursa_venit", False))
-
-                btn_save_edit = st.form_submit_button("💾 Salvează Date Elev", type="primary", use_container_width=True)
-                if btn_save_edit:
-                    n_full = f"{e_nume.strip()} {e_initiala.strip()} {e_prenume.strip()}".replace("  ", " ").strip()
-                    original_student = dict(st_curr)
-                    old_elev_info = (
-                        st_curr.get("id"),
-                        st_curr.get("nume_complet", ""),
-                        st_curr.get("rand_excel", ""),
-                        st_curr.get("matricol", ""),
-                        str(st_curr.get("pin", ""))
+                    add_pin = st.text_input("Cod PIN Acces Părinte:", value=str(1000 + next_id))
+                    add_nat = st.text_input("Naționalitate:", value="Română")
+                    add_cet = st.text_input(
+                        "Cetățenie:", value="Română",
+                        help="Precompletată cu Română; modificați numai dacă elevul are altă cetățenie.",
                     )
-                    try:
-                        excel_backup = prepare_student_identity_edit(
-                            selected_file, old_elev_info, n_full, e_nr_matr, e_rm_pg
-                        )
-                    except Exception as ex:
-                        st.error(f"Modificarea a fost oprită înainte de salvare: {ex}")
-                        st.stop()
-                    st_curr.update({
-                        "nume": e_nume.strip(),
-                        "initiala": e_initiala.strip(),
-                        "prenume": e_prenume.strip(),
-                        "nume_complet": n_full,
-                        "rand_excel": e_nr_matr.strip(),
-                        "matricol": e_rm_pg.strip(),
-                        "cnp": e_cnp.strip(),
-                        "telefon": e_tel.strip(),
-                        "nationalitate": e_nat.strip(),
-                        "cetatenie": e_cet.strip() or "Română",
-                        "etnie": e_etn.strip(),
-                        "pin": e_pin.strip(),
-                        "localitate": e_loc.strip(),
-                        "judet": e_jud.strip(),
-                        "strada": e_str.strip(),
-                        "numar_strada": e_nr.strip(),
-                        "bloc": e_bl.strip(),
-                        "apartament": e_apt.strip(),
-                        "nume_mama": e_nume_m.strip(),
-                        "telefon_mama": e_tel_m.strip(),
-                        "mama_plecata": e_m_plec,
-                        "tara_mama": e_tara_m.strip(),
-                        "nume_tata": e_nume_t.strip(),
-                        "telefon_tata": e_tel_t.strip(),
-                        "tata_plecat": e_t_plec,
-                        "tara_tata": e_tara_t.strip(),
-                        "ingrijitor_nume": e_ingrijitor_nume.strip(),
-                        "ingrijitor_telefon": e_ingrijitor_telefon.strip(),
-                        "revenit_strainatate_peste_un_an": e_revenit_strainatate,
-                        "parinte_unic_sustinator_plecat": e_parinte_unic_tip != "Nu",
-                        "parinte_unic_sustinator_plecat_tip": e_parinte_unic_tip,
-                        "stare_civila_parinti": e_stare_civila,
-                        "locuieste_cu": e_locuieste_cu,
-                        "ces": e_ces,
-                        "orfan": e_orfan,
-                        "plasament": e_plas,
-                        "bursa_medicala": e_bmed,
-                        "bursa_venit": e_bven
-                    })
-                    if not push_to_github(selected_file):
-                        shutil.copy2(excel_backup, selected_file)
-                        st_curr.clear()
-                        st_curr.update(original_student)
-                        st.warning("⚠️ Excel nu a fost sincronizat. Copia originală a fost restaurată, iar JSON nu a fost modificat.")
-                    elif save_gestiune_data(gest_data):
-                        try:
-                            os.remove(excel_backup)
-                        except Exception:
-                            pass
-                        st.success(f"✅ Datele elevului {n_full} au fost salvate și sincronizate cu succes!")
-                        st.rerun()
+                    add_etn = st.text_input("Etnie:", value="Română")
+                    
+                btn_add = st.form_submit_button("➕ Adaugă Elev în Clasă", type="primary", use_container_width=True)
+                if btn_add:
+                    if not add_nume.strip() or not add_prenume.strip() or not add_nr_matr.strip() or not add_rm_pg.strip():
+                        st.error("Numele, prenumele, NR. MATR. și RM/PG sunt obligatorii!")
                     else:
-                        st.error("⚠️ Excel a fost sincronizat, dar JSON nu a fost confirmat. Gestiunea elevilor va fi blocată la următoarea verificare de consistență.")
-
-    elif op_gest == "➕ Adăugare Elev Nou în Clasă":
-        with st.form("form_add_elev"):
-            st.markdown("#### Introduceți Datele Noului Elev")
-            a1, a2, a3 = st.columns(3)
-            with a1:
-                add_nume = st.text_input("Nume de Familie:")
-                add_init = st.text_input("Inițiala Tatălui:")
-                add_prenume = st.text_input("Prenume:")
-            with a2:
-                next_id = max([d.get("id", 0) for d in gest_data] or [0]) + 1
-                add_nr_matr = st.text_input("NR. MATR. (atribuit de școală):")
-                add_rm_pg = st.text_input("RM/PG (atribuit de școală):")
-                add_cnp = st.text_input("CNP (13 cifre):")
-                add_tel = st.text_input("Telefon Elev:")
-            with a3:
-                add_pin = st.text_input("Cod PIN Acces Părinte:", value=str(1000 + next_id))
-                add_nat = st.text_input("Naționalitate:", value="Română")
-                add_cet = st.text_input(
-                    "Cetățenie:", value="Română",
-                    help="Precompletată cu Română; modificați numai dacă elevul are altă cetățenie.",
+                        n_full = f"{add_nume.strip()} {add_init.strip()} {add_prenume.strip()}".replace("  ", " ").strip()
+                        new_item = {
+                            "id": next_id,
+                            "rand_excel": add_nr_matr.strip(),
+                            "matricol": add_rm_pg.strip(),
+                            "pin": add_pin.strip(),
+                            "nume": add_nume.strip(),
+                            "initiala": add_init.strip(),
+                            "prenume": add_prenume.strip(),
+                            "nume_complet": n_full,
+                            "cnp": add_cnp.strip(),
+                            "telefon": add_tel.strip(),
+                            "localitate": "Turda",
+                            "judet": "Cluj",
+                            "strada": "",
+                            "numar_strada": "",
+                            "bloc": "",
+                            "apartament": "",
+                            "nume_mama": "",
+                            "telefon_mama": "",
+                            "mama_plecata": False,
+                            "tara_mama": "",
+                            "nume_tata": "",
+                            "telefon_tata": "",
+                            "tata_plecat": False,
+                            "tara_tata": "",
+                            "ingrijitor_nume": "",
+                            "ingrijitor_telefon": "",
+                            "revenit_strainatate_peste_un_an": False,
+                            "parinte_unic_sustinator_plecat": False,
+                            "parinte_unic_sustinator_plecat_tip": "Nu",
+                            "stare_civila_parinti": "Căsătoriți",
+                            "locuieste_cu": "Nespecificat",
+                            "nationalitate": add_nat.strip(),
+                            "cetatenie": add_cet.strip() or "Română",
+                            "etnie": add_etn.strip(),
+                            "ces": False,
+                            "orfan": False,
+                            "plasament": False,
+                            "bursa_medicala": False,
+                            "bursa_venit": False,
+                            "status_scolar": "ACTIV",
+                            "istoric_miscare": [{
+                                "tip": "ADAUGAT",
+                                "data": datetime.datetime.now(
+                                    ZoneInfo("Europe/Bucharest")
+                                ).strftime("%Y-%m-%d"),
+                            }]
+                        }
+                        excel_backup = None
+                        try:
+                            excel_backup, _new_row = prepare_student_addition(
+                                selected_file,
+                                gest_data,
+                                n_full,
+                                add_nr_matr,
+                                add_rm_pg,
+                            )
+                        except Exception as ex:
+                            st.error(f"Adăugarea a fost oprită înainte de salvare: {ex}")
+                        else:
+                            if not push_to_github(selected_file):
+                                shutil.copy2(excel_backup, selected_file)
+                                st.warning(
+                                    "⚠️ Excel nu a fost sincronizat. Copia originală a fost restaurată, "
+                                    "iar JSON nu a fost modificat."
+                                )
+                            else:
+                                gest_data.append(new_item)
+                                if save_gestiune_data(gest_data):
+                                    try:
+                                        os.remove(excel_backup)
+                                    except Exception:
+                                        pass
+                                    st.success(
+                                        f"✅ Elevul {n_full} a fost adăugat în catalog și în gestiune "
+                                        "și sincronizarea a fost confirmată."
+                                    )
+                                    st.rerun()
+                                else:
+                                    gest_data.pop()
+                                    st.error(
+                                        "⚠️ Excel a fost sincronizat, dar JSON nu a fost confirmat. "
+                                        "Gestiunea elevilor va fi blocată la următoarea verificare de consistență."
+                                    )
+    
+        elif op_gest == "🔄 Transfer/Retragere Elev":
+            if gest_data:
+                sel_status_idx = st.selectbox(
+                    "Selectează elevul:",
+                    range(len(gest_data)),
+                    format_func=lambda i: (
+                        f"{i+1}. {gest_data[i].get('nume_complet', '')} "
+                        f"[{gest_data[i].get('status_scolar', 'ACTIV')}] "
+                        f"(RM/PG {gest_data[i].get('matricol', '')})"
+                    ),
+                    key="sel_st_status"
                 )
-                add_etn = st.text_input("Etnie:", value="Română")
-                
-            btn_add = st.form_submit_button("➕ Adaugă Elev în Clasă", type="primary", use_container_width=True)
-            if btn_add:
-                if not add_nume.strip() or not add_prenume.strip() or not add_nr_matr.strip() or not add_rm_pg.strip():
-                    st.error("Numele, prenumele, NR. MATR. și RM/PG sunt obligatorii!")
-                else:
-                    n_full = f"{add_nume.strip()} {add_init.strip()} {add_prenume.strip()}".replace("  ", " ").strip()
-                    new_item = {
-                        "id": next_id,
-                        "rand_excel": add_nr_matr.strip(),
-                        "matricol": add_rm_pg.strip(),
-                        "pin": add_pin.strip(),
-                        "nume": add_nume.strip(),
-                        "initiala": add_init.strip(),
-                        "prenume": add_prenume.strip(),
-                        "nume_complet": n_full,
-                        "cnp": add_cnp.strip(),
-                        "telefon": add_tel.strip(),
-                        "localitate": "Turda",
-                        "judet": "Cluj",
-                        "strada": "",
-                        "numar_strada": "",
-                        "bloc": "",
-                        "apartament": "",
-                        "nume_mama": "",
-                        "telefon_mama": "",
-                        "mama_plecata": False,
-                        "tara_mama": "",
-                        "nume_tata": "",
-                        "telefon_tata": "",
-                        "tata_plecat": False,
-                        "tara_tata": "",
-                        "ingrijitor_nume": "",
-                        "ingrijitor_telefon": "",
-                        "revenit_strainatate_peste_un_an": False,
-                        "parinte_unic_sustinator_plecat": False,
-                        "parinte_unic_sustinator_plecat_tip": "Nu",
-                        "stare_civila_parinti": "Căsătoriți",
-                        "locuieste_cu": "Nespecificat",
-                        "nationalitate": add_nat.strip(),
-                        "cetatenie": add_cet.strip() or "Română",
-                        "etnie": add_etn.strip(),
-                        "ces": False,
-                        "orfan": False,
-                        "plasament": False,
-                        "bursa_medicala": False,
-                        "bursa_venit": False,
-                        "status_scolar": "ACTIV",
-                        "istoric_miscare": [{
-                            "tip": "ADAUGAT",
+                status_item = gest_data[sel_status_idx]
+                status_curent = str(status_item.get("status_scolar", "ACTIV")).upper()
+                status_options = ["ACTIV", "TRANSFERAT", "RETRAS"]
+                status_index = status_options.index(status_curent) if status_curent in status_options else 0
+                status_nou = st.selectbox(
+                    "Stare școlară:",
+                    status_options,
+                    index=status_index,
+                    key="status_scolar_nou"
+                )
+                st.info(
+                    "Schimbarea stării nu șterge elevul și nu modifică notele, mediile, "
+                    "absențele, NR. MATR. sau RM/PG."
+                )
+                if st.button("💾 Salvează starea școlară", type="primary", use_container_width=True):
+                    status_vechi = status_item.get("status_scolar")
+                    istoric_vechi = list(status_item.get("istoric_miscare", []))
+                    status_item["status_scolar"] = status_nou
+                    if status_nou != status_curent:
+                        istoric = list(status_item.get("istoric_miscare", []))
+                        istoric.append({
+                            "tip": status_nou,
                             "data": datetime.datetime.now(
                                 ZoneInfo("Europe/Bucharest")
                             ).strftime("%Y-%m-%d"),
-                        }]
-                    }
-                    excel_backup = None
-                    try:
-                        excel_backup, _new_row = prepare_student_addition(
-                            selected_file,
-                            gest_data,
-                            n_full,
-                            add_nr_matr,
-                            add_rm_pg,
+                        })
+                        status_item["istoric_miscare"] = istoric
+                    if save_gestiune_data(gest_data):
+                        st.success(
+                            f"✅ Starea elevului {status_item.get('nume_complet')} a fost actualizată la {status_nou}. "
+                            "Istoricul școlar a rămas neschimbat."
                         )
+                        st.rerun()
+                    else:
+                        if status_vechi is None:
+                            status_item.pop("status_scolar", None)
+                        else:
+                            status_item["status_scolar"] = status_vechi
+                        if istoric_vechi:
+                            status_item["istoric_miscare"] = istoric_vechi
+                        else:
+                            status_item.pop("istoric_miscare", None)
+                        st.warning(
+                            "⚠️ Modificarea stării nu a fost confirmată în repository-ul privat. "
+                            "Datele încărcate în sesiunea curentă au fost restaurate."
+                        )
+    
+        elif op_gest == "↩️ Anulare adăugare greșită":
+            if gest_data:
+                last_index = len(gest_data) - 1
+                last_item = gest_data[last_index]
+                st.warning(
+                    "Această operație este destinată exclusiv anulării ultimei înregistrări introduse din greșeală. "
+                    "Este refuzată dacă elevul are deja note, absențe sau alte date școlare."
+                )
+                st.write(
+                    f"Ultima înregistrare: **{last_item.get('nume_complet', '')}** "
+                    f"(NR. MATR. {last_item.get('rand_excel', '')}, RM/PG {last_item.get('matricol', '')})"
+                )
+                confirm_cancel = st.checkbox(
+                    "Confirm că această înregistrare a fost introdusă din greșeală și trebuie anulată.",
+                    key="confirm_cancel_last_student"
+                )
+                if st.button(
+                    "↩️ Anulează ultima adăugare",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=not confirm_cancel
+                ):
+                    try:
+                        excel_backup = prepare_last_student_cancellation(selected_file, gest_data, last_index)
                     except Exception as ex:
-                        st.error(f"Adăugarea a fost oprită înainte de salvare: {ex}")
+                        st.error(f"Anularea a fost oprită fără modificări: {ex}")
                     else:
                         if not push_to_github(selected_file):
                             shutil.copy2(excel_backup, selected_file)
@@ -3730,887 +3951,789 @@ with tab7:
                                 "iar JSON nu a fost modificat."
                             )
                         else:
-                            gest_data.append(new_item)
+                            removed = gest_data.pop()
                             if save_gestiune_data(gest_data):
                                 try:
                                     os.remove(excel_backup)
                                 except Exception:
                                     pass
                                 st.success(
-                                    f"✅ Elevul {n_full} a fost adăugat în catalog și în gestiune "
-                                    "și sincronizarea a fost confirmată."
+                                    f"✅ Adăugarea greșită pentru {removed.get('nume_complet', '')} a fost anulată "
+                                    "în catalog și în gestiune."
                                 )
                                 st.rerun()
                             else:
-                                gest_data.pop()
+                                gest_data.append(removed)
                                 st.error(
                                     "⚠️ Excel a fost sincronizat, dar JSON nu a fost confirmat. "
                                     "Gestiunea elevilor va fi blocată la următoarea verificare de consistență."
                                 )
-
-    elif op_gest == "🔄 Transfer/Retragere Elev":
-        if gest_data:
-            sel_status_idx = st.selectbox(
-                "Selectează elevul:",
-                range(len(gest_data)),
-                format_func=lambda i: (
-                    f"{i+1}. {gest_data[i].get('nume_complet', '')} "
-                    f"[{gest_data[i].get('status_scolar', 'ACTIV')}] "
-                    f"(RM/PG {gest_data[i].get('matricol', '')})"
-                ),
-                key="sel_st_status"
+    
+        st.divider()
+        st.markdown("#### 📋 Monitorizare copii cu părinți plecați / reveniți din străinătate")
+        st.caption("Raport conform structurii modelului DAS 2026–2027. Sunt incluse numai cazurile relevante; informațiile neînregistrate rămân necompletate.")
+        try:
+            raport_das = generate_excel_monitorizare_das(gest_data)
+            st.download_button(
+                "📥 Descarcă Tabel monitorizare DAS 2026–2027 (.xlsx)",
+                data=raport_das,
+                file_name="Tabel_monitorizare_DAS_2026-2027.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key="download_monitorizare_das",
             )
-            status_item = gest_data[sel_status_idx]
-            status_curent = str(status_item.get("status_scolar", "ACTIV")).upper()
-            status_options = ["ACTIV", "TRANSFERAT", "RETRAS"]
-            status_index = status_options.index(status_curent) if status_curent in status_options else 0
-            status_nou = st.selectbox(
-                "Stare școlară:",
-                status_options,
-                index=status_index,
-                key="status_scolar_nou"
-            )
+        except Exception as ex:
+            st.error(f"Eroare la generarea tabelului de monitorizare: {ex}")
+    
+        st.divider()
+        st.markdown("#### 📊 Export Registru & Statistică Clasă (Excel — model ISJ Cluj)")
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            try:
+                excel_reg_bytes = generate_excel_registru_elevi(gest_data)
+                st.download_button(
+                    "📊 Descarcă Registru Date Elevi (.xlsx)",
+                    data=excel_reg_bytes,
+                    file_name="Registru_Gestiune_Elevi_IX_TH.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            except Exception as ex:
+                st.error(f"Eroare la generare Registru Excel: {ex}")
+    
+        with col_g2:
+            try:
+                excel_stat_bytes = generate_excel_statistica_clasa(gest_data)
+                st.download_button(
+                    "📊 Descarcă Statistica Clasa (.xlsx)",
+                    data=excel_stat_bytes,
+                    file_name="Statistica_Clasa_IX_TH_ISJ_Cluj_A4.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            except Exception as ex:
+                st.error(f"Eroare la generare Statistică Excel: {ex}")
+    
+    
+    # --- TAB 9: DOCUMENTE ELEVI ---
+if tab8.open:
+    with tab8:
+        st.subheader("📁 DOCUMENTE ELEVI — Centru documente")
+        if st.button("🔄 Actualizează documentele elevului", key="refresh_student_documents"):
+            _refresh_teacher_view()
+        doc_student_idx = st.selectbox(
+            "Selectează elevul:",
+            range(len(ELEVI)),
+            format_func=lambda i: elev_options[i],
+            key="doc_student_preview",
+        )
+        doc_student = ELEVI[doc_student_idx]
+    
+        st.info(
+            f"Elev selectat: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**."
+        )
+    
+        _doc_leave_panel=st.expander("🚪 Bilet de voie — verifică solicitarea", expanded=False, key="doc_leave_panel", on_change="rerun")
+        if _doc_leave_panel.open:
+            with _doc_leave_panel:
+                try:
+                    leave_request = get_leave_request_for_day(doc_student[3])
+                    if not leave_request:
+                        st.info("Nu există o solicitare de învoire pentru elevul selectat în ziua curentă.")
+                    else:
+                        leave_status = leave_request.get("status")
+                        leave_status_labels = {
+                            LEAVE_STATUS_PENDING: "⏳ ÎN AȘTEPTARE",
+                            LEAVE_STATUS_REFUSED: "❌ REFUZATĂ",
+                            LEAVE_STATUS_EXPIRED: "❌ EXPIRATĂ — CONSIDERATĂ REFUZATĂ",
+                            LEAVE_STATUS_APPROVED: "✅ APROBATĂ",
+                        }
+                        st.markdown(f"**Stare:** {leave_status_labels.get(leave_status, leave_status)}")
+                        st.markdown(
+                            f"**Părinte/Reprezentant legal:** {leave_request.get('parent_name')}  \n"
+                            f"**Data:** {leave_request.get('request_date')}  \n"
+                            f"**Ora solicitată pentru plecare:** {leave_request.get('departure_time')}  \n"
+                            f"**Motiv:** {leave_request.get('reason_label')}  \n"
+                            f"**Revizia solicitării:** {leave_request.get('revision')}"
+                        )
+                        transmitted_raw = str(leave_request.get("transmitted_at_utc") or "")
+                        if transmitted_raw:
+                            try:
+                                transmitted_dt = datetime.datetime.fromisoformat(transmitted_raw.replace("Z", "+00:00"))
+                                if transmitted_dt.tzinfo is None:
+                                    transmitted_dt = transmitted_dt.replace(tzinfo=datetime.timezone.utc)
+                                transmitted_display = transmitted_dt.astimezone(
+                                    ZoneInfo("Europe/Bucharest")
+                                ).strftime("%d.%m.%Y, ora %H:%M")
+                            except (ValueError, TypeError):
+                                transmitted_display = transmitted_raw
+                            st.caption(f"Ultima formulare transmisă: {transmitted_display}")
+    
+                        st.info(
+                            "Biletul de voie permite exclusiv părăsirea unității la data și ora aprobate. "
+                            "Nu reprezintă motivare/scutire și nu modifică automat absențele."
+                        )
+    
+                        if leave_status == LEAVE_STATUS_PENDING:
+                            col_leave_approve, col_leave_refuse = st.columns(2)
+                            if col_leave_approve.button(
+                                "✅ Aprobă învoirea",
+                                type="primary",
+                                use_container_width=True,
+                                key=f"approve_leave_{leave_request['id']}_{leave_request['revision']}",
+                            ):
+                                try:
+                                    result = approve_leave_request(
+                                        student_rm_pg=doc_student[3],
+                                        request_id=leave_request["id"],
+                                        expected_revision=leave_request["revision"],
+                                    )
+                                    if result.get("status") == LEAVE_STATUS_APPROVED:
+                                        st.success("Învoirea a fost aprobată și biletul de voie a fost generat.")
+                                    elif result.get("status") == LEAVE_STATUS_EXPIRED:
+                                        st.error(
+                                            "Ora solicitată a fost atinsă sau depășită. Solicitarea este "
+                                            "considerată refuzată și nu a fost generat niciun bilet de voie."
+                                        )
+                                    st.rerun()
+                                except (DocumentStorageError, ValueError) as ex:
+                                    st.error(f"Învoirea nu a putut fi aprobată: {ex}")
+    
+                            if col_leave_refuse.button(
+                                "❌ Refuză învoirea",
+                                use_container_width=True,
+                                key=f"refuse_leave_{leave_request['id']}_{leave_request['revision']}",
+                            ):
+                                try:
+                                    result = refuse_leave_request(
+                                        student_rm_pg=doc_student[3],
+                                        request_id=leave_request["id"],
+                                        expected_revision=leave_request["revision"],
+                                    )
+                                    if result.get("status") == LEAVE_STATUS_EXPIRED:
+                                        st.error(
+                                            "Ora solicitată a fost atinsă sau depășită; solicitarea este "
+                                            "considerată refuzată prin expirare."
+                                        )
+                                    else:
+                                        st.success("Solicitarea de învoire a fost refuzată.")
+                                    st.rerun()
+                                except (DocumentStorageError, ValueError) as ex:
+                                    st.error(f"Refuzul nu a putut fi înregistrat: {ex}")
+    
+                        elif leave_status == LEAVE_STATUS_REFUSED:
+                            st.warning(
+                                "Solicitarea a fost refuzată. Părintele o poate reformula în aceeași zi "
+                                "pentru o oră viitoare."
+                            )
+                        elif leave_status == LEAVE_STATUS_EXPIRED:
+                            st.warning(
+                                "Solicitarea nu a fost aprobată înainte de ora solicitată și este considerată "
+                                "refuzată. Nu poate fi aprobată retroactiv."
+                            )
+                        elif leave_status == LEAVE_STATUS_APPROVED:
+                            approved_raw = str(leave_request.get("approved_at_utc") or "")
+                            if approved_raw:
+                                try:
+                                    approved_dt = datetime.datetime.fromisoformat(approved_raw.replace("Z", "+00:00"))
+                                    if approved_dt.tzinfo is None:
+                                        approved_dt = approved_dt.replace(tzinfo=datetime.timezone.utc)
+                                    approved_display = approved_dt.astimezone(
+                                        ZoneInfo("Europe/Bucharest")
+                                    ).strftime("%d.%m.%Y, ora %H:%M")
+                                except (ValueError, TypeError):
+                                    approved_display = approved_raw
+                                st.success(f"✅ Învoire aprobată — {approved_display}")
+                            try:
+                                _, leave_pdf = read_approved_leave_pass(
+                                    doc_student[3], leave_request["id"]
+                                )
+                                st.download_button(
+                                    "📥 Descarcă biletul de voie aprobat",
+                                    data=leave_pdf,
+                                    file_name=f"Bilet_de_voie_{leave_request['request_date']}.pdf",
+                                    mime="application/pdf",
+                                    use_container_width=True,
+                                    key=f"teacher_leave_download_{leave_request['id']}",
+                                )
+                            except DocumentStorageError as ex:
+                                st.error(f"Biletul de voie nu poate fi deschis în siguranță: {ex}")
+                except (DocumentStorageError, ValueError) as ex:
+                    st.error(f"Solicitarea de învoire nu poate fi încărcată în siguranță: {ex}")
+    
+        st.divider()
+    
+        st.markdown("#### 📤 Trimite document către părinte/reprezentant legal")
+        st.caption(
+            "Documentul va fi transmis în contul autentificat aferent elevului selectat. "
+            "După prima accesare de către părinte/reprezentant legal, sistemul va putea "
+            "înregistra confirmarea de primire și luare la cunoștință."
+        )
+        teacher_document_type_label = st.selectbox(
+            "Tip document transmis:",
+            ["Înștiințare", "Document transmis de școală"],
+            key="teacher_school_document_type",
+        )
+        teacher_document_type = (
+            "INSTIINTARE"
+            if teacher_document_type_label == "Înștiințare"
+            else "DOCUMENT_SCOALA"
+        )
+        teacher_upload = st.file_uploader(
+            "Încarcă documentul (PDF, JPG/JPEG sau PNG, maximum 15 MB):",
+            type=["pdf", "jpg", "jpeg", "png"],
+            key=f"teacher_school_document_upload_{doc_student[0]}",
+        )
+    
+        if teacher_upload is not None:
             st.info(
-                "Schimbarea stării nu șterge elevul și nu modifică notele, mediile, "
-                "absențele, NR. MATR. sau RM/PG."
-            )
-            if st.button("💾 Salvează starea școlară", type="primary", use_container_width=True):
-                status_vechi = status_item.get("status_scolar")
-                istoric_vechi = list(status_item.get("istoric_miscare", []))
-                status_item["status_scolar"] = status_nou
-                if status_nou != status_curent:
-                    istoric = list(status_item.get("istoric_miscare", []))
-                    istoric.append({
-                        "tip": status_nou,
-                        "data": datetime.datetime.now(
-                            ZoneInfo("Europe/Bucharest")
-                        ).strftime("%Y-%m-%d"),
-                    })
-                    status_item["istoric_miscare"] = istoric
-                if save_gestiune_data(gest_data):
-                    st.success(
-                        f"✅ Starea elevului {status_item.get('nume_complet')} a fost actualizată la {status_nou}. "
-                        "Istoricul școlar a rămas neschimbat."
-                    )
-                    st.rerun()
-                else:
-                    if status_vechi is None:
-                        status_item.pop("status_scolar", None)
-                    else:
-                        status_item["status_scolar"] = status_vechi
-                    if istoric_vechi:
-                        status_item["istoric_miscare"] = istoric_vechi
-                    else:
-                        status_item.pop("istoric_miscare", None)
-                    st.warning(
-                        "⚠️ Modificarea stării nu a fost confirmată în repository-ul privat. "
-                        "Datele încărcate în sesiunea curentă au fost restaurate."
-                    )
-
-    elif op_gest == "↩️ Anulare adăugare greșită":
-        if gest_data:
-            last_index = len(gest_data) - 1
-            last_item = gest_data[last_index]
-            st.warning(
-                "Această operație este destinată exclusiv anulării ultimei înregistrări introduse din greșeală. "
-                "Este refuzată dacă elevul are deja note, absențe sau alte date școlare."
-            )
-            st.write(
-                f"Ultima înregistrare: **{last_item.get('nume_complet', '')}** "
-                f"(NR. MATR. {last_item.get('rand_excel', '')}, RM/PG {last_item.get('matricol', '')})"
-            )
-            confirm_cancel = st.checkbox(
-                "Confirm că această înregistrare a fost introdusă din greșeală și trebuie anulată.",
-                key="confirm_cancel_last_student"
+                f"Destinatar: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**  \n"
+                f"Fișier: **{teacher_upload.name}**"
             )
             if st.button(
-                "↩️ Anulează ultima adăugare",
+                "📤 Trimite către părinte",
                 type="primary",
                 use_container_width=True,
-                disabled=not confirm_cancel
+                key=f"teacher_send_school_document_{doc_student[0]}",
             ):
                 try:
-                    excel_backup = prepare_last_student_cancellation(selected_file, gest_data, last_index)
-                except Exception as ex:
-                    st.error(f"Anularea a fost oprită fără modificări: {ex}")
-                else:
-                    if not push_to_github(selected_file):
-                        shutil.copy2(excel_backup, selected_file)
-                        st.warning(
-                            "⚠️ Excel nu a fost sincronizat. Copia originală a fost restaurată, "
-                            "iar JSON nu a fost modificat."
-                        )
+                    upload_content = teacher_upload.getvalue()
+                    record, validated_content = build_document_record(
+                        student_rm_pg=doc_student[3],
+                        direction="SCOALA_PARINTE",
+                        category="SCOALA_CATRE_PARINTE",
+                        document_type=teacher_document_type,
+                        original_filename=teacher_upload.name,
+                        mime_type=teacher_upload.type,
+                        content=upload_content,
+                        school_year="2026-2027",
+                        sender_role="SCOALA",
+                        recipient_role="PARINTE",
+                    )
+                    store_new_document(record, validated_content)
+                    _event,_created,_wa_links=_register_parent_alert(
+                        doc_student[3],event_type="DOCUMENT_SCOALA",source_type="DOCUMENT",
+                        source_id=record["id"],student_key=record["student_key"],
+                        title="Comunicare nouă din partea dirigintelui",
+                        message="Catalog Online: aveți o nouă comunicare din partea dirigintelui. Accesați Portalul Părinților pentru detalii.",
+                        created_at_utc=record.get("created_at_utc"),
+                    )
+                    for _idx,_wa in enumerate(_wa_links):
+                        st.link_button(f"📲 Deschide WhatsApp pentru părinte {(_idx+1)}",_wa,use_container_width=True)
+                    st.success(
+                        "Documentul a fost transmis și înregistrat în siguranță pentru "
+                        "părintele/reprezentantul legal al elevului selectat."
+                    )
+                    st.rerun()
+                except (DocumentStorageError, ValueError) as ex:
+                    st.error(f"Documentul nu a fost transmis: {ex}")
+    
+        st.divider()
+    
+        _doc_sent_panel=st.expander("📬 Documente trimise către părinte", expanded=False, key="doc_sent_panel", on_change="rerun")
+        if _doc_sent_panel.open:
+            with _doc_sent_panel:
+                try:
+                    sent_documents = list_student_documents(
+                        doc_student[3],
+                        direction="SCOALA_PARINTE",
+                    )
+                    st.markdown("#### 📬 Documente trimise către părinte/reprezentant legal")
+                    if not sent_documents:
+                        st.info("Nu există documente transmise de școală pentru elevul selectat.")
                     else:
-                        removed = gest_data.pop()
-                        if save_gestiune_data(gest_data):
+                        sent_labels = {
+                            "INSTIINTARE": "Înștiințare",
+                            "DOCUMENT_SCOALA": "Document transmis de școală",
+                        }
+                        selected_sent_id = st.selectbox(
+                            "Document trimis:",
+                            [item["id"] for item in sent_documents],
+                            format_func=lambda doc_id: next(
+                                (
+                                    f"{sent_labels.get(item.get('document_type'), item.get('document_type'))} — "
+                                    f"{item.get('original_filename')} — "
+                                    f"{item.get('created_at_utc', '')[:10]}"
+                                )
+                                for item in sent_documents
+                                if item["id"] == doc_id
+                            ),
+                            key="teacher_sent_document",
+                        )
+                        selected_sent = next(
+                            item for item in sent_documents if item["id"] == selected_sent_id
+                        )
+                        first_accessed = str(selected_sent.get("first_accessed_at_utc") or "")
+                        if first_accessed:
                             try:
-                                os.remove(excel_backup)
-                            except Exception:
-                                pass
-                            st.success(
-                                f"✅ Adăugarea greșită pentru {removed.get('nume_complet', '')} a fost anulată "
-                                "în catalog și în gestiune."
-                            )
-                            st.rerun()
+                                accessed_dt = datetime.datetime.fromisoformat(first_accessed.replace("Z", "+00:00"))
+                                if accessed_dt.tzinfo is None:
+                                    accessed_dt = accessed_dt.replace(tzinfo=datetime.timezone.utc)
+                                accessed_display = accessed_dt.astimezone(
+                                    ZoneInfo("Europe/Bucharest")
+                                ).strftime("%d.%m.%Y, ora %H:%M")
+                            except (ValueError, TypeError):
+                                accessed_display = first_accessed
+                            st.success(f"✅ Accesat de părinte — {accessed_display}")
                         else:
-                            gest_data.append(removed)
-                            st.error(
-                                "⚠️ Excel a fost sincronizat, dar JSON nu a fost confirmat. "
-                                "Gestiunea elevilor va fi blocată la următoarea verificare de consistență."
-                            )
-
-    st.divider()
-    st.markdown("#### 📋 Monitorizare copii cu părinți plecați / reveniți din străinătate")
-    st.caption("Raport conform structurii modelului DAS 2026–2027. Sunt incluse numai cazurile relevante; informațiile neînregistrate rămân necompletate.")
-    try:
-        raport_das = generate_excel_monitorizare_das(gest_data)
-        st.download_button(
-            "📥 Descarcă Tabel monitorizare DAS 2026–2027 (.xlsx)",
-            data=raport_das,
-            file_name="Tabel_monitorizare_DAS_2026-2027.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-            key="download_monitorizare_das",
-        )
-    except Exception as ex:
-        st.error(f"Eroare la generarea tabelului de monitorizare: {ex}")
-
-    st.divider()
-    st.markdown("#### 📊 Export Registru & Statistică Clasă (Excel — model ISJ Cluj)")
-    col_g1, col_g2 = st.columns(2)
-    with col_g1:
-        try:
-            excel_reg_bytes = generate_excel_registru_elevi(gest_data)
-            st.download_button(
-                "📊 Descarcă Registru Date Elevi (.xlsx)",
-                data=excel_reg_bytes,
-                file_name="Registru_Gestiune_Elevi_IX_TH.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-        except Exception as ex:
-            st.error(f"Eroare la generare Registru Excel: {ex}")
-
-    with col_g2:
-        try:
-            excel_stat_bytes = generate_excel_statistica_clasa(gest_data)
-            st.download_button(
-                "📊 Descarcă Statistica Clasa (.xlsx)",
-                data=excel_stat_bytes,
-                file_name="Statistica_Clasa_IX_TH_ISJ_Cluj_A4.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-        except Exception as ex:
-            st.error(f"Eroare la generare Statistică Excel: {ex}")
-
-
-# --- TAB 9: DOCUMENTE ELEVI ---
-with tab8:
-    st.subheader("📁 DOCUMENTE ELEVI — Centru documente")
-    doc_student_idx = st.selectbox(
-        "Selectează elevul:",
-        range(len(ELEVI)),
-        format_func=lambda i: elev_options[i],
-        key="doc_student_preview",
-    )
-    doc_student = ELEVI[doc_student_idx]
-
-    st.info(
-        f"Elev selectat: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**."
-    )
-
-    st.markdown("#### 🚪 Bilet de voie — solicitarea părintelui")
-    try:
-        leave_request = get_leave_request_for_day(doc_student[3])
-        if not leave_request:
-            st.info("Nu există o solicitare de învoire pentru elevul selectat în ziua curentă.")
-        else:
-            leave_status = leave_request.get("status")
-            leave_status_labels = {
-                LEAVE_STATUS_PENDING: "⏳ ÎN AȘTEPTARE",
-                LEAVE_STATUS_REFUSED: "❌ REFUZATĂ",
-                LEAVE_STATUS_EXPIRED: "❌ EXPIRATĂ — CONSIDERATĂ REFUZATĂ",
-                LEAVE_STATUS_APPROVED: "✅ APROBATĂ",
-            }
-            st.markdown(f"**Stare:** {leave_status_labels.get(leave_status, leave_status)}")
-            st.markdown(
-                f"**Părinte/Reprezentant legal:** {leave_request.get('parent_name')}  \n"
-                f"**Data:** {leave_request.get('request_date')}  \n"
-                f"**Ora solicitată pentru plecare:** {leave_request.get('departure_time')}  \n"
-                f"**Motiv:** {leave_request.get('reason_label')}  \n"
-                f"**Revizia solicitării:** {leave_request.get('revision')}"
-            )
-            transmitted_raw = str(leave_request.get("transmitted_at_utc") or "")
-            if transmitted_raw:
-                try:
-                    transmitted_dt = datetime.datetime.fromisoformat(transmitted_raw.replace("Z", "+00:00"))
-                    if transmitted_dt.tzinfo is None:
-                        transmitted_dt = transmitted_dt.replace(tzinfo=datetime.timezone.utc)
-                    transmitted_display = transmitted_dt.astimezone(
-                        ZoneInfo("Europe/Bucharest")
-                    ).strftime("%d.%m.%Y, ora %H:%M")
-                except (ValueError, TypeError):
-                    transmitted_display = transmitted_raw
-                st.caption(f"Ultima formulare transmisă: {transmitted_display}")
-
-            st.info(
-                "Biletul de voie permite exclusiv părăsirea unității la data și ora aprobate. "
-                "Nu reprezintă motivare/scutire și nu modifică automat absențele."
-            )
-
-            if leave_status == LEAVE_STATUS_PENDING:
-                col_leave_approve, col_leave_refuse = st.columns(2)
-                if col_leave_approve.button(
-                    "✅ Aprobă învoirea",
-                    type="primary",
-                    use_container_width=True,
-                    key=f"approve_leave_{leave_request['id']}_{leave_request['revision']}",
-                ):
-                    try:
-                        result = approve_leave_request(
-                            student_rm_pg=doc_student[3],
-                            request_id=leave_request["id"],
-                            expected_revision=leave_request["revision"],
+                            st.warning("🔔 Neaccesat de părinte")
+    
+                        st.caption(
+                            f"Tip: {sent_labels.get(selected_sent.get('document_type'), selected_sent.get('document_type'))} | "
+                            f"An școlar: {selected_sent.get('school_year')} | "
+                            f"Dimensiune: {selected_sent.get('size_bytes', 0)} bytes"
                         )
-                        if result.get("status") == LEAVE_STATUS_APPROVED:
-                            st.success("Învoirea a fost aprobată și biletul de voie a fost generat.")
-                        elif result.get("status") == LEAVE_STATUS_EXPIRED:
-                            st.error(
-                                "Ora solicitată a fost atinsă sau depășită. Solicitarea este "
-                                "considerată refuzată și nu a fost generat niciun bilet de voie."
+                        try:
+                            sent_meta, sent_content = read_registered_document(
+                                doc_student[3],
+                                selected_sent_id,
                             )
-                        st.rerun()
-                    except (DocumentStorageError, ValueError) as ex:
-                        st.error(f"Învoirea nu a putut fi aprobată: {ex}")
-
-                if col_leave_refuse.button(
-                    "❌ Refuză învoirea",
-                    use_container_width=True,
-                    key=f"refuse_leave_{leave_request['id']}_{leave_request['revision']}",
-                ):
-                    try:
-                        result = refuse_leave_request(
-                            student_rm_pg=doc_student[3],
-                            request_id=leave_request["id"],
-                            expected_revision=leave_request["revision"],
-                        )
-                        if result.get("status") == LEAVE_STATUS_EXPIRED:
-                            st.error(
-                                "Ora solicitată a fost atinsă sau depășită; solicitarea este "
-                                "considerată refuzată prin expirare."
+                            st.download_button(
+                                "📥 Descarcă documentul trimis",
+                                data=sent_content,
+                                file_name=sent_meta.get("original_filename", "document"),
+                                mime=sent_meta.get("mime_type", "application/octet-stream"),
+                                use_container_width=True,
+                                key="teacher_download_sent_document",
                             )
-                        else:
-                            st.success("Solicitarea de învoire a fost refuzată.")
-                        st.rerun()
-                    except (DocumentStorageError, ValueError) as ex:
-                        st.error(f"Refuzul nu a putut fi înregistrat: {ex}")
-
-            elif leave_status == LEAVE_STATUS_REFUSED:
-                st.warning(
-                    "Solicitarea a fost refuzată. Părintele o poate reformula în aceeași zi "
-                    "pentru o oră viitoare."
-                )
-            elif leave_status == LEAVE_STATUS_EXPIRED:
-                st.warning(
-                    "Solicitarea nu a fost aprobată înainte de ora solicitată și este considerată "
-                    "refuzată. Nu poate fi aprobată retroactiv."
-                )
-            elif leave_status == LEAVE_STATUS_APPROVED:
-                approved_raw = str(leave_request.get("approved_at_utc") or "")
-                if approved_raw:
-                    try:
-                        approved_dt = datetime.datetime.fromisoformat(approved_raw.replace("Z", "+00:00"))
-                        if approved_dt.tzinfo is None:
-                            approved_dt = approved_dt.replace(tzinfo=datetime.timezone.utc)
-                        approved_display = approved_dt.astimezone(
-                            ZoneInfo("Europe/Bucharest")
-                        ).strftime("%d.%m.%Y, ora %H:%M")
-                    except (ValueError, TypeError):
-                        approved_display = approved_raw
-                    st.success(f"✅ Învoire aprobată — {approved_display}")
-                try:
-                    _, leave_pdf = read_approved_leave_pass(
-                        doc_student[3], leave_request["id"]
-                    )
-                    st.download_button(
-                        "📥 Descarcă biletul de voie aprobat",
-                        data=leave_pdf,
-                        file_name=f"Bilet_de_voie_{leave_request['request_date']}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True,
-                        key=f"teacher_leave_download_{leave_request['id']}",
-                    )
+                            _sent_wa_links = _parent_whatsapp_links(
+                                doc_student[3],
+                                "Catalog Online: aveți un document transmis de școală disponibil în Portalul Părinților.",
+                            )
+                            for _idx, _wa in enumerate(_sent_wa_links):
+                                st.link_button(
+                                    f"📲 Deschide WhatsApp pentru părinte {(_idx + 1)}",
+                                    _wa,
+                                    use_container_width=True,
+                                    key=f"teacher_sent_document_wa_{selected_sent_id}_{_idx}",
+                                )
+                        except DocumentStorageError as ex:
+                            st.error(f"Documentul trimis nu poate fi deschis în siguranță: {ex}")
+    
+                        confirmation_id = selected_sent.get("confirmation_document_id")
+                        if confirmation_id:
+                            try:
+                                confirmation_meta, confirmation_content = read_registered_document(
+                                    doc_student[3],
+                                    confirmation_id,
+                                )
+                                st.download_button(
+                                    "📄 Descarcă confirmarea de primire",
+                                    data=confirmation_content,
+                                    file_name=confirmation_meta.get("original_filename", "confirmare_primire.pdf"),
+                                    mime="application/pdf",
+                                    use_container_width=True,
+                                    key="teacher_download_receipt",
+                                )
+                            except DocumentStorageError as ex:
+                                st.error(f"Confirmarea de primire nu poate fi deschisă în siguranță: {ex}")
                 except DocumentStorageError as ex:
-                    st.error(f"Biletul de voie nu poate fi deschis în siguranță: {ex}")
-    except (DocumentStorageError, ValueError) as ex:
-        st.error(f"Solicitarea de învoire nu poate fi încărcată în siguranță: {ex}")
-
-    st.divider()
-
-    st.markdown("#### 📤 Trimite document către părinte/reprezentant legal")
-    st.caption(
-        "Documentul va fi transmis în contul autentificat aferent elevului selectat. "
-        "După prima accesare de către părinte/reprezentant legal, sistemul va putea "
-        "înregistra confirmarea de primire și luare la cunoștință."
-    )
-    teacher_document_type_label = st.selectbox(
-        "Tip document transmis:",
-        ["Înștiințare", "Document transmis de școală"],
-        key="teacher_school_document_type",
-    )
-    teacher_document_type = (
-        "INSTIINTARE"
-        if teacher_document_type_label == "Înștiințare"
-        else "DOCUMENT_SCOALA"
-    )
-    teacher_upload = st.file_uploader(
-        "Încarcă documentul (PDF, JPG/JPEG sau PNG, maximum 15 MB):",
-        type=["pdf", "jpg", "jpeg", "png"],
-        key=f"teacher_school_document_upload_{doc_student[0]}",
-    )
-
-    if teacher_upload is not None:
-        st.info(
-            f"Destinatar: **{doc_student[1]}** — RM/PG: **{doc_student[3]}**  \n"
-            f"Fișier: **{teacher_upload.name}**"
-        )
-        if st.button(
-            "📤 Trimite către părinte",
-            type="primary",
-            use_container_width=True,
-            key=f"teacher_send_school_document_{doc_student[0]}",
-        ):
-            try:
-                upload_content = teacher_upload.getvalue()
-                record, validated_content = build_document_record(
-                    student_rm_pg=doc_student[3],
-                    direction="SCOALA_PARINTE",
-                    category="SCOALA_CATRE_PARINTE",
-                    document_type=teacher_document_type,
-                    original_filename=teacher_upload.name,
-                    mime_type=teacher_upload.type,
-                    content=upload_content,
-                    school_year="2026-2027",
-                    sender_role="SCOALA",
-                    recipient_role="PARINTE",
-                )
-                store_new_document(record, validated_content)
-                _event,_created,_wa_links=_register_parent_alert(
-                    doc_student[3],event_type="DOCUMENT_SCOALA",source_type="DOCUMENT",
-                    source_id=record["id"],student_key=record["student_key"],
-                    title="Comunicare nouă din partea dirigintelui",
-                    message="Catalog Online: aveți o nouă comunicare din partea dirigintelui. Accesați Portalul Părinților pentru detalii.",
-                    created_at_utc=record.get("created_at_utc"),
-                )
-                for _idx,_wa in enumerate(_wa_links):
-                    st.link_button(f"📲 Deschide WhatsApp pentru părinte {(_idx+1)}",_wa,use_container_width=True)
-                st.success(
-                    "Documentul a fost transmis și înregistrat în siguranță pentru "
-                    "părintele/reprezentantul legal al elevului selectat."
-                )
-                st.rerun()
-            except (DocumentStorageError, ValueError) as ex:
-                st.error(f"Documentul nu a fost transmis: {ex}")
-
-    st.divider()
-
-    try:
-        sent_documents = list_student_documents(
-            doc_student[3],
-            direction="SCOALA_PARINTE",
-        )
-        st.markdown("#### 📬 Documente trimise către părinte/reprezentant legal")
-        if not sent_documents:
-            st.info("Nu există documente transmise de școală pentru elevul selectat.")
-        else:
-            sent_labels = {
-                "INSTIINTARE": "Înștiințare",
-                "DOCUMENT_SCOALA": "Document transmis de școală",
-            }
-            selected_sent_id = st.selectbox(
-                "Document trimis:",
-                [item["id"] for item in sent_documents],
-                format_func=lambda doc_id: next(
-                    (
-                        f"{sent_labels.get(item.get('document_type'), item.get('document_type'))} — "
-                        f"{item.get('original_filename')} — "
-                        f"{item.get('created_at_utc', '')[:10]}"
-                    )
-                    for item in sent_documents
-                    if item["id"] == doc_id
-                ),
-                key="teacher_sent_document",
-            )
-            selected_sent = next(
-                item for item in sent_documents if item["id"] == selected_sent_id
-            )
-            first_accessed = str(selected_sent.get("first_accessed_at_utc") or "")
-            if first_accessed:
+                    st.error(f"Documentele trimise nu pot fi încărcate în siguranță: {ex}")
+    
+        st.divider()
+    
+        _doc_received_panel=st.expander("📨 Documente primite de la părinte", expanded=False, key="doc_received_panel", on_change="rerun")
+        if _doc_received_panel.open:
+            with _doc_received_panel:
                 try:
-                    accessed_dt = datetime.datetime.fromisoformat(first_accessed.replace("Z", "+00:00"))
-                    if accessed_dt.tzinfo is None:
-                        accessed_dt = accessed_dt.replace(tzinfo=datetime.timezone.utc)
-                    accessed_display = accessed_dt.astimezone(
-                        ZoneInfo("Europe/Bucharest")
-                    ).strftime("%d.%m.%Y, ora %H:%M")
-                except (ValueError, TypeError):
-                    accessed_display = first_accessed
-                st.success(f"✅ Accesat de părinte — {accessed_display}")
-            else:
-                st.warning("🔔 Neaccesat de părinte")
-
-            st.caption(
-                f"Tip: {sent_labels.get(selected_sent.get('document_type'), selected_sent.get('document_type'))} | "
-                f"An școlar: {selected_sent.get('school_year')} | "
-                f"Dimensiune: {selected_sent.get('size_bytes', 0)} bytes"
-            )
-            try:
-                sent_meta, sent_content = read_registered_document(
-                    doc_student[3],
-                    selected_sent_id,
-                )
-                st.download_button(
-                    "📥 Descarcă documentul trimis",
-                    data=sent_content,
-                    file_name=sent_meta.get("original_filename", "document"),
-                    mime=sent_meta.get("mime_type", "application/octet-stream"),
-                    use_container_width=True,
-                    key="teacher_download_sent_document",
-                )
-                _sent_wa_links = _parent_whatsapp_links(
-                    doc_student[3],
-                    "Catalog Online: aveți un document transmis de școală disponibil în Portalul Părinților.",
-                )
-                for _idx, _wa in enumerate(_sent_wa_links):
-                    st.link_button(
-                        f"📲 Deschide WhatsApp pentru părinte {(_idx + 1)}",
-                        _wa,
-                        use_container_width=True,
-                        key=f"teacher_sent_document_wa_{selected_sent_id}_{_idx}",
-                    )
-            except DocumentStorageError as ex:
-                st.error(f"Documentul trimis nu poate fi deschis în siguranță: {ex}")
-
-            confirmation_id = selected_sent.get("confirmation_document_id")
-            if confirmation_id:
-                try:
-                    confirmation_meta, confirmation_content = read_registered_document(
+                    received_documents = list_student_documents(
                         doc_student[3],
-                        confirmation_id,
+                        direction="PARINTE_SCOALA",
                     )
-                    st.download_button(
-                        "📄 Descarcă confirmarea de primire",
-                        data=confirmation_content,
-                        file_name=confirmation_meta.get("original_filename", "confirmare_primire.pdf"),
-                        mime="application/pdf",
-                        use_container_width=True,
-                        key="teacher_download_receipt",
+                    col_doc1, col_doc2 = st.columns(2)
+                    col_doc1.metric("Documente de la părinte", len(received_documents))
+                    col_doc2.metric(
+                        "Documente primite în anul curent",
+                        sum(1 for item in received_documents if item.get("school_year") == "2026-2027"),
                     )
-                except DocumentStorageError as ex:
-                    st.error(f"Confirmarea de primire nu poate fi deschisă în siguranță: {ex}")
-    except DocumentStorageError as ex:
-        st.error(f"Documentele trimise nu pot fi încărcate în siguranță: {ex}")
-
-    st.divider()
-
-    try:
-        received_documents = list_student_documents(
-            doc_student[3],
-            direction="PARINTE_SCOALA",
-        )
-        col_doc1, col_doc2 = st.columns(2)
-        col_doc1.metric("Documente de la părinte", len(received_documents))
-        col_doc2.metric(
-            "Documente primite în anul curent",
-            sum(1 for item in received_documents if item.get("school_year") == "2026-2027"),
-        )
-
-        try:
-            excuse_usage = parent_excuse_usage(doc_student[3], "2026-2027")
-            st.markdown("#### 📝 Scutiri / Motivări întocmite de părinte — anul școlar 2026–2027")
-            col_exc1, col_exc2, col_exc3 = st.columns(3)
-            col_exc1.metric("Ore utilizate", excuse_usage["used_hours"])
-            col_exc2.metric("Ore rămase", excuse_usage["remaining_hours"])
-            col_exc3.metric("Limită anuală", excuse_usage["annual_limit"])
-        except DocumentStorageError as ex:
-            st.error(f"Contorul anual al motivărilor nu poate fi încărcat în siguranță: {ex}")
-
-        if not received_documents:
-            st.info("Nu există documente transmise de părinte pentru elevul selectat.")
-        else:
-            labels = {
-                "DOSAR_PERSONAL": "Dosar personal",
-                "SCUTIRE_MEDICALA": "Scutire / document medical",
-                "DOSAR_BURSA": "Dosar bursă",
-                "MOTIVARE_PARINTE": "Scutire / Motivare absențe — Părinte",
-            }
-            selected_doc_id = st.selectbox(
-                "Document primit:",
-                [item["id"] for item in received_documents],
-                format_func=lambda doc_id: next(
-                    (
-                        f"{labels.get(item.get('category'), item.get('category'))} — "
-                        f"{item.get('original_filename')} — "
-                        f"{item.get('created_at_utc', '')[:10]}"
-                    )
-                    for item in received_documents
-                    if item["id"] == doc_id
-                ),
-                key="teacher_received_document",
-            )
-            selected_meta = next(
-                item for item in received_documents if item["id"] == selected_doc_id
-            )
-            st.caption(
-                f"Tip: {selected_meta.get('document_type')} | "
-                f"An școlar: {selected_meta.get('school_year')} | "
-                f"Dimensiune: {selected_meta.get('size_bytes', 0)} bytes"
-            )
-
-            if selected_meta.get("category") == "MOTIVARE_PARINTE":
-                try:
-                    excuse_meta = get_parent_excuse_for_document(
-                        doc_student[3],
-                        selected_doc_id,
-                    )
-                    if excuse_meta is None:
-                        st.warning(
-                            "Documentul există în registrul general, dar înregistrarea administrativă "
-                            "a motivării nu a fost găsită. Situația trebuie verificată înainte de prelucrare."
-                        )
+    
+                    try:
+                        excuse_usage = parent_excuse_usage(doc_student[3], "2026-2027")
+                        st.markdown("#### 📝 Scutiri / Motivări întocmite de părinte — anul școlar 2026–2027")
+                        col_exc1, col_exc2, col_exc3 = st.columns(3)
+                        col_exc1.metric("Ore utilizate", excuse_usage["used_hours"])
+                        col_exc2.metric("Ore rămase", excuse_usage["remaining_hours"])
+                        col_exc3.metric("Limită anuală", excuse_usage["annual_limit"])
+                    except DocumentStorageError as ex:
+                        st.error(f"Contorul anual al motivărilor nu poate fi încărcat în siguranță: {ex}")
+    
+                    if not received_documents:
+                        st.info("Nu există documente transmise de părinte pentru elevul selectat.")
                     else:
-                        absence_date = str(excuse_meta.get("absence_date", ""))
-                        try:
-                            absence_date_display = datetime.date.fromisoformat(absence_date).strftime("%d.%m.%Y")
-                        except ValueError:
-                            absence_date_display = absence_date or "—"
-                        transmitted_at = str(excuse_meta.get("transmitted_at_utc", ""))
-                        try:
-                            transmitted_display = datetime.datetime.fromisoformat(transmitted_at).strftime("%d.%m.%Y %H:%M")
-                        except ValueError:
-                            transmitted_display = transmitted_at or "—"
-                        st.markdown(
-                            f"**Data absenței:** {absence_date_display}  \n"
-                            f"**Număr ore:** {excuse_meta.get('hours', '—')}  \n"
-                            f"**Transmis de:** {excuse_meta.get('parent_name') or '—'}  \n"
-                            f"**Stare:** {excuse_meta.get('status') or '—'}  \n"
-                            f"**Înregistrat la:** {transmitted_display} UTC"
+                        labels = {
+                            "DOSAR_PERSONAL": "Dosar personal",
+                            "SCUTIRE_MEDICALA": "Scutire / document medical",
+                            "DOSAR_BURSA": "Dosar bursă",
+                            "MOTIVARE_PARINTE": "Scutire / Motivare absențe — Părinte",
+                        }
+                        selected_doc_id = st.selectbox(
+                            "Document primit:",
+                            [item["id"] for item in received_documents],
+                            format_func=lambda doc_id: next(
+                                (
+                                    f"{labels.get(item.get('category'), item.get('category'))} — "
+                                    f"{item.get('original_filename')} — "
+                                    f"{item.get('created_at_utc', '')[:10]}"
+                                )
+                                for item in received_documents
+                                if item["id"] == doc_id
+                            ),
+                            key="teacher_received_document",
                         )
-                        st.info(
-                            "Cererea a fost transmisă prin contul autentificat al părintelui/reprezentantului "
-                            "legal și este considerată depusă. Dacă sunt necesare clarificări sau documente "
-                            "suplimentare, părintele va fi contactat."
+                        selected_meta = next(
+                            item for item in received_documents if item["id"] == selected_doc_id
                         )
+                        st.caption(
+                            f"Tip: {selected_meta.get('document_type')} | "
+                            f"An școlar: {selected_meta.get('school_year')} | "
+                            f"Dimensiune: {selected_meta.get('size_bytes', 0)} bytes"
+                        )
+    
+                        if selected_meta.get("category") == "MOTIVARE_PARINTE":
+                            try:
+                                excuse_meta = get_parent_excuse_for_document(
+                                    doc_student[3],
+                                    selected_doc_id,
+                                )
+                                if excuse_meta is None:
+                                    st.warning(
+                                        "Documentul există în registrul general, dar înregistrarea administrativă "
+                                        "a motivării nu a fost găsită. Situația trebuie verificată înainte de prelucrare."
+                                    )
+                                else:
+                                    absence_date = str(excuse_meta.get("absence_date", ""))
+                                    try:
+                                        absence_date_display = datetime.date.fromisoformat(absence_date).strftime("%d.%m.%Y")
+                                    except ValueError:
+                                        absence_date_display = absence_date or "—"
+                                    transmitted_at = str(excuse_meta.get("transmitted_at_utc", ""))
+                                    try:
+                                        transmitted_display = datetime.datetime.fromisoformat(transmitted_at).strftime("%d.%m.%Y %H:%M")
+                                    except ValueError:
+                                        transmitted_display = transmitted_at or "—"
+                                    st.markdown(
+                                        f"**Data absenței:** {absence_date_display}  \n"
+                                        f"**Număr ore:** {excuse_meta.get('hours', '—')}  \n"
+                                        f"**Transmis de:** {excuse_meta.get('parent_name') or '—'}  \n"
+                                        f"**Stare:** {excuse_meta.get('status') or '—'}  \n"
+                                        f"**Înregistrat la:** {transmitted_display} UTC"
+                                    )
+                                    st.info(
+                                        "Cererea a fost transmisă prin contul autentificat al părintelui/reprezentantului "
+                                        "legal și este considerată depusă. Dacă sunt necesare clarificări sau documente "
+                                        "suplimentare, părintele va fi contactat."
+                                    )
+                            except DocumentStorageError as ex:
+                                st.error(f"Datele administrative ale motivării nu pot fi încărcate în siguranță: {ex}")
+    
+                        try:
+                            verified_meta, verified_content = read_registered_document(
+                                doc_student[3],
+                                selected_doc_id,
+                            )
+                            st.download_button(
+                                "📥 Descarcă documentul selectat",
+                                data=verified_content,
+                                file_name=verified_meta.get("original_filename", "document"),
+                                mime=verified_meta.get("mime_type", "application/octet-stream"),
+                                use_container_width=True,
+                                key="teacher_download_received_document",
+                            )
+                        except DocumentStorageError as ex:
+                            st.error(f"Documentul nu poate fi deschis în siguranță: {ex}")
                 except DocumentStorageError as ex:
-                    st.error(f"Datele administrative ale motivării nu pot fi încărcate în siguranță: {ex}")
-
-            try:
-                verified_meta, verified_content = read_registered_document(
-                    doc_student[3],
-                    selected_doc_id,
-                )
-                st.download_button(
-                    "📥 Descarcă documentul selectat",
-                    data=verified_content,
-                    file_name=verified_meta.get("original_filename", "document"),
-                    mime=verified_meta.get("mime_type", "application/octet-stream"),
-                    use_container_width=True,
-                    key="teacher_download_received_document",
-                )
-            except DocumentStorageError as ex:
-                st.error(f"Documentul nu poate fi deschis în siguranță: {ex}")
-    except DocumentStorageError as ex:
-        st.error(f"Registrul documentelor nu poate fi încărcat în siguranță: {ex}")
-
-
+                    st.error(f"Registrul documentelor nu poate fi încărcat în siguranță: {ex}")
+    
+    
 render_copyright_footer()
 
 
 # --- TAB 9: PURTARE PE INTERVALE ---
-with tab9:
-    @st.fragment
-    @_timed_catalog_call("conduct_fragment_render")
-    def _render_conduct_grades():
-        st.subheader("Purtare pe intervalele de cursuri")
-        if not _measure_catalog_operation("conduct_private_sync", sync_conduct_registry_from_private_repo):
-            st.error(
-                "Registrul notelor la purtare nu a putut fi sincronizat din sursa privată. "
-                "Acordarea notelor este blocată pentru protejarea datelor."
-            )
-            st.stop()
-        st.caption(
-            "Nota este acordată de diriginte după consultarea consiliului clasei. "
-            "Absențele nu generează automat nota pe interval; diminuarea pentru "
-            "nefrecventare se aplică mediei anuale la închiderea anului."
-        )
-        elev_idx_p = st.selectbox(
-            "Selectează elevul:",
-            range(len(ELEVI)),
-            format_func=lambda i: elev_options[i],
-            key="elev_purtare_interval",
-        )
-        today_ro = datetime.datetime.now(ZoneInfo("Europe/Bucharest")).date()
-        registry = load_conduct_registry()
-        student_key = str(ELEVI[elev_idx_p][3]).strip()
-        existing = {
-            int(item["interval_number"]): item
-            for item in registry.get("grades", [])
-            if str(item.get("student_key", "")).strip() == student_key
-        }
-
-        st.divider()
-        st.markdown("#### 📄 Procese-verbale pe intervale — documente pentru conducere / ISJ")
-        st.caption(
-            "Modelul atașat: tabel nominal, propuneri sub 7 și semnături. "
-            "PDF-ul este doar un proiect până la verificarea datelor și semnarea lui. "
-            "Data de referință se completează automat cu ultima zi a intervalului."
-        )
-        # O singură sursă: dict-ul PROFESSORS din catalogul oficial printabil.
-        # Păstrăm fiecare profesor o singură dată, chiar dacă predă mai multe module.
-        try:
-            _pv_teacher_names = list(unique_class_council_professors())
+if tab9.open:
+    with tab9:
+        @st.fragment
+        @_timed_catalog_call("conduct_fragment_render")
+        def _render_conduct_grades():
+            st.subheader("Purtare pe intervalele de cursuri")
+            if not _measure_catalog_operation("conduct_private_sync", sync_conduct_registry_from_private_repo):
+                st.error(
+                    "Registrul notelor la purtare nu a putut fi sincronizat din sursa privată. "
+                    "Acordarea notelor este blocată pentru protejarea datelor."
+                )
+                st.stop()
             st.caption(
-                f"Colectiv profesoral preluat automat din catalogul oficial printabil: "
-                f"{len(_pv_teacher_names)} profesori distincți. "
-                "Numele nu se introduc manual și nu se salvează separat."
+                "Nota este acordată de diriginte după consultarea consiliului clasei. "
+                "Absențele nu generează automat nota pe interval; diminuarea pentru "
+                "nefrecventare se aplică mediei anuale la închiderea anului."
             )
-            with st.expander("👥 Verifică numele profesorilor preluați automat"):
-                st.text("\n".join(
-                    f"{i}. {name}" for i, name in enumerate(_pv_teacher_names, 1)
-                ))
-        except OfficialCatalogError as _pv_teacher_error:
-            _pv_teacher_names = []
-            st.error(
-                "Lista profesorilor din catalogul oficial nu poate fi validată. "
-                f"Generarea procesului-verbal este blocată: {_pv_teacher_error}"
+            elev_idx_p = st.selectbox(
+                "Selectează elevul:",
+                range(len(ELEVI)),
+                format_func=lambda i: elev_options[i],
+                key="elev_purtare_interval",
             )
-
-        _pv_document_registry = None
-        _pv_document_registry_error = None
-        if any(st.session_state.get(f"pv_show_sources_{i.number}", False) for i in CLJ_2026_2027_COURSE_INTERVALS):
-            try:
-                _pv_document_registry, _ = load_registry()
-            except DocumentStorageError:
-                _pv_document_registry_error = (
-                    "Registrul documentelor private nu a putut fi citit. "
-                    "Asocierea documentelor este blocată."
-                )
-        _pv_confirmations = {}
-        if _pv_document_registry is not None:
-            for _pv_doc in _pv_document_registry.get("documents", []):
-                if _pv_doc.get("category") == "CONFIRMARE_PRIMIRE":
-                    _pv_key = (_pv_doc.get("source_document_id"), _pv_doc.get("student_key"))
-                    if _pv_key in _pv_confirmations:
-                        _pv_document_registry_error = "Au fost identificate confirmări duplicate."
-                    else:
-                        _pv_confirmations[_pv_key] = _pv_doc
-
-        for interval in CLJ_2026_2027_COURSE_INTERVALS:
-            st.markdown(
-                f"**Intervalul {interval.number}** — "
-                f"{interval.start_date.strftime('%d.%m.%Y')} – {interval.end_date.strftime('%d.%m.%Y')}"
-            )
-            _pv_details = {}
-            _pv_select_sources = st.checkbox(
-                f"Completează motivarea scăderii și asociază înștiințările — intervalul {interval.number}",
-                key=f"pv_show_sources_{interval.number}",
-            )
-            if _pv_select_sources:
-                if _pv_document_registry_error:
-                    st.error(_pv_document_registry_error)
-                elif _pv_document_registry is None:
-                    st.info("Deschide din nou secțiunea pentru încărcarea documentelor private.")
-                else:
-                    for _pv_student in ELEVI:
-                        _pv_student_key = str(_pv_student[3]).strip()
-                        _pv_grade = next(
-                            (
-                                record.get("grade")
-                                for record in registry.get("grades", [])
-                                if str(record.get("student_key", "")).strip() == _pv_student_key
-                                and record.get("interval_number") == interval.number
-                            ),
-                            None,
-                        )
-                        if type(_pv_grade) is not int or _pv_grade >= 10:
-                            continue
-                        with st.expander(f"{_pv_student[1]} — nota {_pv_grade}", expanded=False):
-                            _pv_reason = st.text_input(
-                                "Motivul scăderii (exact cum apare în PV-ul consiliului clasei)",
-                                key=f"pv_reason_{interval.number}_{_pv_student[0]}",
-                            )
-                            _pv_registration = st.text_input(
-                                "Numărul oficial al înștiințării (dacă există în document)",
-                                key=f"pv_registration_{interval.number}_{_pv_student[0]}",
-                            )
-                            _pv_hash = normalize_student_key(_pv_student[3])
-                            _pv_sent = [
-                                doc for doc in _pv_document_registry.get("documents", [])
-                                if doc.get("student_key") == _pv_hash
-                                and doc.get("school_year") == "2026-2027"
-                                and doc.get("direction") == "SCOALA_PARINTE"
-                                and doc.get("document_type") in ("INSTIINTARE", "DOCUMENT_SCOALA")
-                            ]
-                            _pv_by_id = {doc["id"]: doc for doc in _pv_sent}
-                            _pv_choice = st.selectbox(
-                                "Document transmis asociat acestei note",
-                                [""] + [doc["id"] for doc in _pv_sent],
-                                format_func=lambda did: (
-                                    "— neasociat —" if not did else
-                                    f"{_pv_by_id[did].get('original_filename', '')} | "
-                                    f"{str(_pv_by_id[did].get('created_at_utc') or '')[:10]} | ID {did}"
-                                ),
-                                key=f"pv_doc_{interval.number}_{_pv_student[0]}",
-                            )
-                            _pv_item = {"reason": _pv_reason, "registration_number": _pv_registration}
-                            if _pv_choice:
-                                _pv_source = _pv_by_id[_pv_choice]
-                                _pv_item["document_id"] = _pv_choice
-                                _pv_item["sent_at_utc"] = _pv_source.get("created_at_utc")
-                                _pv_item["received_at_utc"] = _pv_source.get("first_accessed_at_utc")
-                                _pv_receipt_id = _pv_source.get("confirmation_document_id")
-                                _pv_confirmation = _pv_confirmations.get((_pv_choice, _pv_hash))
-                                if _pv_receipt_id and (
-                                    _pv_confirmation is None or _pv_confirmation.get("id") != _pv_receipt_id
-                                ):
-                                    _pv_document_registry_error = (
-                                        "Confirmarea de primire nu corespunde înștiințării."
-                                    )
-                                if _pv_receipt_id and _pv_confirmation is not None:
-                                    _pv_item["confirmation_id"] = _pv_receipt_id
-                            _pv_details[_pv_student_key] = _pv_item
-            _pv_fingerprint_inputs = {
-                "interval": interval.number,
-                "students": [[str(e[1]), str(e[3])] for e in ELEVI],
-                "grades": [
-                    [str(record.get("student_key")), record.get("interval_number"), record.get("grade"),
-                     str(record.get("awarded_on"))]
-                    for record in registry.get("grades", [])
-                    if record.get("interval_number") == interval.number
-                ],
-                "teachers": _pv_teacher_names,
-                "details": _pv_details,
+            today_ro = datetime.datetime.now(ZoneInfo("Europe/Bucharest")).date()
+            registry = load_conduct_registry()
+            student_key = str(ELEVI[elev_idx_p][3]).strip()
+            existing = {
+                int(item["interval_number"]): item
+                for item in registry.get("grades", [])
+                if str(item.get("student_key", "")).strip() == student_key
             }
-            _pv_fingerprint = hashlib.sha256(
-                json.dumps(_pv_fingerprint_inputs, ensure_ascii=False, sort_keys=True).encode("utf-8")
-            ).hexdigest()
-            _pv_filename = (
-                f"PV_note_purtare_IX_TH_interval_{interval.number}_"
-                f"{interval.end_date.strftime('%Y-%m-%d')}.pdf"
-            )
-            if st.button(
-                "📄 Generare Raport",
-                key=f"generate_pv_conduct_{interval.number}",
-                use_container_width=True,
-            ):
-                try:
-                    if _pv_document_registry_error:
-                        raise ConductReportError(_pv_document_registry_error)
-                    if not _pv_teacher_names:
-                        raise ConductReportError(
-                            "Numele profesorilor nu sunt validate din catalogul oficial."
-                        )
-                    _pv_bytes = generate_conduct_council_pdf(
-                        interval_number=interval.number,
-                        students=ELEVI,
-                        conduct_records=registry.get("grades", []),
-                        details_by_student=_pv_details,
-                        teacher_names=_pv_teacher_names,
-                    )
-                    st.session_state[f"pv_conduct_file_{interval.number}"] = _pv_bytes
-                    st.session_state[f"pv_conduct_hash_{interval.number}"] = _pv_fingerprint
-                    st.success(
-                        f"PDF pentru intervalul {interval.number} a fost generat. "
-                        "Verifică rubricile incomplete înainte de semnare."
-                    )
-                except (ConductReportError, ValueError) as ex:
-                    st.session_state.pop(f"pv_conduct_file_{interval.number}", None)
-                    st.session_state.pop(f"pv_conduct_hash_{interval.number}", None)
-                    st.error(f"Raportul nu poate fi generat: {ex}")
-            _pv_ready = st.session_state.get(f"pv_conduct_file_{interval.number}")
-            _pv_same_input = st.session_state.get(f"pv_conduct_hash_{interval.number}") == _pv_fingerprint
-            if _pv_ready and _pv_same_input:
-                st.download_button(
-                    f"⬇️ Descarcă Raport PDF — intervalul {interval.number}",
-                    data=_pv_ready,
-                    file_name=_pv_filename,
-                    mime="application/pdf",
-                    key=f"download_pv_conduct_{interval.number}",
-                    use_container_width=True,
-                )
-            elif _pv_ready and not _pv_same_input:
-                st.info("Datele raportului s-au schimbat. Apasă din nou Generare Raport pentru o versiune actualizată.")
+    
             st.divider()
-            current = existing.get(interval.number)
-            label = (
-                f"Intervalul {interval.number}: "
-                f"{interval.start_date.strftime('%d.%m.%Y')}–{interval.end_date.strftime('%d.%m.%Y')}"
+            st.markdown("#### 📄 Procese-verbale pe intervale — documente pentru conducere / ISJ")
+            st.caption(
+                "Modelul atașat: tabel nominal, propuneri sub 7 și semnături. "
+                "PDF-ul este doar un proiect până la verificarea datelor și semnarea lui. "
+                "Data de referință se completează automat cu ultima zi a intervalului."
             )
-            if current:
-                st.success(
-                    f"{label} — nota {current['grade']}, acordată la {current['awarded_on']}."
+            # O singură sursă: dict-ul PROFESSORS din catalogul oficial printabil.
+            # Păstrăm fiecare profesor o singură dată, chiar dacă predă mai multe module.
+            try:
+                _pv_teacher_names = list(unique_class_council_professors())
+                st.caption(
+                    f"Colectiv profesoral preluat automat din catalogul oficial printabil: "
+                    f"{len(_pv_teacher_names)} profesori distincți. "
+                    "Numele nu se introduc manual și nu se salvează separat."
                 )
-                continue
-            if today_ro < interval.end_date:
-                st.info(f"{label} — nota poate fi acordată după încheierea intervalului.")
-                continue
-
-            with st.expander(f"{label} — acordă nota"):
-                nota_p = st.number_input(
-                    "Nota la purtare",
-                    min_value=1,
-                    max_value=10,
-                    value=10,
-                    step=1,
-                    key=f"nota_purtare_{interval.number}_{student_key}",
+                with st.expander("👥 Verifică numele profesorilor preluați automat"):
+                    st.text("\n".join(
+                        f"{i}. {name}" for i, name in enumerate(_pv_teacher_names, 1)
+                    ))
+            except OfficialCatalogError as _pv_teacher_error:
+                _pv_teacher_names = []
+                st.error(
+                    "Lista profesorilor din catalogul oficial nu poate fi validată. "
+                    f"Generarea procesului-verbal este blocată: {_pv_teacher_error}"
+                )
+    
+            _pv_document_registry = None
+            _pv_document_registry_error = None
+            if any(st.session_state.get(f"pv_show_sources_{i.number}", False) for i in CLJ_2026_2027_COURSE_INTERVALS):
+                try:
+                    _pv_document_registry, _ = load_registry()
+                except DocumentStorageError:
+                    _pv_document_registry_error = (
+                        "Registrul documentelor private nu a putut fi citit. "
+                        "Asocierea documentelor este blocată."
+                    )
+            _pv_confirmations = {}
+            if _pv_document_registry is not None:
+                for _pv_doc in _pv_document_registry.get("documents", []):
+                    if _pv_doc.get("category") == "CONFIRMARE_PRIMIRE":
+                        _pv_key = (_pv_doc.get("source_document_id"), _pv_doc.get("student_key"))
+                        if _pv_key in _pv_confirmations:
+                            _pv_document_registry_error = "Au fost identificate confirmări duplicate."
+                        else:
+                            _pv_confirmations[_pv_key] = _pv_doc
+    
+            for interval in CLJ_2026_2027_COURSE_INTERVALS:
+                st.markdown(
+                    f"**Intervalul {interval.number}** — "
+                    f"{interval.start_date.strftime('%d.%m.%Y')} – {interval.end_date.strftime('%d.%m.%Y')}"
+                )
+                _pv_details = {}
+                _pv_select_sources = st.checkbox(
+                    f"Completează motivarea scăderii și asociază înștiințările — intervalul {interval.number}",
+                    key=f"pv_show_sources_{interval.number}",
+                )
+                if _pv_select_sources:
+                    if _pv_document_registry_error:
+                        st.error(_pv_document_registry_error)
+                    elif _pv_document_registry is None:
+                        st.info("Deschide din nou secțiunea pentru încărcarea documentelor private.")
+                    else:
+                        for _pv_student in ELEVI:
+                            _pv_student_key = str(_pv_student[3]).strip()
+                            _pv_grade = next(
+                                (
+                                    record.get("grade")
+                                    for record in registry.get("grades", [])
+                                    if str(record.get("student_key", "")).strip() == _pv_student_key
+                                    and record.get("interval_number") == interval.number
+                                ),
+                                None,
+                            )
+                            if type(_pv_grade) is not int or _pv_grade >= 10:
+                                continue
+                            with st.expander(f"{_pv_student[1]} — nota {_pv_grade}", expanded=False):
+                                _pv_reason = st.text_input(
+                                    "Motivul scăderii (exact cum apare în PV-ul consiliului clasei)",
+                                    key=f"pv_reason_{interval.number}_{_pv_student[0]}",
+                                )
+                                _pv_registration = st.text_input(
+                                    "Numărul oficial al înștiințării (dacă există în document)",
+                                    key=f"pv_registration_{interval.number}_{_pv_student[0]}",
+                                )
+                                _pv_hash = normalize_student_key(_pv_student[3])
+                                _pv_sent = [
+                                    doc for doc in _pv_document_registry.get("documents", [])
+                                    if doc.get("student_key") == _pv_hash
+                                    and doc.get("school_year") == "2026-2027"
+                                    and doc.get("direction") == "SCOALA_PARINTE"
+                                    and doc.get("document_type") in ("INSTIINTARE", "DOCUMENT_SCOALA")
+                                ]
+                                _pv_by_id = {doc["id"]: doc for doc in _pv_sent}
+                                _pv_choice = st.selectbox(
+                                    "Document transmis asociat acestei note",
+                                    [""] + [doc["id"] for doc in _pv_sent],
+                                    format_func=lambda did: (
+                                        "— neasociat —" if not did else
+                                        f"{_pv_by_id[did].get('original_filename', '')} | "
+                                        f"{str(_pv_by_id[did].get('created_at_utc') or '')[:10]} | ID {did}"
+                                    ),
+                                    key=f"pv_doc_{interval.number}_{_pv_student[0]}",
+                                )
+                                _pv_item = {"reason": _pv_reason, "registration_number": _pv_registration}
+                                if _pv_choice:
+                                    _pv_source = _pv_by_id[_pv_choice]
+                                    _pv_item["document_id"] = _pv_choice
+                                    _pv_item["sent_at_utc"] = _pv_source.get("created_at_utc")
+                                    _pv_item["received_at_utc"] = _pv_source.get("first_accessed_at_utc")
+                                    _pv_receipt_id = _pv_source.get("confirmation_document_id")
+                                    _pv_confirmation = _pv_confirmations.get((_pv_choice, _pv_hash))
+                                    if _pv_receipt_id and (
+                                        _pv_confirmation is None or _pv_confirmation.get("id") != _pv_receipt_id
+                                    ):
+                                        _pv_document_registry_error = (
+                                            "Confirmarea de primire nu corespunde înștiințării."
+                                        )
+                                    if _pv_receipt_id and _pv_confirmation is not None:
+                                        _pv_item["confirmation_id"] = _pv_receipt_id
+                                _pv_details[_pv_student_key] = _pv_item
+                _pv_fingerprint_inputs = {
+                    "interval": interval.number,
+                    "students": [[str(e[1]), str(e[3])] for e in ELEVI],
+                    "grades": [
+                        [str(record.get("student_key")), record.get("interval_number"), record.get("grade"),
+                         str(record.get("awarded_on"))]
+                        for record in registry.get("grades", [])
+                        if record.get("interval_number") == interval.number
+                    ],
+                    "teachers": _pv_teacher_names,
+                    "details": _pv_details,
+                }
+                _pv_fingerprint = hashlib.sha256(
+                    json.dumps(_pv_fingerprint_inputs, ensure_ascii=False, sort_keys=True).encode("utf-8")
+                ).hexdigest()
+                _pv_filename = (
+                    f"PV_note_purtare_IX_TH_interval_{interval.number}_"
+                    f"{interval.end_date.strftime('%Y-%m-%d')}.pdf"
                 )
                 if st.button(
-                    f"💾 Salvează nota pentru intervalul {interval.number}",
-                    key=f"save_purtare_{interval.number}_{student_key}",
+                    "📄 Generare Raport",
+                    key=f"generate_pv_conduct_{interval.number}",
                     use_container_width=True,
                 ):
-                    _manual_action_started = time.perf_counter()
-                    wb_check = None
                     try:
-                        # Normal mode avoids costly repeated random reads in a large read_only workbook.
-                        wb_check = _measure_catalog_operation(
-                            "conduct_workbook_open",
-                            lambda: openpyxl.load_workbook(selected_file, read_only=False, data_only=False),
-                        )
-                        resolve_student_row(wb_check, ELEVI[elev_idx_p])
-                        wb_check.close()
-                        wb_check = None
-                        _measure_catalog_operation(
-                            "conduct_registry_save",
-                            lambda: save_conduct_grade(
-                                student_key=student_key,
-                                interval_number=interval.number,
-                                grade=int(nota_p),
-                                awarded_on=today_ro.isoformat(),
-                            ),
-                        )
-                        registry_path = "registru_purtare_2026_2027.json"
-                        if not push_to_github(registry_path):
-                            _restore_manual_backup(registry_path, registry_path + ".bak")
-                            raise RuntimeError(
-                                "Sincronizarea privată nu a fost confirmată; "
-                                "registrul local a fost readus la versiunea anterioară."
+                        if _pv_document_registry_error:
+                            raise ConductReportError(_pv_document_registry_error)
+                        if not _pv_teacher_names:
+                            raise ConductReportError(
+                                "Numele profesorilor nu sunt validate din catalogul oficial."
                             )
+                        _pv_bytes = generate_conduct_council_pdf(
+                            interval_number=interval.number,
+                            students=ELEVI,
+                            conduct_records=registry.get("grades", []),
+                            details_by_student=_pv_details,
+                            teacher_names=_pv_teacher_names,
+                        )
+                        st.session_state[f"pv_conduct_file_{interval.number}"] = _pv_bytes
+                        st.session_state[f"pv_conduct_hash_{interval.number}"] = _pv_fingerprint
+                        st.success(
+                            f"PDF pentru intervalul {interval.number} a fost generat. "
+                            "Verifică rubricile incomplete înainte de semnare."
+                        )
+                    except (ConductReportError, ValueError) as ex:
                         st.session_state.pop(f"pv_conduct_file_{interval.number}", None)
                         st.session_state.pop(f"pv_conduct_hash_{interval.number}", None)
-                        st.success("Nota la purtare a fost salvată și sincronizată.")
-                        print(f"[catalog-performance] conduct_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
-                        st.rerun(scope="fragment")
-                    except Exception as ex:
-                        st.error(f"Nota la purtare nu a fost salvată: {ex}")
-                    finally:
-                        if wb_check is not None:
+                        st.error(f"Raportul nu poate fi generat: {ex}")
+                _pv_ready = st.session_state.get(f"pv_conduct_file_{interval.number}")
+                _pv_same_input = st.session_state.get(f"pv_conduct_hash_{interval.number}") == _pv_fingerprint
+                if _pv_ready and _pv_same_input:
+                    st.download_button(
+                        f"⬇️ Descarcă Raport PDF — intervalul {interval.number}",
+                        data=_pv_ready,
+                        file_name=_pv_filename,
+                        mime="application/pdf",
+                        key=f"download_pv_conduct_{interval.number}",
+                        use_container_width=True,
+                    )
+                elif _pv_ready and not _pv_same_input:
+                    st.info("Datele raportului s-au schimbat. Apasă din nou Generare Raport pentru o versiune actualizată.")
+                st.divider()
+                current = existing.get(interval.number)
+                label = (
+                    f"Intervalul {interval.number}: "
+                    f"{interval.start_date.strftime('%d.%m.%Y')}–{interval.end_date.strftime('%d.%m.%Y')}"
+                )
+                if current:
+                    st.success(
+                        f"{label} — nota {current['grade']}, acordată la {current['awarded_on']}."
+                    )
+                    continue
+                if today_ro < interval.end_date:
+                    st.info(f"{label} — nota poate fi acordată după încheierea intervalului.")
+                    continue
+    
+                with st.expander(f"{label} — acordă nota"):
+                    nota_p = st.number_input(
+                        "Nota la purtare",
+                        min_value=1,
+                        max_value=10,
+                        value=10,
+                        step=1,
+                        key=f"nota_purtare_{interval.number}_{student_key}",
+                    )
+                    if st.button(
+                        f"💾 Salvează nota pentru intervalul {interval.number}",
+                        key=f"save_purtare_{interval.number}_{student_key}",
+                        use_container_width=True,
+                    ):
+                        _manual_action_started = time.perf_counter()
+                        wb_check = None
+                        try:
+                            # Normal mode avoids costly repeated random reads in a large read_only workbook.
+                            wb_check = _measure_catalog_operation(
+                                "conduct_workbook_open",
+                                lambda: openpyxl.load_workbook(selected_file, read_only=False, data_only=False),
+                            )
+                            resolve_student_row(wb_check, ELEVI[elev_idx_p])
                             wb_check.close()
-
-    _render_conduct_grades()
-
-
+                            wb_check = None
+                            _measure_catalog_operation(
+                                "conduct_registry_save",
+                                lambda: save_conduct_grade(
+                                    student_key=student_key,
+                                    interval_number=interval.number,
+                                    grade=int(nota_p),
+                                    awarded_on=today_ro.isoformat(),
+                                ),
+                            )
+                            registry_path = "registru_purtare_2026_2027.json"
+                            if not push_to_github(registry_path):
+                                _restore_manual_backup(registry_path, registry_path + ".bak")
+                                raise RuntimeError(
+                                    "Sincronizarea privată nu a fost confirmată; "
+                                    "registrul local a fost readus la versiunea anterioară."
+                                )
+                            st.session_state.pop("_teacher_conduct_view_cache", None)
+                            st.session_state.pop(f"pv_conduct_file_{interval.number}", None)
+                            st.session_state.pop(f"pv_conduct_hash_{interval.number}", None)
+                            st.success("Nota la purtare a fost salvată și sincronizată.")
+                            print(f"[catalog-performance] conduct_action_before_rerun: {time.perf_counter() - _manual_action_started:.3f}s", flush=True)
+                            st.rerun(scope="fragment")
+                        except Exception as ex:
+                            st.error(f"Nota la purtare nu a fost salvată: {ex}")
+                        finally:
+                            if wb_check is not None:
+                                wb_check.close()
+    
+        _render_conduct_grades()
+    
+    
 def build_class_annual_closure_previews(file_path):
     """Construiește read-only situația anuală pentru întreaga clasă.
 
@@ -4700,378 +4823,385 @@ def build_class_annual_closure_previews(file_path):
 
 
 # Catalogul la zi este complet separat de închiderea anuală și nu persistă nimic.
-with tab9:
-    st.divider()
-    st.subheader("Catalog oficial la zi")
-    st.caption(
-        "Generează situația existentă în acest moment: note și absențe curente. "
-        "Rubricile anuale/finale care nu există încă rămân necompletate. "
-        "Operația este strict read-only și nu modifică Excelul, gestiunea elevilor "
-        "sau registrele private."
-    )
-    if st.button(
-        "📘 Generează catalogul la zi",
-        key="generate_current_official_catalog_pdf",
-        use_container_width=True,
-    ):
-        try:
-            with st.spinner("Generez catalogul oficial la zi, fără nicio scriere..."):
-                current_catalog_pdf = generate_official_catalog_current(
-                    selected_file,
-                    load_gestiune_data(),
-                )
-            st.session_state["current_official_catalog_pdf"] = current_catalog_pdf
-            st.success(
-                "Catalogul la zi a fost generat read-only. "
-                "Nu s-a modificat nicio dată din catalog."
-            )
-        except (OfficialCatalogError, RuntimeError, OSError, ValueError) as ex:
-            st.session_state.pop("current_official_catalog_pdf", None)
-            st.error(f"Catalogul la zi nu a putut fi generat în siguranță: {ex}")
-
-    current_pdf = st.session_state.get("current_official_catalog_pdf")
-    if current_pdf:
-        st.download_button(
-            "⬇️ Descarcă catalogul oficial la zi",
-            data=current_pdf,
-            file_name="catalog_oficial_la_zi.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-            key="download_current_official_catalog_pdf",
+if tab9.open:
+    with tab9:
+        st.divider()
+        st.subheader("Catalog oficial la zi")
+        st.caption(
+            "Generează situația existentă în acest moment: note și absențe curente. "
+            "Rubricile anuale/finale care nu există încă rămân necompletate. "
+            "Operația este strict read-only și nu modifică Excelul, gestiunea elevilor "
+            "sau registrele private."
         )
-
-
-# Validarea clasei este numai informativă/read-only. Nu închide și nu persistă situații.
-with tab9:
-    st.divider()
-    st.subheader("Validare clasă înainte de închiderea situației școlare")
-    st.caption(
-        "Verificarea citește situația tuturor elevilor și indică blocajele. "
-        "Nu modifică Excelul, registrul de purtare sau gestiunea elevilor."
-    )
-    if st.button(
-        "🔎 Verifică întreaga clasă pentru închidere",
-        key="annual_class_validation_readonly",
-        use_container_width=True,
-    ):
-        try:
-            validation_status = st.status(
-                "Diagnostic validare: pornesc citirea catalogului...",
-                expanded=True,
-            )
-            validation_started = time.perf_counter()
-            validation_status.write("Etapa 1/2 — deschid și citesc catalogul Excel.")
-            class_results = build_class_annual_closure_previews(selected_file)
-            validation_status.write(
-                f"Etapa 1/2 finalizată în {time.perf_counter() - validation_started:.2f} s."
-            )
-            validation_status.write("Etapa 2/2 — sintetizez rezultatele clasei.")
-            ready_count = 0
-            blocked_count = 0
-            error_count = 0
-            for item in class_results:
-                preview = item["preview"]
-                if item["error"] is not None:
-                    error_count += 1
-                elif preview.ready_for_final_closure:
-                    ready_count += 1
-                else:
-                    blocked_count += 1
-
-            validation_elapsed = time.perf_counter() - validation_started
-            validation_status.update(
-                label=f"Diagnostic finalizat în {validation_elapsed:.2f} s.",
-                state="complete",
-                expanded=True,
-            )
-            st.session_state["annual_class_validation_summary"] = {
-                "ready_count": ready_count,
-                "blocked_count": blocked_count,
-                "error_count": error_count,
-                "elapsed": validation_elapsed,
-            }
-
-            col_ready, col_blocked, col_error = st.columns(3)
-            col_ready.metric("Pregătiți", ready_count)
-            col_blocked.metric("Cu blocaje", blocked_count)
-            col_error.metric("Date incomplete/incoerente", error_count)
-
-            if blocked_count == 0 and error_count == 0:
+        if st.button(
+            "📘 Generează catalogul la zi",
+            key="generate_current_official_catalog_pdf",
+            use_container_width=True,
+        ):
+            try:
+                with st.spinner("Generez catalogul oficial la zi, fără nicio scriere..."):
+                    current_catalog_pdf = generate_official_catalog_current(
+                        selected_file,
+                        load_gestiune_data(),
+                    )
+                st.session_state["current_official_catalog_pdf"] = current_catalog_pdf
                 st.success(
-                    "Toți elevii au trecut validarea read-only. "
-                    "Această verificare NU a închis încă situația școlară."
+                    "Catalogul la zi a fost generat read-only. "
+                    "Nu s-a modificat nicio dată din catalog."
+                )
+            except (OfficialCatalogError, RuntimeError, OSError, ValueError) as ex:
+                st.session_state.pop("current_official_catalog_pdf", None)
+                st.error(f"Catalogul la zi nu a putut fi generat în siguranță: {ex}")
+    
+        current_pdf = st.session_state.get("current_official_catalog_pdf")
+        if current_pdf:
+            st.download_button(
+                "⬇️ Descarcă catalogul oficial la zi",
+                data=current_pdf,
+                file_name="catalog_oficial_la_zi.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="download_current_official_catalog_pdf",
+            )
+    
+    
+    # Validarea clasei este numai informativă/read-only. Nu închide și nu persistă situații.
+if tab9.open:
+    with tab9:
+        st.divider()
+        st.subheader("Validare clasă înainte de închiderea situației școlare")
+        st.caption(
+            "Verificarea citește situația tuturor elevilor și indică blocajele. "
+            "Nu modifică Excelul, registrul de purtare sau gestiunea elevilor."
+        )
+        if st.button(
+            "🔎 Verifică întreaga clasă pentru închidere",
+            key="annual_class_validation_readonly",
+            use_container_width=True,
+        ):
+            try:
+                validation_status = st.status(
+                    "Diagnostic validare: pornesc citirea catalogului...",
+                    expanded=True,
+                )
+                validation_started = time.perf_counter()
+                validation_status.write("Etapa 1/2 — deschid și citesc catalogul Excel.")
+                class_results = build_class_annual_closure_previews(selected_file)
+                validation_status.write(
+                    f"Etapa 1/2 finalizată în {time.perf_counter() - validation_started:.2f} s."
+                )
+                validation_status.write("Etapa 2/2 — sintetizez rezultatele clasei.")
+                ready_count = 0
+                blocked_count = 0
+                error_count = 0
+                for item in class_results:
+                    preview = item["preview"]
+                    if item["error"] is not None:
+                        error_count += 1
+                    elif preview.ready_for_final_closure:
+                        ready_count += 1
+                    else:
+                        blocked_count += 1
+    
+                validation_elapsed = time.perf_counter() - validation_started
+                validation_status.update(
+                    label=f"Diagnostic finalizat în {validation_elapsed:.2f} s.",
+                    state="complete",
+                    expanded=True,
+                )
+                st.session_state["annual_class_validation_summary"] = {
+                    "ready_count": ready_count,
+                    "blocked_count": blocked_count,
+                    "error_count": error_count,
+                    "elapsed": validation_elapsed,
+                }
+    
+                col_ready, col_blocked, col_error = st.columns(3)
+                col_ready.metric("Pregătiți", ready_count)
+                col_blocked.metric("Cu blocaje", blocked_count)
+                col_error.metric("Date incomplete/incoerente", error_count)
+    
+                if blocked_count == 0 and error_count == 0:
+                    st.success(
+                        "Toți elevii au trecut validarea read-only. "
+                        "Această verificare NU a închis încă situația școlară."
+                    )
+                else:
+                    st.warning(
+                        "Clasa nu este încă pregătită integral pentru închidere. "
+                        "Problemele de mai jos trebuie analizate înainte de orice persistență."
+                    )
+    
+                for item in class_results:
+                    preview = item["preview"]
+                    if item["error"] is not None:
+                        with st.expander(f"❌ {item['name']} — calcul indisponibil"):
+                            st.error(item["error"])
+                        continue
+                    if preview.ready_for_final_closure:
+                        st.success(
+                            f"✅ {item['name']} — {preview.final_status}; "
+                            f"purtare {preview.conduct_annual_average}; "
+                            f"absențe {preview.total_absences}."
+                        )
+                        continue
+                    with st.expander(f"⚠️ {item['name']} — necesită verificare"):
+                        st.write(
+                            f"Situație calculată: **{preview.final_status}** | "
+                            f"Purtare: **{preview.conduct_annual_average}** | "
+                            f"Absențe: **{preview.total_absences}**"
+                        )
+                        for blocker in preview.readiness_blockers:
+                            st.warning(blocker)
+            except (AnnualClosureError, ConductStorageError, RuntimeError, OSError) as ex:
+                st.session_state["annual_class_validation_summary"] = {
+                    "error": str(ex),
+                }
+                st.error(f"Validarea clasei nu a putut fi finalizată: {ex}")
+    
+        persisted_validation = st.session_state.get("annual_class_validation_summary")
+        if persisted_validation:
+            st.caption("Ultimul rezultat al verificării read-only (păstrat în această sesiune):")
+            if persisted_validation.get("error"):
+                st.error(
+                    "Ultima verificare nu a putut fi finalizată: "
+                    + persisted_validation["error"]
                 )
             else:
-                st.warning(
-                    "Clasa nu este încă pregătită integral pentru închidere. "
-                    "Problemele de mai jos trebuie analizate înainte de orice persistență."
+                p_ready, p_blocked, p_error = st.columns(3)
+                p_ready.metric("Pregătiți", persisted_validation["ready_count"])
+                p_blocked.metric("Cu blocaje", persisted_validation["blocked_count"])
+                p_error.metric(
+                    "Date incomplete/incoerente",
+                    persisted_validation["error_count"],
                 )
-
-            for item in class_results:
-                preview = item["preview"]
-                if item["error"] is not None:
-                    with st.expander(f"❌ {item['name']} — calcul indisponibil"):
-                        st.error(item["error"])
-                    continue
+                st.caption(
+                    f"Timpul ultimei verificări: {persisted_validation['elapsed']:.2f} s. "
+                    "Rezultatul este numai informativ; nu s-a efectuat nicio scriere."
+                )
+    
+    
+    # Închiderea situației școlare persistă numai snapshoturi validate în registrul privat separat.
+if tab9.open:
+    with tab9:
+        st.divider()
+        st.subheader("Închiderea situației școlare")
+        st.warning(
+            "Operația fixează snapshotul de la încheierea cursurilor. Nu modifică Excelul. "
+            "Snapshoturile existente nu sunt suprascrise; orice conflict blochează operația."
+        )
+        closure_confirmed = st.checkbox(
+            "Confirm că am verificat situația clasei și doresc închiderea situației școlare.",
+            key="confirm_annual_class_closure",
+        )
+        if st.button(
+            "🔒 Închiderea situației școlare",
+            key="persist_annual_class_closure",
+            type="primary",
+            use_container_width=True,
+            disabled=not closure_confirmed,
+        ):
+            try:
+                class_results = build_class_annual_closure_previews(selected_file)
+                invalid = [item for item in class_results if item["error"] is not None]
+                blocked = [
+                    item for item in class_results
+                    if item["error"] is None
+                    and not item["preview"].ready_for_final_closure
+                    and item["preview"].final_status != "AMANAT"
+                ]
+                if invalid or blocked:
+                    st.error(
+                        "Închiderea a fost blocată înainte de orice scriere: "
+                        "cel puțin un elev are date incomplete/incoerente sau blocaje nerezolvate."
+                    )
+                    for item in invalid:
+                        st.error(f"{item['name']}: {item['error']}")
+                    for item in blocked:
+                        for reason in item["preview"].readiness_blockers:
+                            st.warning(f"{item['name']}: {reason}")
+                else:
+                    snapshots = []
+                    for item in class_results:
+                        snapshots.append(
+                            build_annual_closure_snapshot(
+                                student_key=item["student_key"],
+                                preview=item["preview"],
+                                interval_conduct_grades=item["conduct_values"],
+                            )
+                        )
+    
+                    # Revalidăm toate snapshoturile înainte de prima publicare.
+                    if len(snapshots) != len(class_results):
+                        raise AnnualClosureError("Numărul snapshoturilor nu corespunde clasei validate.")
+    
+                    persist_private_annual_closure_batch_once(tuple(snapshots))
+                    persisted = len(snapshots)
+                    st.success(
+                        f"Închiderea situației școlare a fost înregistrată pentru {persisted} elevi. "
+                        "Datele primare din Excel nu au fost modificate."
+                    )
+            except (AnnualClosureError, AnnualClosureStorageError, ConductStorageError, RuntimeError, OSError) as ex:
+                st.error(
+                    "Închiderea situației școlare nu a fost finalizată în siguranță. "
+                    f"Motiv: {ex}"
+                )
+    
+    
+    # Situația definitivă este o etapă separată de snapshotul de la încheierea cursurilor.
+    # Nu rescrie snapshoturile și nu modifică datele primare.
+if tab9.open:
+    with tab9:
+        st.divider()
+        st.subheader("Situație definitivă")
+        st.caption(
+            "Această etapă poate fi înregistrată numai după închiderea situației școlare pentru "
+            "întreaga clasă. PROMOVAT și REPETENT pot deveni definitive direct; CORIGENT și "
+            "AMÂNAT necesită mai întâi rezultatul/actul ulterior auditabil."
+        )
+        try:
+            definitive_closed_snapshots = load_private_annual_closure_snapshots()
+            definitive_expected_keys = {str(elev[3]).strip() for elev in ELEVI}
+            definitive_missing = definitive_expected_keys - set(definitive_closed_snapshots)
+            definitive_extra = set(definitive_closed_snapshots) - definitive_expected_keys
+            definitive_pending = {
+                key: snapshot.final_status
+                for key, snapshot in definitive_closed_snapshots.items()
+                if str(snapshot.final_status).strip().upper() in {"CORIGENT", "AMANAT", "AMÂNAT"}
+            }
+            definitive_unknown = {
+                key: snapshot.final_status
+                for key, snapshot in definitive_closed_snapshots.items()
+                if str(snapshot.final_status).strip().upper()
+                not in {"PROMOVAT", "REPETENT", "CORIGENT", "AMANAT", "AMÂNAT"}
+            }
+    
+            final_registry, _final_registry_sha = load_private_final_status_registry()
+            final_existing = set(final_registry["students"])
+            already_final = final_existing == definitive_expected_keys
+    
+            if definitive_missing or definitive_extra:
+                st.warning(
+                    "Situația definitivă este blocată: registrul de închidere nu corespunde exact clasei."
+                )
+            elif definitive_pending:
+                st.warning(
+                    f"Situația definitivă nu poate fi încă înregistrată pentru clasă: "
+                    f"{len(definitive_pending)} elev(i) au CORIGENT/AMÂNAT și necesită act ulterior auditabil."
+                )
+            elif definitive_unknown:
+                st.error("Situația definitivă este blocată de statute anuale necunoscute.")
+            elif already_final:
+                st.success("Situația școlară definitivă a întregii clase este deja înregistrată.")
+            else:
+                definitive_confirmed = st.checkbox(
+                    "Confirm că am verificat situația definitivă a întregii clase.",
+                    key="confirm_definitive_class_status",
+                )
+                if st.button(
+                    "🔐 Situație definitivă",
+                    key="persist_definitive_class_status",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=not definitive_confirmed,
+                ):
+                    persist_private_final_status_batch_once(
+                        definitive_closed_snapshots,
+                        definitive_expected_keys,
+                    )
+                    st.success(
+                        "Situația școlară definitivă a clasei a fost înregistrată în registrul privat. "
+                        "Excelul, gestiunea elevilor și snapshoturile de la încheierea cursurilor "
+                        "nu au fost modificate."
+                    )
+                    st.rerun()
+        except (AnnualClosureStorageError, FinalStatusStorageError, RuntimeError, OSError, ValueError) as ex:
+            st.error(f"Situația definitivă nu poate fi înregistrată în siguranță: {ex}")
+    
+    
+    # PDF-ul de după închidere folosește exclusiv snapshoturile private validate pentru situația anuală.
+if tab9.open:
+    with tab9:
+        st.divider()
+        st.subheader("Catalog PDF după închiderea situației școlare")
+        try:
+            closed_snapshots = load_private_annual_closure_snapshots()
+            expected_keys = {str(elev[3]).strip() for elev in ELEVI}
+            if set(closed_snapshots) == expected_keys:
+                annual_states = {
+                    key: official_catalog_state_from_records(snapshot)
+                    for key, snapshot in closed_snapshots.items()
+                }
+                closed_catalog_pdf = generate_official_catalog_final(
+                    selected_file,
+                    load_gestiune_data(),
+                    annual_states,
+                )
+                st.download_button(
+                    "📘 Descarcă catalogul PDF din situația închisă",
+                    data=closed_catalog_pdf,
+                    file_name="catalog_situatie_inchisa.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="download_closed_official_catalog_pdf",
+                )
+                st.caption(
+                    "Mediile anuale, purtarea și statutul școlar provin din snapshoturile "
+                    "private verificate SHA-256; notele și absențele curente sunt citite "
+                    "read-only pentru rubricile de evidență ale catalogului."
+                )
+            elif closed_snapshots:
+                st.info(
+                    "Registrul privat conține numai o parte din elevii clasei. "
+                    "Catalogul din situația închisă nu este generat până când setul nu este complet."
+                )
+            else:
+                st.info(
+                    "Catalogul din situația închisă va deveni disponibil după înregistrarea "
+                    "snapshoturilor pentru întreaga clasă."
+                )
+        except (AnnualClosureStorageError, OfficialCatalogError, RuntimeError, OSError, ValueError) as ex:
+            st.error(f"Catalogul PDF din situația închisă nu poate fi generat: {ex}")
+    
+    
+    # Preview-ul anual rămâne read-only; este disponibil doar când registrul are toate cele 5 note.
+if tab9.open:
+    with tab9:
+        st.divider()
+        st.subheader("Simulare închidere anuală")
+        if st.button("🧮 Simulează situația anuală", key="annual_preview_readonly", use_container_width=True):
+            try:
+                conduct_values = conduct_grades_for_student(student_key)
+                wb_preview = openpyxl.load_workbook(selected_file, read_only=True, data_only=True)
+                try:
+                    subjects = build_student_subject_inputs(
+                        wb_preview, ELEVI[elev_idx_p], resolve_student_row, IX_TH_2026_2027_CLASS_CDEOS_HOURS
+                    )
+                finally:
+                    wb_preview.close()
+                preview = preview_annual_closure(
+                    subjects,
+                    sum(item.motivated_absences for item in subjects),
+                    conduct_values,
+                )
+                st.success(
+                    f"Situație preliminară: {preview.final_status}; "
+                    f"purtare anuală: {preview.conduct_annual_average}; "
+                    f"absențe totale: {preview.total_absences}."
+                )
+                if preview.general_average is not None:
+                    st.info(f"Media generală anuală preliminară: {preview.general_average}")
                 if preview.ready_for_final_closure:
                     st.success(
-                        f"✅ {item['name']} — {preview.final_status}; "
-                        f"purtare {preview.conduct_annual_average}; "
-                        f"absențe {preview.total_absences}."
+                        "Validarea preliminară nu a identificat blocaje pentru închiderea situației școlare. "
+                        "Nu s-a efectuat nicio scriere."
                     )
-                    continue
-                with st.expander(f"⚠️ {item['name']} — necesită verificare"):
-                    st.write(
-                        f"Situație calculată: **{preview.final_status}** | "
-                        f"Purtare: **{preview.conduct_annual_average}** | "
-                        f"Absențe: **{preview.total_absences}**"
+                else:
+                    st.warning(
+                        "Situația poate fi simulată, dar NU este pregătită pentru închiderea situației școlare."
                     )
                     for blocker in preview.readiness_blockers:
                         st.warning(blocker)
-        except (AnnualClosureError, ConductStorageError, RuntimeError, OSError) as ex:
-            st.session_state["annual_class_validation_summary"] = {
-                "error": str(ex),
-            }
-            st.error(f"Validarea clasei nu a putut fi finalizată: {ex}")
-
-    persisted_validation = st.session_state.get("annual_class_validation_summary")
-    if persisted_validation:
-        st.caption("Ultimul rezultat al verificării read-only (păstrat în această sesiune):")
-        if persisted_validation.get("error"):
-            st.error(
-                "Ultima verificare nu a putut fi finalizată: "
-                + persisted_validation["error"]
-            )
-        else:
-            p_ready, p_blocked, p_error = st.columns(3)
-            p_ready.metric("Pregătiți", persisted_validation["ready_count"])
-            p_blocked.metric("Cu blocaje", persisted_validation["blocked_count"])
-            p_error.metric(
-                "Date incomplete/incoerente",
-                persisted_validation["error_count"],
-            )
-            st.caption(
-                f"Timpul ultimei verificări: {persisted_validation['elapsed']:.2f} s. "
-                "Rezultatul este numai informativ; nu s-a efectuat nicio scriere."
-            )
-
-
-# Închiderea situației școlare persistă numai snapshoturi validate în registrul privat separat.
-with tab9:
-    st.divider()
-    st.subheader("Închiderea situației școlare")
-    st.warning(
-        "Operația fixează snapshotul de la încheierea cursurilor. Nu modifică Excelul. "
-        "Snapshoturile existente nu sunt suprascrise; orice conflict blochează operația."
-    )
-    closure_confirmed = st.checkbox(
-        "Confirm că am verificat situația clasei și doresc închiderea situației școlare.",
-        key="confirm_annual_class_closure",
-    )
-    if st.button(
-        "🔒 Închiderea situației școlare",
-        key="persist_annual_class_closure",
-        type="primary",
-        use_container_width=True,
-        disabled=not closure_confirmed,
-    ):
-        try:
-            class_results = build_class_annual_closure_previews(selected_file)
-            invalid = [item for item in class_results if item["error"] is not None]
-            blocked = [
-                item for item in class_results
-                if item["error"] is None
-                and not item["preview"].ready_for_final_closure
-                and item["preview"].final_status != "AMANAT"
-            ]
-            if invalid or blocked:
-                st.error(
-                    "Închiderea a fost blocată înainte de orice scriere: "
-                    "cel puțin un elev are date incomplete/incoerente sau blocaje nerezolvate."
-                )
-                for item in invalid:
-                    st.error(f"{item['name']}: {item['error']}")
-                for item in blocked:
-                    for reason in item["preview"].readiness_blockers:
-                        st.warning(f"{item['name']}: {reason}")
-            else:
-                snapshots = []
-                for item in class_results:
-                    snapshots.append(
-                        build_annual_closure_snapshot(
-                            student_key=item["student_key"],
-                            preview=item["preview"],
-                            interval_conduct_grades=item["conduct_values"],
-                        )
-                    )
-
-                # Revalidăm toate snapshoturile înainte de prima publicare.
-                if len(snapshots) != len(class_results):
-                    raise AnnualClosureError("Numărul snapshoturilor nu corespunde clasei validate.")
-
-                persist_private_annual_closure_batch_once(tuple(snapshots))
-                persisted = len(snapshots)
-                st.success(
-                    f"Închiderea situației școlare a fost înregistrată pentru {persisted} elevi. "
-                    "Datele primare din Excel nu au fost modificate."
-                )
-        except (AnnualClosureError, AnnualClosureStorageError, ConductStorageError, RuntimeError, OSError) as ex:
-            st.error(
-                "Închiderea situației școlare nu a fost finalizată în siguranță. "
-                f"Motiv: {ex}"
-            )
-
-
-# Situația definitivă este o etapă separată de snapshotul de la încheierea cursurilor.
-# Nu rescrie snapshoturile și nu modifică datele primare.
-with tab9:
-    st.divider()
-    st.subheader("Situație definitivă")
-    st.caption(
-        "Această etapă poate fi înregistrată numai după închiderea situației școlare pentru "
-        "întreaga clasă. PROMOVAT și REPETENT pot deveni definitive direct; CORIGENT și "
-        "AMÂNAT necesită mai întâi rezultatul/actul ulterior auditabil."
-    )
-    try:
-        definitive_closed_snapshots = load_private_annual_closure_snapshots()
-        definitive_expected_keys = {str(elev[3]).strip() for elev in ELEVI}
-        definitive_missing = definitive_expected_keys - set(definitive_closed_snapshots)
-        definitive_extra = set(definitive_closed_snapshots) - definitive_expected_keys
-        definitive_pending = {
-            key: snapshot.final_status
-            for key, snapshot in definitive_closed_snapshots.items()
-            if str(snapshot.final_status).strip().upper() in {"CORIGENT", "AMANAT", "AMÂNAT"}
-        }
-        definitive_unknown = {
-            key: snapshot.final_status
-            for key, snapshot in definitive_closed_snapshots.items()
-            if str(snapshot.final_status).strip().upper()
-            not in {"PROMOVAT", "REPETENT", "CORIGENT", "AMANAT", "AMÂNAT"}
-        }
-
-        final_registry, _final_registry_sha = load_private_final_status_registry()
-        final_existing = set(final_registry["students"])
-        already_final = final_existing == definitive_expected_keys
-
-        if definitive_missing or definitive_extra:
-            st.warning(
-                "Situația definitivă este blocată: registrul de închidere nu corespunde exact clasei."
-            )
-        elif definitive_pending:
-            st.warning(
-                f"Situația definitivă nu poate fi încă înregistrată pentru clasă: "
-                f"{len(definitive_pending)} elev(i) au CORIGENT/AMÂNAT și necesită act ulterior auditabil."
-            )
-        elif definitive_unknown:
-            st.error("Situația definitivă este blocată de statute anuale necunoscute.")
-        elif already_final:
-            st.success("Situația școlară definitivă a întregii clase este deja înregistrată.")
-        else:
-            definitive_confirmed = st.checkbox(
-                "Confirm că am verificat situația definitivă a întregii clase.",
-                key="confirm_definitive_class_status",
-            )
-            if st.button(
-                "🔐 Situație definitivă",
-                key="persist_definitive_class_status",
-                type="primary",
-                use_container_width=True,
-                disabled=not definitive_confirmed,
-            ):
-                persist_private_final_status_batch_once(
-                    definitive_closed_snapshots,
-                    definitive_expected_keys,
-                )
-                st.success(
-                    "Situația școlară definitivă a clasei a fost înregistrată în registrul privat. "
-                    "Excelul, gestiunea elevilor și snapshoturile de la încheierea cursurilor "
-                    "nu au fost modificate."
-                )
-                st.rerun()
-    except (AnnualClosureStorageError, FinalStatusStorageError, RuntimeError, OSError, ValueError) as ex:
-        st.error(f"Situația definitivă nu poate fi înregistrată în siguranță: {ex}")
-
-
-# PDF-ul de după închidere folosește exclusiv snapshoturile private validate pentru situația anuală.
-with tab9:
-    st.divider()
-    st.subheader("Catalog PDF după închiderea situației școlare")
-    try:
-        closed_snapshots = load_private_annual_closure_snapshots()
-        expected_keys = {str(elev[3]).strip() for elev in ELEVI}
-        if set(closed_snapshots) == expected_keys:
-            annual_states = {
-                key: official_catalog_state_from_records(snapshot)
-                for key, snapshot in closed_snapshots.items()
-            }
-            closed_catalog_pdf = generate_official_catalog_final(
-                selected_file,
-                load_gestiune_data(),
-                annual_states,
-            )
-            st.download_button(
-                "📘 Descarcă catalogul PDF din situația închisă",
-                data=closed_catalog_pdf,
-                file_name="catalog_situatie_inchisa.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-                key="download_closed_official_catalog_pdf",
-            )
-            st.caption(
-                "Mediile anuale, purtarea și statutul școlar provin din snapshoturile "
-                "private verificate SHA-256; notele și absențele curente sunt citite "
-                "read-only pentru rubricile de evidență ale catalogului."
-            )
-        elif closed_snapshots:
-            st.info(
-                "Registrul privat conține numai o parte din elevii clasei. "
-                "Catalogul din situația închisă nu este generat până când setul nu este complet."
-            )
-        else:
-            st.info(
-                "Catalogul din situația închisă va deveni disponibil după înregistrarea "
-                "snapshoturilor pentru întreaga clasă."
-            )
-    except (AnnualClosureStorageError, OfficialCatalogError, RuntimeError, OSError, ValueError) as ex:
-        st.error(f"Catalogul PDF din situația închisă nu poate fi generat: {ex}")
-
-
-# Preview-ul anual rămâne read-only; este disponibil doar când registrul are toate cele 5 note.
-with tab9:
-    st.divider()
-    st.subheader("Simulare închidere anuală")
-    if st.button("🧮 Simulează situația anuală", key="annual_preview_readonly", use_container_width=True):
-        try:
-            conduct_values = conduct_grades_for_student(student_key)
-            wb_preview = openpyxl.load_workbook(selected_file, read_only=True, data_only=True)
-            try:
-                subjects = build_student_subject_inputs(
-                    wb_preview, ELEVI[elev_idx_p], resolve_student_row, IX_TH_2026_2027_CLASS_CDEOS_HOURS
-                )
-            finally:
-                wb_preview.close()
-            preview = preview_annual_closure(
-                subjects,
-                sum(item.motivated_absences for item in subjects),
-                conduct_values,
-            )
-            st.success(
-                f"Situație preliminară: {preview.final_status}; "
-                f"purtare anuală: {preview.conduct_annual_average}; "
-                f"absențe totale: {preview.total_absences}."
-            )
-            if preview.general_average is not None:
-                st.info(f"Media generală anuală preliminară: {preview.general_average}")
-            if preview.ready_for_final_closure:
-                st.success(
-                    "Validarea preliminară nu a identificat blocaje pentru închiderea situației școlare. "
-                    "Nu s-a efectuat nicio scriere."
-                )
-            else:
-                st.warning(
-                    "Situația poate fi simulată, dar NU este pregătită pentru închiderea situației școlare."
-                )
-                for blocker in preview.readiness_blockers:
-                    st.warning(blocker)
-        except (ConductStorageError, AnnualClosureError, RuntimeError) as ex:
-            st.warning(f"Simularea anuală nu poate fi finalizată încă: {ex}")
+            except (ConductStorageError, AnnualClosureError, RuntimeError) as ex:
+                st.warning(f"Simularea anuală nu poate fi finalizată încă: {ex}")
+    
