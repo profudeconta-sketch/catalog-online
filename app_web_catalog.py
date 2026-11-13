@@ -1891,7 +1891,7 @@ with st.sidebar:
             )):
                 st.session_state.pop(_pv_session_key, None)
         st.session_state.pop("nelutu_admin_verified", None)
-        for _key in ("_teacher_inbox_cache", "_teacher_conduct_view_cache", "_inbox_leave_pdf", "_inbox_document_open", "_inbox_leave_open"):
+        for _key in ("_teacher_inbox_cache", "_teacher_conduct_view_cache", "_student_profile_pdf_cache", "_inbox_leave_pdf", "_inbox_document_open", "_inbox_leave_open"):
             st.session_state.pop(_key, None)
         st.session_state.pop("parent_history_verified", None)
         st.session_state.pop("parent_history_rows", None)
