@@ -1890,6 +1890,8 @@ with st.sidebar:
             )):
                 st.session_state.pop(_pv_session_key, None)
         st.session_state.pop("nelutu_admin_verified", None)
+        for _key in ("_teacher_inbox_cache", "_teacher_conduct_view_cache", "_inbox_leave_pdf", "_inbox_document_open", "_inbox_leave_open"):
+            st.session_state.pop(_key, None)
         st.session_state.pop("parent_history_verified", None)
         st.session_state.pop("parent_history_rows", None)
         st.rerun()
@@ -4717,6 +4719,7 @@ if tab9.open:
                                     "Sincronizarea privată nu a fost confirmată; "
                                     "registrul local a fost readus la versiunea anterioară."
                                 )
+                            st.session_state.pop("_teacher_conduct_view_cache", None)
                             st.session_state.pop(f"pv_conduct_file_{interval.number}", None)
                             st.session_state.pop(f"pv_conduct_hash_{interval.number}", None)
                             st.success("Nota la purtare a fost salvată și sincronizată.")
