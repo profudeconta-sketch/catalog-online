@@ -65,6 +65,29 @@ class TeacherLazyUIContract(unittest.TestCase):
             self.assertIn(f'key="{panel}", on_change="rerun"', s)
 
 
+    def test_complete_student_pdf_uses_verified_profile_and_content_cache(self):
+        s = self.source
+        self.assertIn("from student_profile_pdf import append_student_profile_pdf, find_student_profile", s)
+        self.assertIn("find_student_profile(load_gestiune_data(), ELEVI[elev_idx_v])", s)
+        self.assertIn("append_student_profile_pdf(", s)
+        self.assertIn("student_profile = find_student_profile([student_profile], ELEVI[student_idx])", s)
+        self.assertIn("student_full_profile_pdf_generate", s)
+        self.assertIn("_student_profile_pdf_cache", s)
+        self.assertIn("_student_catalog_hash", s)
+        self.assertIn("_student_profile_hash", s)
+        self.assertIn("_student_conduct_hash", s)
+        begin = s.index("def generate_pdf_student(")
+        end = s.index("def generate_pdf_centralizator(", begin)
+        block = s[begin:end]
+        self.assertLess(block.index("append_student_profile_pdf("),
+                        block.index("SITUAȚIA LA ÎNVĂȚĂTURĂ ȘI A ABSENȚELOR"))
+        self.assertLess(block.index("SITUAȚIA LA ÎNVĂȚĂTURĂ ȘI A ABSENȚELOR"),
+                        block.index("DISCIPLINE CULTURĂ GENERALĂ"))
+        self.assertIn("<b>Nr. Matricol:</b> {e_info[2]}", block)
+        self.assertIn("<b>RM/PG:</b> {e_info[3]}", block)
+
+
+
 class ApprovedLeaveIdentityTests(unittest.TestCase):
     def test_approved_pdf_read_uses_original_rm_pg_exactly_once(self):
         """Read-only regression: hashed keys must not be re-hashed."""
