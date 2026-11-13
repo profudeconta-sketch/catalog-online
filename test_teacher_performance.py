@@ -81,7 +81,7 @@ class ApprovedLeaveIdentityTests(unittest.TestCase):
             "document_path": "documente_scolare/test/approved.pdf",
             "document_sha256": hashlib.sha256(pdf).hexdigest(),
         }]}
-        with patch.object(leave, "load_leave_pass_registry", return_value=(registry, "sha")), \\
+        with patch.object(leave, "load_leave_pass_registry", return_value=(registry, "sha")), \
              patch.object(leave, "private_read", return_value=(pdf, "sha")):
             record, content = leave.read_approved_leave_pass(original_rm_pg, request_id)
             self.assertEqual(record["student_key"], key)
